@@ -1,0 +1,19 @@
+# Build artifacts
+/build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# IDE/editor
+.vscode/
+.idea/
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Local env
+.env
+.env.local
