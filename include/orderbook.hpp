@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <shared_mutex>
 #include <functional>
+#include <optional>
 
 namespace polymarket
 {
