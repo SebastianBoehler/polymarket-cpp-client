@@ -228,6 +228,8 @@ namespace polymarket
 
         // Order creation (creates signed order, does not post)
         SignedOrder create_order(const CreateOrderParams &params);
+        // Overload with cached neg_risk to avoid HTTP call
+        SignedOrder create_order(const CreateOrderParams &params, bool is_neg_risk);
         SignedOrder create_market_order(const CreateMarketOrderParams &params);
 
         // Order posting

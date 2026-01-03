@@ -648,11 +648,22 @@ namespace polymarket
             throw std::runtime_error("Client not authenticated");
         }
 
-        // Determine exchange address based on neg_risk
+        // Determine exchange address based on neg_risk (makes HTTP call)
         auto neg_risk_info = get_neg_risk(params.token_id);
-        std::string exchange_addr = (neg_risk_info && neg_risk_info->neg_risk)
-                                        ? NEG_RISK_EXCHANGE_ADDRESS
-                                        : EXCHANGE_ADDRESS;
+        bool is_neg_risk = neg_risk_info && neg_risk_info->neg_risk;
+
+        return create_order(params, is_neg_risk);
+    }
+
+    SignedOrder ClobClient::create_order(const CreateOrderParams &params, bool is_neg_risk)
+    {
+        if (!order_signer_)
+        {
+            throw std::runtime_error("Client not authenticated");
+        }
+
+        // Use cached neg_risk value to determine exchange address
+        std::string exchange_addr = is_neg_risk ? NEG_RISK_EXCHANGE_ADDRESS : EXCHANGE_ADDRESS;
 
         // Calculate amounts
         double maker_amount, taker_amount;
