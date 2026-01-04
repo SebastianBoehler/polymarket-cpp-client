@@ -157,8 +157,24 @@ namespace polymarket
         if (!proxy_url_.empty() && curl_)
         {
             curl_easy_setopt(curl_, CURLOPT_PROXY, proxy_url_.c_str());
-            curl_easy_setopt(curl_, CURLOPT_HTTPPROXYTUNNEL, 1L); // Use CONNECT for HTTPS
-            curl_easy_setopt(curl_, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+
+            // Detect proxy type from URL scheme
+            if (proxy_url_.find("socks5://") == 0 || proxy_url_.find("socks5h://") == 0)
+            {
+                // SOCKS5 proxy - use socks5h for DNS resolution through proxy
+                curl_easy_setopt(curl_, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
+            }
+            else if (proxy_url_.find("socks4://") == 0)
+            {
+                curl_easy_setopt(curl_, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
+            }
+            else
+            {
+                // HTTP/HTTPS proxy
+                curl_easy_setopt(curl_, CURLOPT_HTTPPROXYTUNNEL, 1L); // Use CONNECT for HTTPS
+                curl_easy_setopt(curl_, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+            }
+
             // Skip SSL verification when using proxy (residential proxies may intercept)
             curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYPEER, 0L);
             curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYHOST, 0L);
