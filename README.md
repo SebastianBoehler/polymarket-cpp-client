@@ -34,7 +34,7 @@ include(FetchContent)
 FetchContent_Declare(
     polymarket_client
     GIT_REPOSITORY https://github.com/SebastianBoehler/polymarket-cpp-client.git
-    GIT_TAG v1.0.0  # or any release tag
+    GIT_TAG v1.1.0  # or any release tag
 )
 FetchContent_MakeAvailable(polymarket_client)
 
@@ -48,11 +48,11 @@ Download pre-built binaries from [Releases](https://github.com/SebastianBoehler/
 
 ```bash
 # macOS
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.0.0/polymarket-cpp-client-macos-arm64.tar.gz
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.1.0/polymarket-cpp-client-macos-arm64.tar.gz
 tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C /usr/local
 
 # Linux
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.0.0/polymarket-cpp-client-linux-x64.tar.gz
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.1.0/polymarket-cpp-client-linux-x64.tar.gz
 tar -xzf polymarket-cpp-client-linux-x64.tar.gz -C /usr/local
 ```
 
@@ -192,8 +192,8 @@ This is handled automatically in `create_order()` - no manual intervention neede
 
 ```bash
 # Update version in CMakeLists.txt, then:
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 This triggers the release workflow which builds for macOS and Linux, then creates a GitHub release with downloadable artifacts.
