@@ -1,6 +1,7 @@
 # Polymarket C++ Client
 
 [![build](https://github.com/SebastianBoehler/polymarket-cpp-client/actions/workflows/build.yml/badge.svg)](https://github.com/SebastianBoehler/polymarket-cpp-client/actions/workflows/build.yml)
+[![release](https://img.shields.io/github/v/release/SebastianBoehler/polymarket-cpp-client)](https://github.com/SebastianBoehler/polymarket-cpp-client/releases)
 
 Reusable C++20 client for Polymarket: REST, WebSocket streaming, and order signing (EIP-712) with examples and tests.
 
@@ -20,7 +21,49 @@ Reusable C++20 client for Polymarket: REST, WebSocket streaming, and order signi
 - C++20 compiler
 - libcurl, OpenSSL
 
-## Build & install
+## Installation
+
+### Option 1: CMake FetchContent (Recommended)
+
+Add to your `CMakeLists.txt`:
+
+```cmake
+include(FetchContent)
+
+# Fetch specific version
+FetchContent_Declare(
+    polymarket_client
+    GIT_REPOSITORY https://github.com/SebastianBoehler/polymarket-cpp-client.git
+    GIT_TAG v1.0.0  # or any release tag
+)
+FetchContent_MakeAvailable(polymarket_client)
+
+# Link to your target
+target_link_libraries(your_target PRIVATE polymarket::client)
+```
+
+### Option 2: Pre-built Releases
+
+Download pre-built binaries from [Releases](https://github.com/SebastianBoehler/polymarket-cpp-client/releases):
+
+```bash
+# macOS
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.0.0/polymarket-cpp-client-macos-arm64.tar.gz
+tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C /usr/local
+
+# Linux
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.0.0/polymarket-cpp-client-linux-x64.tar.gz
+tar -xzf polymarket-cpp-client-linux-x64.tar.gz -C /usr/local
+```
+
+Then in your CMake:
+
+```cmake
+find_package(polymarket_client REQUIRED)
+target_link_libraries(your_target PRIVATE polymarket::client)
+```
+
+### Option 3: Build from Source
 
 ```bash
 cmake -S . -B build -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON -DPOLYMARKET_CLIENT_BUILD_TESTS=ON
@@ -31,7 +74,20 @@ ctest --test-dir build
 cmake --install build --prefix <install_prefix>
 ```
 
-Consumers can use `polymarket::client` from the installed package config (`polymarket_clientTargets.cmake`).
+## Version Info
+
+Check library version at runtime:
+
+```cpp
+#include <polymarket/version.hpp>
+#include <iostream>
+
+int main() {
+    std::cout << "polymarket-cpp-client v" << polymarket::version_string << "\n";
+    // Or access individual components:
+    // polymarket::version_major, version_minor, version_patch
+}
+```
 
 ## Examples
 
@@ -129,7 +185,18 @@ This is handled automatically in `create_order()` - no manual intervention neede
 
 ## GitHub Actions
 
-The repo ships with `.github/workflows/build.yml` to configure and build on macOS.
+- **build.yml**: CI build on every push/PR (macOS)
+- **release.yml**: Automated releases when you push a version tag
+
+### Creating a Release
+
+```bash
+# Update version in CMakeLists.txt, then:
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This triggers the release workflow which builds for macOS and Linux, then creates a GitHub release with downloadable artifacts.
 
 ## License
 
