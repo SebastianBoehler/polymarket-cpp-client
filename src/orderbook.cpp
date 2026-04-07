@@ -62,6 +62,11 @@ namespace polymarket
 
         std::cout << "[OrderbookManager] Subscribed to market: " << market.slug
                   << " (YES: " << market.token_yes.substr(0, 16) << "...)" << std::endl;
+
+        if (ws_.is_connected())
+        {
+            send_subscribe_message();
+        }
     }
 
     void OrderbookManager::unsubscribe(const std::string &token_id)
