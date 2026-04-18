@@ -70,10 +70,14 @@ FetchContent_MakeAvailable(json ixwebsocket secp256k1 ethash)
 
 # Core client library
 set(POLYMARKET_CLIENT_SOURCES
+    src/evm_event_indexer.cpp
+    src/evm_utils.cpp
     src/http_client.cpp
+    src/json_rpc_client.cpp
     src/websocket_client.cpp
     src/market_fetcher.cpp
     src/orderbook.cpp
+    src/polymarket_events.cpp
     src/order_signer.cpp
     src/clob_client.cpp
 )
@@ -125,6 +129,18 @@ if(POLYMARKET_CLIENT_BUILD_EXAMPLES)
 
     add_executable(ws_example examples/ws_example.cpp)
     target_link_libraries(ws_example PRIVATE polymarket::client)
+
+    add_executable(uma_oracle_watch examples/uma_oracle_watch.cpp)
+    target_link_libraries(uma_oracle_watch PRIVATE polymarket::client)
+
+    add_executable(condition_resolution_watch examples/condition_resolution_watch.cpp)
+    target_link_libraries(condition_resolution_watch PRIVATE polymarket::client)
+
+    add_executable(feed_latency_benchmark examples/feed_latency_benchmark.cpp)
+    target_link_libraries(feed_latency_benchmark PRIVATE polymarket::client)
+
+    add_executable(evm_event_indexer_example examples/evm_event_indexer_example.cpp)
+    target_link_libraries(evm_event_indexer_example PRIVATE polymarket::client)
 endif()
 
 if(POLYMARKET_CLIENT_BUILD_TESTS)
@@ -132,6 +148,14 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     add_executable(test_utils tests/test_utils.cpp)
     target_link_libraries(test_utils PRIVATE polymarket::client)
     add_test(NAME test_utils COMMAND test_utils)
+
+    add_executable(test_evm_events tests/test_evm_events.cpp)
+    target_link_libraries(test_evm_events PRIVATE polymarket::client)
+    add_test(NAME test_evm_events COMMAND test_evm_events)
+
+    add_executable(test_evm_event_indexer tests/test_evm_event_indexer.cpp)
+    target_link_libraries(test_evm_event_indexer PRIVATE polymarket::client)
+    add_test(NAME test_evm_event_indexer COMMAND test_evm_event_indexer)
 endif()
 
 # Install library, headers, and dependency targets into a single export set
