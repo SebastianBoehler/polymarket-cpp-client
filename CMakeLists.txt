@@ -76,14 +76,6 @@ set(POLYMARKET_CLIENT_SOURCES
     src/orderbook.cpp
     src/order_signer.cpp
     src/clob_client.cpp
-    src/arb/signal_detector.cpp
-    src/arb/execution_planner.cpp
-    src/arb/risk_policy.cpp
-    src/arb/client_bootstrap.cpp
-    src/arb/market_runtime.cpp
-    src/arb/polymarket_execution_adapter.cpp
-    src/arb/execution_runner.cpp
-    src/arb/engine.cpp
 )
 
 add_library(polymarket_client ${POLYMARKET_CLIENT_SOURCES})
@@ -140,18 +132,6 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     add_executable(test_utils tests/test_utils.cpp)
     target_link_libraries(test_utils PRIVATE polymarket::client)
     add_test(NAME test_utils COMMAND test_utils)
-
-    add_executable(arb_signal_detector_test tests/arb_signal_detector_test.cpp)
-    target_link_libraries(arb_signal_detector_test PRIVATE polymarket::client)
-    add_test(NAME arb_signal_detector_test COMMAND arb_signal_detector_test)
-
-    add_executable(arb_execution_planner_test tests/arb_execution_planner_test.cpp)
-    target_link_libraries(arb_execution_planner_test PRIVATE polymarket::client)
-    add_test(NAME arb_execution_planner_test COMMAND arb_execution_planner_test)
-
-    add_executable(arb_execution_runner_test tests/arb_execution_runner_test.cpp)
-    target_link_libraries(arb_execution_runner_test PRIVATE polymarket::client)
-    add_test(NAME arb_execution_runner_test COMMAND arb_execution_runner_test)
 endif()
 
 # Install library, headers, and dependency targets into a single export set
