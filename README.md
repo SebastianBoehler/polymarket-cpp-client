@@ -10,9 +10,11 @@ Reusable C++20 client for Polymarket: REST, WebSocket streaming, and order signi
 - **REST**: market discovery, orderbook/price queries, auth key management.
 - **WebSocket**: orderbook streaming via IXWebSocket.
 - **Signing**: EIP-712 order signing (secp256k1, keccak).
+- **EVM JSON-RPC**: Polygon HTTP catch-up and WebSocket subscriptions for logs, heads, and pending transaction hashes.
+- **Resolution Events**: Decoders for UMA adapter and Conditional Tokens resolution/redemption logs.
 - **Proxy Support**: HTTP/HTTPS proxy with authentication for geo-restricted access.
 - **Neg-Risk Markets**: Automatic exchange selection for neg_risk markets.
-- **Examples**: REST (`rest_example`), signing (`sign_example`), WebSocket (`ws_example`).
+- **Examples**: REST (`rest_example`), signing (`sign_example`), WebSocket (`ws_example`), onchain watchers.
 - **Tests**: small utility test (`test_utils`) plus runnable examples.
 
 ## Requirements
@@ -94,18 +96,71 @@ int main() {
 - `rest_example`: fetch markets from CLOB REST
 - `sign_example`: sign a dummy order (requires `PRIVATE_KEY`)
 - `ws_example`: connect to Polymarket WS and subscribe to orderbook agg
+- `uma_oracle_watch`: stream UMA adapter lifecycle events over Polygon JSON-RPC
+- `condition_resolution_watch`: stream Conditional Tokens resolution/redemption events
+- `evm_event_indexer_example`: persistent HTTP catch-up + live WS indexer with a cursor file
+- `feed_latency_benchmark`: compare local receive timing across Polymarket market WS and Polygon RPC WS
 
 Build them with `POLYMARKET_CLIENT_BUILD_EXAMPLES=ON` and run from `build/`.
 
+## Polygon JSON-RPC Watchers
+
+The client includes provider-neutral EVM JSON-RPC helpers for users who want to build their own low-latency indexer instead of depending on a third-party Polymarket data feed.
+
+```bash
+# Live UMA adapter events
+POLYMARKET_POLYGON_RPC_WS=wss://your-polygon-rpc \
+POLYMARKET_UMA_CTF_ADAPTER=0x... \
+./build/uma_oracle_watch
+
+# Catch up historical CTF logs first, then stream live logs
+./build/condition_resolution_watch \
+  --rpc-http https://your-polygon-rpc \
+  --rpc-ws wss://your-polygon-rpc \
+  --ctf 0x... \
+  --from-block 0x39f0000 \
+  --to-block latest
+```
+
+Optional flags:
+
+- `--pending`: also subscribe to `newPendingTransactions` if the RPC provider or node exposes mempool data.
+- `--heads`: also stream new block headers.
+- `--duration-seconds <n>`: stop automatically after `n` seconds.
+- `--timeout-ms <n>`: override the HTTP JSON-RPC timeout used during catch-up.
+
+Use current contract addresses from the official [Polymarket contracts docs](https://docs.polymarket.com/resources/contracts) and [resolution docs](https://docs.polymarket.com/concepts/resolution). The examples intentionally require addresses via args or env vars because Polymarket has versioned resolution contracts and docs may list both active and legacy adapters.
+
+For persistent indexing, combine `eth_getLogs` catch-up (`--from-block`) with live `eth_subscribe` logs and store the last processed block in your own application. A normal hosted WebSocket RPC is enough for confirmed logs. Complete pre-confirmation mempool visibility is not guaranteed by public RPC; for that you typically need a provider that exposes pending transactions at scale or your own Polygon node with txpool/mempool access.
+
+The reusable `EvmEventIndexer` handles the catch-up/live handoff for any `EvmLogFilter`:
+
+```bash
+./build/evm_event_indexer_example \
+  --rpc-http https://your-polygon-rpc \
+  --rpc-ws wss://your-polygon-rpc \
+  --ctf 0x... \
+  --cursor-file ./polymarket-cursors.json \
+  --start-block 0x51b0000 \
+  --live \
+  --duration-seconds 60
+```
+
+If no cursor exists and `--start-block` is omitted, the example starts at the current latest block to avoid accidental full-history backfills. Pass `--start-block` explicitly when you want historical replay.
+
 ## Tests
 
-`test_utils` exercises basic utility helpers. Run via `ctest --test-dir build`.
+`test_utils` exercises basic utility helpers. `test_evm_events` covers EVM topic hashing, log filter serialization, and UMA/CTF event decoding. `test_evm_event_indexer` covers block range planning and file-backed cursors. Run via `ctest --test-dir build`.
 
 ## Key components
 
 - `include/` headers for client API
 - `src/http_client.cpp`: libcurl HTTP client
 - `src/websocket_client.cpp`: IXWebSocket wrapper
+- `src/json_rpc_client.cpp`: EVM HTTP/WS JSON-RPC helpers
+- `src/evm_event_indexer.cpp`: persistent log catch-up and live indexing
+- `src/evm_utils.cpp`: ABI/log utilities
+- `src/polymarket_events.cpp`: UMA/CTF event decoders
 - `src/order_signer.cpp`: EIP-712 signing (secp256k1, keccak)
 - `src/clob_client.cpp`: REST + trading endpoints
 - `src/orderbook.cpp`: WS orderbook management

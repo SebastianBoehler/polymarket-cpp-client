@@ -17,3 +17,6 @@ node_modules/
 # Local env
 .env
 .env.local
+
+# Project-local agent learnings
+.learnings/
