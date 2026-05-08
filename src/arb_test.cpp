@@ -25,8 +25,8 @@ using namespace polymarket;
 
 // Polymarket contract addresses (Polygon mainnet)
 const std::string CLOB_API = "https://clob.polymarket.com";
-const std::string NEG_RISK_CTF_EXCHANGE = "0xC5d563A36AE78145C45a50134d48A1215220f80a";
-const std::string CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
+const std::string NEG_RISK_CTF_EXCHANGE = "0xe2222d279d744050d28e00520010520000310F59";
+const std::string CTF_EXCHANGE = "0xE111180000d2663C0091e4f400237545B87B996B";
 
 struct MarketInfo
 {
@@ -528,8 +528,6 @@ int main(int argc, char *argv[])
     yes_order.maker_amount = to_wei(maker_amount, 6);
     yes_order.taker_amount = to_wei(yes_taker_raw, 6);
     yes_order.side = OrderSide::BUY;
-    yes_order.fee_rate_bps = "0";
-    yes_order.nonce = "0";
     yes_order.signer = signer.address();
     yes_order.expiration = "0";
     yes_order.signature_type = (funder_address != signer.address())
@@ -543,8 +541,6 @@ int main(int argc, char *argv[])
     no_order.maker_amount = to_wei(maker_amount, 6);
     no_order.taker_amount = to_wei(no_taker_raw, 6);
     no_order.side = OrderSide::BUY;
-    no_order.fee_rate_bps = "0";
-    no_order.nonce = "0";
     no_order.signer = signer.address();
     no_order.expiration = "0";
     no_order.signature_type = yes_order.signature_type;
@@ -571,11 +567,13 @@ int main(int argc, char *argv[])
         order_obj["takerAmount"] = yes_signed.taker_amount;
         order_obj["side"] = "BUY";
         order_obj["expiration"] = yes_signed.expiration;
-        order_obj["nonce"] = yes_signed.nonce;
-        order_obj["feeRateBps"] = yes_signed.fee_rate_bps;
         order_obj["signatureType"] = static_cast<int>(yes_signed.signature_type);
+        order_obj["timestamp"] = yes_signed.timestamp;
+        order_obj["metadata"] = yes_signed.metadata;
+        order_obj["builder"] = yes_signed.builder;
         order_obj["signature"] = yes_signed.signature;
         yes_payload["deferExec"] = false;
+        yes_payload["postOnly"] = false;
         yes_payload["order"] = order_obj;
         yes_payload["owner"] = creds.api_key;
         yes_payload["orderType"] = "FOK"; // Fill-Or-Kill for immediate execution
@@ -593,11 +591,13 @@ int main(int argc, char *argv[])
         order_obj["takerAmount"] = no_signed.taker_amount;
         order_obj["side"] = "BUY";
         order_obj["expiration"] = no_signed.expiration;
-        order_obj["nonce"] = no_signed.nonce;
-        order_obj["feeRateBps"] = no_signed.fee_rate_bps;
         order_obj["signatureType"] = static_cast<int>(no_signed.signature_type);
+        order_obj["timestamp"] = no_signed.timestamp;
+        order_obj["metadata"] = no_signed.metadata;
+        order_obj["builder"] = no_signed.builder;
         order_obj["signature"] = no_signed.signature;
         no_payload["deferExec"] = false;
+        no_payload["postOnly"] = false;
         no_payload["order"] = order_obj;
         no_payload["owner"] = creds.api_key;
         no_payload["orderType"] = "FOK";

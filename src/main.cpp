@@ -413,13 +413,11 @@ int main(int argc, char *argv[])
             yes_order.maker_amount = to_wei(size_usdc, 6);
             yes_order.taker_amount = to_wei(yes_shares, 6);
             yes_order.side = OrderSide::BUY;
-            yes_order.fee_rate_bps = "0";
-            yes_order.nonce = "0";
             yes_order.signer = order_signer->address();
             yes_order.expiration = "0";
             yes_order.signature_type = SignatureType::EOA;
             
-            auto signed_yes = order_signer->sign_order(yes_order, "0xC5d563A36AE78145C45a50134d48A1215220f80a");
+            auto signed_yes = order_signer->sign_order(yes_order, "0xe2222d279d744050d28e00520010520000310F59");
             std::cout << "    YES order signed: " << signed_yes.signature.substr(0, 20) << "..." << std::endl;
             
             // TODO: Post orders to API with L2 headers

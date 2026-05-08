@@ -15,7 +15,8 @@ namespace polymarket
     {
         EOA = 0,             // Externally Owned Account (standard wallet)
         POLY_PROXY = 1,      // Polymarket proxy wallet
-        POLY_GNOSIS_SAFE = 2 // Gnosis Safe (used for email wallets)
+        POLY_GNOSIS_SAFE = 2, // Gnosis Safe (used for email wallets)
+        POLY_1271 = 3        // EIP-1271 deposit wallet / smart contract wallet
     };
 
     // Order side
@@ -38,6 +39,9 @@ namespace polymarket
         std::string nonce;        // Order nonce
         std::string signer;       // Address of the signer
         std::string expiration;   // Unix timestamp or "0" for no expiration
+        std::string timestamp;    // V2 order creation time in milliseconds
+        std::string metadata;     // V2 bytes32 metadata
+        std::string builder;      // V2 bytes32 builder code
         SignatureType signature_type;
     };
 
@@ -56,6 +60,9 @@ namespace polymarket
         std::string fee_rate_bps;
         int side;
         int signature_type;
+        std::string timestamp;
+        std::string metadata;
+        std::string builder;
         std::string signature;
     };
 
@@ -129,9 +136,12 @@ namespace polymarket
         // EIP-712 encoding helpers
         std::array<uint8_t, 32> hash_domain(const std::string &name, const std::string &version,
                                             int chain_id, const std::string &verifying_contract);
-        std::array<uint8_t, 32> hash_order(const OrderData &order, const std::string &salt);
+        std::array<uint8_t, 32> hash_order_v2(const OrderData &order, const std::string &salt);
         std::array<uint8_t, 32> encode_eip712(const std::array<uint8_t, 32> &domain_hash,
                                               const std::array<uint8_t, 32> &struct_hash);
+        std::string sign_poly_1271(const std::array<uint8_t, 32> &domain_hash,
+                                   const std::array<uint8_t, 32> &order_hash,
+                                   const std::string &verifying_contract);
 
         // L1 auth helpers
         std::array<uint8_t, 32> hash_clob_auth_domain();

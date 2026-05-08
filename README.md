@@ -105,10 +105,11 @@ Build them with `POLYMARKET_CLIENT_BUILD_EXAMPLES=ON` and run from `build/`.
 
 ## CLOB V2 Status
 
-Polymarket production CLOB now uses V2. The existing authenticated order
-signing path in this library is still V1-shaped and needs a deliberate
-migration before it should be used for production order posting. See
-[docs/clob-v2-migration.md](docs/clob-v2-migration.md) for the migration plan.
+Polymarket production CLOB uses V2 at `https://clob.polymarket.com`. The
+authenticated order path signs V2 EIP-712 orders, posts V2 order payloads, uses
+the V2 exchange contracts, and supports the V2 `POLY_1271` deposit-wallet
+signature wrapper. See [docs/clob-v2-migration.md](docs/clob-v2-migration.md)
+for implementation notes.
 
 ## Polygon JSON-RPC Watchers
 
@@ -240,8 +241,8 @@ client.stop_heartbeat();
 
 The client automatically detects neg_risk markets and uses the appropriate exchange address for order signing:
 
-- **Standard markets**: `0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E`
-- **Neg-risk markets**: `0xC5d563A36AE78145C45a50134d48A1215220f80a`
+- **Standard markets**: `0xE111180000d2663C0091e4f400237545B87B996B`
+- **Neg-risk markets**: `0xe2222d279d744050d28e00520010520000310F59`
 
 This is handled automatically in `create_order()` - no manual intervention needed.
 

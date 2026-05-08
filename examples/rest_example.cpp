@@ -125,11 +125,11 @@ int main()
             funder_address};
 
         // Get balance
-        auto balance = client.get_balance_allowance("USDC");
+        auto balance = client.get_balance_allowance("COLLATERAL");
         if (balance)
         {
-            std::cout << "USDC Balance: " << balance->balance << "\n";
-            std::cout << "USDC Allowance: " << balance->allowance << "\n";
+            std::cout << "Collateral Balance: " << balance->balance << "\n";
+            std::cout << "Collateral Allowance: " << balance->allowance << "\n";
         }
 
         // Get open orders
