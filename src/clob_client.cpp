@@ -939,8 +939,10 @@ namespace polymarket
 
     std::optional<BalanceAllowance> ClobClient::get_balance_allowance(const std::string &asset_type)
     {
-        std::string path = "/balance-allowance?asset_type=" + asset_type;
-        auto headers = get_l2_headers("GET", path, "");
+        std::string request_path = "/balance-allowance";
+        std::string path = request_path + "?asset_type=" + asset_type +
+                           "&signature_type=" + std::to_string(static_cast<int>(sig_type_));
+        auto headers = get_l2_headers("GET", request_path, "");
         auto response = http_.get(path, headers);
 
         if (!response.ok())
@@ -962,13 +964,11 @@ namespace polymarket
 
     bool ClobClient::update_balance_allowance(const std::string &asset_type)
     {
-        json body;
-        body["asset_type"] = asset_type;
-
-        std::string body_str = body.dump();
-        auto headers = get_l2_headers("POST", "/balance-allowance", body_str);
-
-        auto response = http_.post("/balance-allowance", body_str, headers);
+        std::string request_path = "/balance-allowance/update";
+        std::string path = request_path + "?asset_type=" + asset_type +
+                           "&signature_type=" + std::to_string(static_cast<int>(sig_type_));
+        auto headers = get_l2_headers("GET", request_path, "");
+        auto response = http_.get(path, headers);
         return response.ok();
     }
 

@@ -253,8 +253,8 @@ namespace polymarket
         std::vector<Trade> get_trades(const std::string &next_cursor = "");
 
         // Balance and allowance
-        std::optional<BalanceAllowance> get_balance_allowance(const std::string &asset_type = "USDC");
-        bool update_balance_allowance(const std::string &asset_type = "USDC");
+        std::optional<BalanceAllowance> get_balance_allowance(const std::string &asset_type = "COLLATERAL");
+        bool update_balance_allowance(const std::string &asset_type = "COLLATERAL");
 
         // Order scoring
         std::optional<OrderScoringResult> is_order_scoring(const SignedOrder &order);
