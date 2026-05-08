@@ -17,7 +17,6 @@ using json = nlohmann::json;
 
 namespace polymarket
 {
-
     std::string to_hex(const std::vector<uint8_t> &data)
     {
         std::stringstream ss;
@@ -300,120 +299,6 @@ namespace polymarket
         return keccak256(encoded);
     }
 
-    std::array<uint8_t, 32> OrderSigner::hash_order(const OrderData &order, const std::string &salt)
-    {
-        auto type_hash = keccak256(std::string(
-            "Order(uint256 salt,address maker,address signer,address taker,uint256 tokenId,"
-            "uint256 makerAmount,uint256 takerAmount,uint256 expiration,uint256 nonce,"
-            "uint256 feeRateBps,uint8 side,uint8 signatureType)"));
-
-        auto encode_uint256 = [](const std::string &value) -> std::vector<uint8_t>
-        {
-            std::vector<uint8_t> result(32, 0);
-            if (value.empty())
-            {
-                return result;
-            }
-            if (value.size() >= 2 && value.substr(0, 2) == "0x")
-            {
-                // Hex string
-                auto bytes = from_hex(value);
-                size_t offset = 32 - std::min(bytes.size(), size_t(32));
-                std::memcpy(result.data() + offset, bytes.data(), std::min(bytes.size(), size_t(32)));
-            }
-            else if (value.size() <= 18)
-            {
-                // Small enough for uint64_t
-                uint64_t val = std::stoull(value);
-                for (int i = 0; i < 8; i++)
-                {
-                    result[31 - i] = (val >> (i * 8)) & 0xFF;
-                }
-            }
-            else
-            {
-                // Large decimal - convert to bytes manually using repeated division
-                std::string num = value;
-                std::vector<uint8_t> bytes;
-                while (!num.empty() && num != "0")
-                {
-                    // Divide by 256 and get remainder
-                    int remainder = 0;
-                    std::string quotient;
-                    for (char c : num)
-                    {
-                        int digit = remainder * 10 + (c - '0');
-                        if (!quotient.empty() || digit / 256 > 0)
-                        {
-                            quotient += ('0' + digit / 256);
-                        }
-                        remainder = digit % 256;
-                    }
-                    bytes.push_back(static_cast<uint8_t>(remainder));
-                    num = quotient.empty() ? "0" : quotient;
-                }
-                // Copy bytes in reverse (big-endian)
-                size_t offset = 32 - std::min(bytes.size(), size_t(32));
-                for (size_t i = 0; i < std::min(bytes.size(), size_t(32)); i++)
-                {
-                    result[31 - i] = bytes[i];
-                }
-            }
-            return result;
-        };
-
-        auto encode_address = [](const std::string &addr) -> std::vector<uint8_t>
-        {
-            auto bytes = from_hex(addr);
-            std::vector<uint8_t> result(32, 0);
-            std::memcpy(result.data() + 12, bytes.data(), std::min(bytes.size(), size_t(20)));
-            return result;
-        };
-
-        std::vector<uint8_t> encoded;
-        encoded.insert(encoded.end(), type_hash.begin(), type_hash.end());
-
-        auto salt_enc = encode_uint256(salt);
-        encoded.insert(encoded.end(), salt_enc.begin(), salt_enc.end());
-
-        auto maker_enc = encode_address(order.maker);
-        encoded.insert(encoded.end(), maker_enc.begin(), maker_enc.end());
-
-        auto signer_enc = encode_address(order.signer);
-        encoded.insert(encoded.end(), signer_enc.begin(), signer_enc.end());
-
-        auto taker_enc = encode_address(order.taker);
-        encoded.insert(encoded.end(), taker_enc.begin(), taker_enc.end());
-
-        auto token_enc = encode_uint256(order.token_id);
-        encoded.insert(encoded.end(), token_enc.begin(), token_enc.end());
-
-        auto maker_amt_enc = encode_uint256(order.maker_amount);
-        encoded.insert(encoded.end(), maker_amt_enc.begin(), maker_amt_enc.end());
-
-        auto taker_amt_enc = encode_uint256(order.taker_amount);
-        encoded.insert(encoded.end(), taker_amt_enc.begin(), taker_amt_enc.end());
-
-        auto exp_enc = encode_uint256(order.expiration);
-        encoded.insert(encoded.end(), exp_enc.begin(), exp_enc.end());
-
-        auto nonce_enc = encode_uint256(order.nonce);
-        encoded.insert(encoded.end(), nonce_enc.begin(), nonce_enc.end());
-
-        auto fee_enc = encode_uint256(order.fee_rate_bps);
-        encoded.insert(encoded.end(), fee_enc.begin(), fee_enc.end());
-
-        std::vector<uint8_t> side_enc(32, 0);
-        side_enc[31] = static_cast<uint8_t>(order.side);
-        encoded.insert(encoded.end(), side_enc.begin(), side_enc.end());
-
-        std::vector<uint8_t> sig_type_enc(32, 0);
-        sig_type_enc[31] = static_cast<uint8_t>(order.signature_type);
-        encoded.insert(encoded.end(), sig_type_enc.begin(), sig_type_enc.end());
-
-        return keccak256(encoded);
-    }
-
     std::array<uint8_t, 32> OrderSigner::encode_eip712(const std::array<uint8_t, 32> &domain_hash,
                                                        const std::array<uint8_t, 32> &struct_hash)
     {
@@ -423,38 +308,6 @@ namespace polymarket
         encoded.insert(encoded.end(), domain_hash.begin(), domain_hash.end());
         encoded.insert(encoded.end(), struct_hash.begin(), struct_hash.end());
         return keccak256(encoded);
-    }
-
-    SignedOrder OrderSigner::sign_order(const OrderData &order, const std::string &exchange_address)
-    {
-        std::string salt = generate_salt();
-        return sign_order_with_salt(order, exchange_address, salt);
-    }
-
-    SignedOrder OrderSigner::sign_order_with_salt(const OrderData &order, const std::string &exchange_address, const std::string &salt)
-    {
-        auto domain_hash = hash_domain("Polymarket CTF Exchange", "1", chain_id_, exchange_address);
-        auto order_hash = hash_order(order, salt);
-        auto message_hash = encode_eip712(domain_hash, order_hash);
-
-        std::string signature = sign_hash(message_hash);
-
-        SignedOrder signed_order;
-        signed_order.salt = salt;
-        signed_order.maker = order.maker;
-        signed_order.signer = order.signer;
-        signed_order.taker = order.taker;
-        signed_order.token_id = order.token_id;
-        signed_order.maker_amount = order.maker_amount;
-        signed_order.taker_amount = order.taker_amount;
-        signed_order.expiration = order.expiration;
-        signed_order.nonce = order.nonce;
-        signed_order.fee_rate_bps = order.fee_rate_bps;
-        signed_order.side = static_cast<int>(order.side);
-        signed_order.signature_type = static_cast<int>(order.signature_type);
-        signed_order.signature = signature;
-
-        return signed_order;
     }
 
     std::array<uint8_t, 32> OrderSigner::hash_clob_auth_domain()

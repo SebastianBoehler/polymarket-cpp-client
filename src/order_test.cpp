@@ -22,8 +22,8 @@ using namespace polymarket;
 
 // Polymarket contract addresses (Polygon mainnet)
 const std::string CLOB_API = "https://clob.polymarket.com";
-const std::string NEG_RISK_CTF_EXCHANGE = "0xC5d563A36AE78145C45a50134d48A1215220f80a";
-const std::string CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
+const std::string NEG_RISK_CTF_EXCHANGE = "0xe2222d279d744050d28e00520010520000310F59";
+const std::string CTF_EXCHANGE = "0xE111180000d2663C0091e4f400237545B87B996B";
 
 void print_usage()
 {
@@ -107,8 +107,6 @@ int main(int argc, char *argv[])
         order.maker_amount = "5000000";  // 5 USDC (6 decimals)
         order.taker_amount = "10000000"; // 10 shares
         order.side = OrderSide::BUY;
-        order.fee_rate_bps = "0";
-        order.nonce = "0";
         order.signer = signer.address();
         order.expiration = "0";
         order.signature_type = SignatureType::EOA;
@@ -128,18 +126,17 @@ int main(int argc, char *argv[])
         fixed_order.maker_amount = "1000000";
         fixed_order.taker_amount = "2000000";
         fixed_order.side = OrderSide::BUY;
-        fixed_order.fee_rate_bps = "0";
-        fixed_order.nonce = "0";
         fixed_order.expiration = "0";
-        fixed_order.signature_type = SignatureType::POLY_GNOSIS_SAFE;
+        fixed_order.signature_type = SignatureType::POLY_PROXY;
+        fixed_order.timestamp = "1713398400000";
 
         std::string fixed_salt = "123456789";
         auto signed_order_fixed = signer.sign_order_with_salt(fixed_order, NEG_RISK_CTF_EXCHANGE, fixed_salt);
         std::cout << "    Fixed salt: " << fixed_salt << "\n";
         std::cout << "    C++ Signature: " << signed_order_fixed.signature << "\n";
-        std::cout << "    Expected (TS): 0x7883a3b2be0a2ec3ad8574fdf5fafe68a7d841369e2154272cbc9f8e66fc98bd27a7e89f0d51138be6b2f7b81012a2d4f475e2959f0a7ddf2ba0f5d756f6ae2f1c\n";
+        std::cout << "    Expected (official V2 SDK): 0x172933dc26efdf531dc959a95743b5c13147c5027a1eaa172701f1e599a130851f8126ce1c4fa043e360e4ee30211f49151d6f192a32b1cbad2123463e3d45641c\n";
 
-        if (signed_order_fixed.signature == "0x7883a3b2be0a2ec3ad8574fdf5fafe68a7d841369e2154272cbc9f8e66fc98bd27a7e89f0d51138be6b2f7b81012a2d4f475e2959f0a7ddf2ba0f5d756f6ae2f1c")
+        if (signed_order_fixed.signature == "0x172933dc26efdf531dc959a95743b5c13147c5027a1eaa172701f1e599a130851f8126ce1c4fa043e360e4ee30211f49151d6f192a32b1cbad2123463e3d45641c")
         {
             std::cout << "    ✅ SIGNATURES MATCH!\n";
         }
@@ -162,10 +159,11 @@ int main(int argc, char *argv[])
         order_json["makerAmount"] = signed_order.maker_amount;
         order_json["takerAmount"] = signed_order.taker_amount;
         order_json["expiration"] = signed_order.expiration;
-        order_json["nonce"] = signed_order.nonce;
-        order_json["feeRateBps"] = signed_order.fee_rate_bps;
         order_json["side"] = signed_order.side;
         order_json["signatureType"] = signed_order.signature_type;
+        order_json["timestamp"] = signed_order.timestamp;
+        order_json["metadata"] = signed_order.metadata;
+        order_json["builder"] = signed_order.builder;
         order_json["signature"] = signed_order.signature;
 
         std::cout << "[3] Order JSON:\n";
@@ -379,8 +377,6 @@ int main(int argc, char *argv[])
             real_order.maker_amount = to_wei(raw_maker, 6);
             real_order.taker_amount = to_wei(raw_taker, 6);
             real_order.side = OrderSide::BUY;
-            real_order.fee_rate_bps = "0";
-            real_order.nonce = "0";
             real_order.signer = signer.address();
             real_order.expiration = "0";
             // Use POLY_GNOSIS_SAFE (2) when funder != signer (proxy wallet)
@@ -415,11 +411,13 @@ int main(int argc, char *argv[])
             order_obj["takerAmount"] = real_signed.taker_amount;
             order_obj["side"] = real_signed.side == 0 ? "BUY" : "SELL";
             order_obj["expiration"] = real_signed.expiration;
-            order_obj["nonce"] = real_signed.nonce;
-            order_obj["feeRateBps"] = real_signed.fee_rate_bps;
             order_obj["signatureType"] = real_signed.signature_type;
+            order_obj["timestamp"] = real_signed.timestamp;
+            order_obj["metadata"] = real_signed.metadata;
+            order_obj["builder"] = real_signed.builder;
             order_obj["signature"] = real_signed.signature;
             post_body["deferExec"] = false;
+            post_body["postOnly"] = false;
             post_body["order"] = order_obj;
             post_body["owner"] = creds.api_key;
             post_body["orderType"] = "FAK";

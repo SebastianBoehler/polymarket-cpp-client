@@ -79,6 +79,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/orderbook.cpp
     src/polymarket_events.cpp
     src/order_signer.cpp
+    src/order_signer_v2.cpp
     src/clob_client.cpp
 )
 
@@ -156,6 +157,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     add_executable(test_evm_event_indexer tests/test_evm_event_indexer.cpp)
     target_link_libraries(test_evm_event_indexer PRIVATE polymarket::client)
     add_test(NAME test_evm_event_indexer COMMAND test_evm_event_indexer)
+
+    add_executable(test_order_signer_v2 tests/test_order_signer_v2.cpp)
+    target_link_libraries(test_order_signer_v2 PRIVATE polymarket::client)
+    add_test(NAME test_order_signer_v2 COMMAND test_order_signer_v2)
 endif()
 
 # Install library, headers, and dependency targets into a single export set

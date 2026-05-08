@@ -118,9 +118,9 @@ namespace polymarket
         double price;
         double size;
         OrderSide side;
-        std::string fee_rate_bps = "0";
         std::string expiration = "0";
-        std::string nonce = "0";
+        std::string metadata = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::string builder_code = "0x0000000000000000000000000000000000000000000000000000000000000000";
         std::optional<bool> neg_risk; // If set, skips API call to fetch neg_risk
     };
 
@@ -131,6 +131,8 @@ namespace polymarket
         double amount; // USDC for BUY, shares for SELL
         OrderSide side;
         std::optional<double> price; // Optional price limit
+        std::string metadata = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::string builder_code = "0x0000000000000000000000000000000000000000000000000000000000000000";
     };
 
     // Batch order entry

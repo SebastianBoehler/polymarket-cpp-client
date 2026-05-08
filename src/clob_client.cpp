@@ -14,8 +14,9 @@ namespace polymarket
 {
 
     // Exchange addresses for Polygon mainnet
-    static const std::string EXCHANGE_ADDRESS = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
-    static const std::string NEG_RISK_EXCHANGE_ADDRESS = "0xC5d563A36AE78145C45a50134d48A1215220f80a";
+    static const std::string EXCHANGE_ADDRESS = "0xE111180000d2663C0091e4f400237545B87B996B";
+    static const std::string NEG_RISK_EXCHANGE_ADDRESS = "0xe2222d279d744050d28e00520010520000310F59";
+    static const std::string ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
     // Data API URL for positions
     static const std::string DATA_API_URL = "https://data-api.polymarket.com";
@@ -698,15 +699,15 @@ namespace polymarket
 
         OrderData order_data;
         order_data.maker = funder_address_.empty() ? order_signer_->address() : funder_address_;
-        order_data.taker = "0x0000000000000000000000000000000000000000";
+        order_data.taker = ZERO_ADDRESS;
         order_data.token_id = params.token_id;
         order_data.maker_amount = to_wei(maker_amount, 6);
         order_data.taker_amount = to_wei(taker_amount, 6);
         order_data.side = params.side;
-        order_data.fee_rate_bps = params.fee_rate_bps;
-        order_data.nonce = params.nonce;
-        order_data.signer = order_signer_->address();
+        order_data.signer = sig_type_ == SignatureType::POLY_1271 ? order_data.maker : order_signer_->address();
         order_data.expiration = params.expiration;
+        order_data.metadata = params.metadata;
+        order_data.builder = params.builder_code;
         order_data.signature_type = sig_type_;
 
         return order_signer_->sign_order(order_data, exchange_addr);
@@ -750,6 +751,8 @@ namespace polymarket
         order_params.price = price;
         order_params.size = size;
         order_params.side = params.side;
+        order_params.metadata = params.metadata;
+        order_params.builder_code = params.builder_code;
 
         return create_order(order_params);
     }
@@ -758,7 +761,7 @@ namespace polymarket
     {
         json body;
         body["order"] = {
-            {"salt", order.salt},
+            {"salt", std::stoll(order.salt)},
             {"maker", order.maker},
             {"signer", order.signer},
             {"taker", order.taker},
@@ -766,12 +769,16 @@ namespace polymarket
             {"makerAmount", order.maker_amount},
             {"takerAmount", order.taker_amount},
             {"expiration", order.expiration},
-            {"nonce", order.nonce},
-            {"feeRateBps", order.fee_rate_bps},
             {"side", order.side == 0 ? "BUY" : "SELL"},
             {"signatureType", order.signature_type},
+            {"timestamp", order.timestamp},
+            {"metadata", order.metadata},
+            {"builder", order.builder},
             {"signature", order.signature}};
+        body["owner"] = api_creds_ ? api_creds_->api_key : "";
         body["orderType"] = order_type_to_string(order_type);
+        body["deferExec"] = false;
+        body["postOnly"] = false;
 
         std::string body_str = body.dump();
         auto headers = get_l2_headers("POST", "/order", body_str);
@@ -792,7 +799,7 @@ namespace polymarket
         {
             json order_json;
             order_json["order"] = {
-                {"salt", entry.order.salt},
+                {"salt", std::stoll(entry.order.salt)},
                 {"maker", entry.order.maker},
                 {"signer", entry.order.signer},
                 {"taker", entry.order.taker},
@@ -800,12 +807,16 @@ namespace polymarket
                 {"makerAmount", entry.order.maker_amount},
                 {"takerAmount", entry.order.taker_amount},
                 {"expiration", entry.order.expiration},
-                {"nonce", entry.order.nonce},
-                {"feeRateBps", entry.order.fee_rate_bps},
                 {"side", entry.order.side == 0 ? "BUY" : "SELL"},
                 {"signatureType", entry.order.signature_type},
+                {"timestamp", entry.order.timestamp},
+                {"metadata", entry.order.metadata},
+                {"builder", entry.order.builder},
                 {"signature", entry.order.signature}};
+            order_json["owner"] = api_creds_ ? api_creds_->api_key : "";
             order_json["orderType"] = order_type_to_string(entry.order_type);
+            order_json["deferExec"] = false;
+            order_json["postOnly"] = false;
             body.push_back(order_json);
         }
 

@@ -27,13 +27,11 @@ int main()
         order.maker_amount = to_wei(1.0, 6); // $1
         order.taker_amount = to_wei(2.0, 6); // 2 shares (dummy)
         order.side = OrderSide::BUY;
-        order.fee_rate_bps = "0";
-        order.nonce = "0";
         order.signer = signer.address();
         order.expiration = "0";
         order.signature_type = SignatureType::EOA;
 
-        auto signed_order = signer.sign_order(order, "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E");
+        auto signed_order = signer.sign_order(order, "0xE111180000d2663C0091e4f400237545B87B996B");
         std::cout << "Salt: " << signed_order.salt << "\n";
         std::cout << "Signature: " << signed_order.signature.substr(0, 20) << "...\n";
     }
