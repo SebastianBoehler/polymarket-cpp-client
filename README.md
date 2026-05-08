@@ -103,6 +103,13 @@ int main() {
 
 Build them with `POLYMARKET_CLIENT_BUILD_EXAMPLES=ON` and run from `build/`.
 
+## CLOB V2 Status
+
+Polymarket production CLOB now uses V2. The existing authenticated order
+signing path in this library is still V1-shaped and needs a deliberate
+migration before it should be used for production order posting. See
+[docs/clob-v2-migration.md](docs/clob-v2-migration.md) for the migration plan.
+
 ## Polygon JSON-RPC Watchers
 
 The client includes provider-neutral EVM JSON-RPC helpers for users who want to build their own low-latency indexer instead of depending on a third-party Polymarket data feed.
