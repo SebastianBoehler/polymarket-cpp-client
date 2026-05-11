@@ -75,6 +75,8 @@ set(POLYMARKET_CLIENT_SOURCES
     src/http_client.cpp
     src/json_rpc_client.cpp
     src/websocket_client.cpp
+    src/websocket_client_resilience.cpp
+    src/websocket_resilience.cpp
     src/market_fetcher.cpp
     src/orderbook.cpp
     src/clob_order_execution.cpp
@@ -177,6 +179,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     add_executable(test_sdk_error tests/test_sdk_error.cpp)
     target_link_libraries(test_sdk_error PRIVATE polymarket::client)
     add_test(NAME test_sdk_error COMMAND test_sdk_error)
+
+    add_executable(test_websocket_resilience tests/test_websocket_resilience.cpp)
+    target_include_directories(test_websocket_resilience PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_websocket_resilience PRIVATE polymarket::client)
+    add_test(NAME test_websocket_resilience COMMAND test_websocket_resilience)
 endif()
 
 # Install library, headers, and dependency targets into a single export set

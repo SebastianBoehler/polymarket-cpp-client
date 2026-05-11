@@ -23,7 +23,10 @@ namespace polymarket
         ws_.on_connect([this]()
                        {
         std::cout << "[WS] Connected to orderbook stream" << std::endl;
-        send_subscribe_message(); });
+        if (ws_.stats().reconnects == 0 || ws_.tracked_subscription_count() == 0)
+        {
+            send_subscribe_message();
+        } });
 
         ws_.on_disconnect([this]()
                           { std::cout << "[WS] Disconnected from orderbook stream" << std::endl; });
@@ -62,6 +65,12 @@ namespace polymarket
 
         std::cout << "[OrderbookManager] Subscribed to market: " << market.slug
                   << " (YES: " << market.token_yes.substr(0, 16) << "...)" << std::endl;
+
+        ws_.clear_subscriptions();
+        if (ws_.is_connected())
+        {
+            send_subscribe_message();
+        }
     }
 
     void OrderbookManager::unsubscribe(const std::string &token_id)
@@ -70,6 +79,11 @@ namespace polymarket
         if (it != subscribed_tokens_.end())
         {
             subscribed_tokens_.erase(it);
+            ws_.clear_subscriptions();
+            if (ws_.is_connected())
+            {
+                send_subscribe_message();
+            }
         }
 
         std::unique_lock<std::shared_mutex> lock(orderbooks_mutex_);
@@ -79,6 +93,7 @@ namespace polymarket
     void OrderbookManager::unsubscribe_all()
     {
         subscribed_tokens_.clear();
+        ws_.clear_subscriptions();
 
         {
             std::unique_lock<std::shared_mutex> lock(orderbooks_mutex_);
@@ -183,6 +198,7 @@ namespace polymarket
         std::string msg = subscribe_msg.dump();
         std::cout << "[WS] Sending subscribe: " << subscribed_tokens_.size() << " tokens" << std::endl;
 
+        ws_.track_subscription(msg);
         ws_.send(msg);
     }
 
