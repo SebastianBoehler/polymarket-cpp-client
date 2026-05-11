@@ -77,6 +77,8 @@ set(POLYMARKET_CLIENT_SOURCES
     src/websocket_client.cpp
     src/market_fetcher.cpp
     src/orderbook.cpp
+    src/clob_order_execution.cpp
+    src/order_execution.cpp
     src/polymarket_events.cpp
     src/order_signer.cpp
     src/order_signer_v2.cpp
@@ -165,6 +167,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     add_executable(test_http_client_transport tests/test_http_client_transport.cpp)
     target_link_libraries(test_http_client_transport PRIVATE polymarket::client)
     add_test(NAME test_http_client_transport COMMAND test_http_client_transport)
+
+    add_executable(test_order_execution tests/test_order_execution.cpp)
+    target_include_directories(test_order_execution PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_order_execution PRIVATE polymarket::client)
+    add_test(NAME test_order_execution COMMAND test_order_execution)
 endif()
 
 # Install library, headers, and dependency targets into a single export set
