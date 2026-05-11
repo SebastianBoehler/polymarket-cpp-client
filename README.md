@@ -111,6 +111,26 @@ the V2 exchange contracts, and supports the V2 `POLY_1271` deposit-wallet
 signature wrapper. See [docs/clob-v2-migration.md](docs/clob-v2-migration.md)
 for implementation notes.
 
+## Structured Errors
+
+Existing convenience methods still return `std::optional`, vectors, booleans,
+or `OrderResponse`. New opt-in `Result<T>` methods expose structured failures
+for callers that need to inspect transport errors, API responses, auth failures,
+rate limits, parse errors, signing errors, and invalid arguments.
+
+```cpp
+auto result = client.get_open_orders_result();
+if (!result) {
+    const auto& error = result.error();
+    std::cerr << polymarket::sdk_error_code_to_string(error.code)
+              << " " << error.http_status
+              << " " << error.message << "\n";
+}
+```
+
+`SdkError` includes endpoint, HTTP status, response body excerpt, retryability,
+and request id when the server returns a recognizable request-id header.
+
 ## Polygon JSON-RPC Watchers
 
 The client includes provider-neutral EVM JSON-RPC helpers for users who want to build their own low-latency indexer instead of depending on a third-party Polymarket data feed.

@@ -82,6 +82,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/polymarket_events.cpp
     src/order_signer.cpp
     src/order_signer_v2.cpp
+    src/sdk_error.cpp
     src/clob_client.cpp
 )
 
@@ -172,6 +173,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_include_directories(test_order_execution PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_order_execution PRIVATE polymarket::client)
     add_test(NAME test_order_execution COMMAND test_order_execution)
+
+    add_executable(test_sdk_error tests/test_sdk_error.cpp)
+    target_link_libraries(test_sdk_error PRIVATE polymarket::client)
+    add_test(NAME test_sdk_error COMMAND test_sdk_error)
 endif()
 
 # Install library, headers, and dependency targets into a single export set

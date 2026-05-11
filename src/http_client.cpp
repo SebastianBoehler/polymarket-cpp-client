@@ -1,6 +1,7 @@
 #include "http_client.hpp"
 #include <algorithm>
 #include <chrono>
+#include <cctype>
 #include <stdexcept>
 #include <thread>
 
@@ -253,6 +254,47 @@ namespace polymarket
         return total_size;
     }
 
+    size_t HttpClient::header_callback(char *ptr, size_t size, size_t nmemb, void *userdata)
+    {
+        auto *headers = static_cast<std::map<std::string, std::string> *>(userdata);
+        const size_t total_size = size * nmemb;
+        std::string line(ptr, total_size);
+
+        const auto colon = line.find(':');
+        if (colon == std::string::npos)
+        {
+            return total_size;
+        }
+
+        auto key = line.substr(0, colon);
+        auto value = line.substr(colon + 1);
+        auto trim = [](std::string &text)
+        {
+            while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front())))
+            {
+                text.erase(text.begin());
+            }
+            while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())))
+            {
+                text.pop_back();
+            }
+        };
+
+        trim(key);
+        trim(value);
+        std::transform(key.begin(), key.end(), key.begin(),
+                       [](unsigned char c)
+                       {
+                           return static_cast<char>(std::tolower(c));
+                       });
+        if (!key.empty())
+        {
+            (*headers)[key] = value;
+        }
+
+        return total_size;
+    }
+
     HttpResponse HttpClient::perform(const std::string &method, const std::string &path, const std::string &url)
     {
         HttpResponse response;
@@ -264,6 +306,8 @@ namespace polymarket
         curl_easy_setopt(curl_, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, headers_);
         curl_easy_setopt(curl_, CURLOPT_WRITEDATA, &response.body);
+        curl_easy_setopt(curl_, CURLOPT_HEADERFUNCTION, header_callback);
+        curl_easy_setopt(curl_, CURLOPT_HEADERDATA, &response.headers);
 
         CURLcode res = curl_easy_perform(curl_);
 

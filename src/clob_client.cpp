@@ -680,21 +680,57 @@ namespace polymarket
 
     std::optional<OpenOrder> ClobClient::get_order(const std::string &order_id)
     {
+        auto result = get_order_result(order_id);
+        return result ? result.value() : std::nullopt;
+    }
+
+    Result<std::optional<OpenOrder>> ClobClient::get_order_result(const std::string &order_id)
+    {
+        if (!order_signer_ || !api_creds_)
+        {
+            return Result<std::optional<OpenOrder>>::failure(make_auth_error("Client not authenticated", "/order/" + order_id));
+        }
+
         auto headers = get_l2_headers("GET", "/order/" + order_id, "");
         auto response = http_.get("/order/" + order_id, headers);
 
         if (!response.ok())
-            return std::nullopt;
+        {
+            return Result<std::optional<OpenOrder>>::failure(make_sdk_error(response, "/order/" + order_id));
+        }
+
+        try
+        {
+            auto parsed_json = json::parse(response.body);
+            (void)parsed_json;
+        }
+        catch (const std::exception &ex)
+        {
+            return Result<std::optional<OpenOrder>>::failure(make_parse_error(ex.what(), "/order/" + order_id, response.body));
+        }
 
         auto orders = parse_open_orders("[" + response.body + "]");
         if (orders.empty())
-            return std::nullopt;
+        {
+            return Result<std::optional<OpenOrder>>::success(std::nullopt);
+        }
 
-        return orders[0];
+        return Result<std::optional<OpenOrder>>::success(orders[0]);
     }
 
     std::vector<OpenOrder> ClobClient::get_open_orders(const std::string &market)
     {
+        auto result = get_open_orders_result(market);
+        return result ? result.value() : std::vector<OpenOrder>{};
+    }
+
+    Result<std::vector<OpenOrder>> ClobClient::get_open_orders_result(const std::string &market)
+    {
+        if (!order_signer_ || !api_creds_)
+        {
+            return Result<std::vector<OpenOrder>>::failure(make_auth_error("Client not authenticated", "/orders"));
+        }
+
         std::string path = "/orders";
         if (!market.empty())
         {
@@ -705,9 +741,21 @@ namespace polymarket
         auto response = http_.get(path, headers);
 
         if (!response.ok())
-            return {};
+        {
+            return Result<std::vector<OpenOrder>>::failure(make_sdk_error(response, path));
+        }
 
-        return parse_open_orders(response.body);
+        try
+        {
+            auto parsed_json = json::parse(response.body);
+            (void)parsed_json;
+        }
+        catch (const std::exception &ex)
+        {
+            return Result<std::vector<OpenOrder>>::failure(make_parse_error(ex.what(), path, response.body));
+        }
+
+        return Result<std::vector<OpenOrder>>::success(parse_open_orders(response.body));
     }
 
     std::vector<Trade> ClobClient::get_trades(const std::string &next_cursor)
