@@ -3,6 +3,7 @@
 #include "types.hpp"
 #include "http_client.hpp"
 #include "order_signer.hpp"
+#include "sdk_error.hpp"
 #include <string>
 #include <vector>
 #include <optional>
@@ -239,9 +240,12 @@ namespace polymarket
         // Order creation (creates signed order, does not post)
         SignedOrder create_order(const CreateOrderParams &params);
         SignedOrder create_market_order(const CreateMarketOrderParams &params);
+        Result<SignedOrder> create_order_result(const CreateOrderParams &params);
+        Result<SignedOrder> create_market_order_result(const CreateMarketOrderParams &params);
 
         // Order posting
         OrderResponse post_order(const SignedOrder &order, OrderType order_type = OrderType::GTC);
+        Result<OrderResponse> post_order_result(const SignedOrder &order, OrderType order_type = OrderType::GTC);
         std::vector<OrderResponse> post_orders(const std::vector<BatchOrderEntry> &orders);
 
         // Combined create and post
@@ -252,13 +256,16 @@ namespace polymarket
 
         // Order management
         bool cancel_order(const std::string &order_id);
+        Result<bool> cancel_order_result(const std::string &order_id);
         bool cancel_orders(const std::vector<std::string> &order_ids);
         bool cancel_all();
         bool cancel_market_orders(const std::string &condition_id);
 
         // Order queries
         std::optional<OpenOrder> get_order(const std::string &order_id);
+        Result<std::optional<OpenOrder>> get_order_result(const std::string &order_id);
         std::vector<OpenOrder> get_open_orders(const std::string &market = "");
+        Result<std::vector<OpenOrder>> get_open_orders_result(const std::string &market = "");
         std::vector<Trade> get_trades(const std::string &next_cursor = "");
 
         // Balance and allowance

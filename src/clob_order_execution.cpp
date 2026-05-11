@@ -24,6 +24,16 @@ namespace polymarket
                 client.get_exchange_address(),
                 client.get_neg_risk_exchange_address()};
         }
+
+        SdkError order_response_error(const OrderResponse &response, const std::string &endpoint)
+        {
+            SdkError error;
+            error.code = SdkErrorCode::ApiResponse;
+            error.message = response.error_msg.empty() ? "Order request failed" : response.error_msg;
+            error.endpoint = endpoint;
+            error.retryable = false;
+            return error;
+        }
     }
 
     SignedOrder ClobClient::create_order(const CreateOrderParams &params)
@@ -63,6 +73,33 @@ namespace polymarket
         return order_signer_->sign_order(order_data, context.exchange_for(is_neg_risk));
     }
 
+    Result<SignedOrder> ClobClient::create_order_result(const CreateOrderParams &params)
+    {
+        if (!order_signer_)
+        {
+            return Result<SignedOrder>::failure(make_auth_error("Client not authenticated", "/order"));
+        }
+        if (params.price <= 0.0 || params.size <= 0.0)
+        {
+            return Result<SignedOrder>::failure({SdkErrorCode::InvalidArgument,
+                                                "Order price and size must be positive",
+                                                "/order",
+                                                0,
+                                                "",
+                                                "",
+                                                false});
+        }
+
+        try
+        {
+            return Result<SignedOrder>::success(create_order(params));
+        }
+        catch (const std::exception &ex)
+        {
+            return Result<SignedOrder>::failure({SdkErrorCode::Signing, ex.what(), "/order", 0, "", "", false});
+        }
+    }
+
     SignedOrder ClobClient::create_market_order(const CreateMarketOrderParams &params)
     {
         if (!order_signer_)
@@ -95,8 +132,54 @@ namespace polymarket
         return create_order(order_params);
     }
 
+    Result<SignedOrder> ClobClient::create_market_order_result(const CreateMarketOrderParams &params)
+    {
+        if (!order_signer_)
+        {
+            return Result<SignedOrder>::failure(make_auth_error("Client not authenticated", "/order"));
+        }
+        if (params.amount <= 0.0)
+        {
+            return Result<SignedOrder>::failure({SdkErrorCode::InvalidArgument,
+                                                "Market order amount must be positive",
+                                                "/order",
+                                                0,
+                                                "",
+                                                "",
+                                                false});
+        }
+
+        try
+        {
+            return Result<SignedOrder>::success(create_market_order(params));
+        }
+        catch (const std::exception &ex)
+        {
+            return Result<SignedOrder>::failure({SdkErrorCode::Signing, ex.what(), "/order", 0, "", "", false});
+        }
+    }
+
     OrderResponse ClobClient::post_order(const SignedOrder &order, OrderType order_type)
     {
+        auto result = post_order_result(order, order_type);
+        if (result)
+        {
+            return result.value();
+        }
+
+        OrderResponse response;
+        response.success = false;
+        response.error_msg = result.error().message;
+        return response;
+    }
+
+    Result<OrderResponse> ClobClient::post_order_result(const SignedOrder &order, OrderType order_type)
+    {
+        if (!order_signer_ || !api_creds_)
+        {
+            return Result<OrderResponse>::failure(make_auth_error("Client not authenticated", "/order"));
+        }
+
         const auto body = detail::order_payload_json(order,
                                                      api_creds_ ? api_creds_->api_key : "",
                                                      order_type_to_string(order_type));
@@ -104,7 +187,28 @@ namespace polymarket
         auto headers = get_l2_headers("POST", "/order", body_str);
         auto response = http_.post("/order", body_str, headers);
 
-        return parse_order_response(response.body);
+        if (!response.ok())
+        {
+            return Result<OrderResponse>::failure(make_sdk_error(response, "/order"));
+        }
+
+        try
+        {
+            auto parsed_json = json::parse(response.body);
+            (void)parsed_json;
+        }
+        catch (const std::exception &ex)
+        {
+            return Result<OrderResponse>::failure(make_parse_error(ex.what(), "/order", response.body));
+        }
+
+        auto parsed = parse_order_response(response.body);
+        if (!parsed.success)
+        {
+            return Result<OrderResponse>::failure(order_response_error(parsed, "/order"));
+        }
+
+        return Result<OrderResponse>::success(parsed);
     }
 
     std::vector<OrderResponse> ClobClient::post_orders(const std::vector<BatchOrderEntry> &orders)
@@ -158,6 +262,17 @@ namespace polymarket
 
     bool ClobClient::cancel_order(const std::string &order_id)
     {
+        auto result = cancel_order_result(order_id);
+        return result && result.value();
+    }
+
+    Result<bool> ClobClient::cancel_order_result(const std::string &order_id)
+    {
+        if (!order_signer_ || !api_creds_)
+        {
+            return Result<bool>::failure(make_auth_error("Client not authenticated", "/order"));
+        }
+
         json body;
         body["orderID"] = order_id;
 
@@ -165,7 +280,11 @@ namespace polymarket
         auto headers = get_l2_headers("DELETE", "/order", body_str);
 
         auto response = http_.post("/order", body_str, headers);
-        return response.ok();
+        if (!response.ok())
+        {
+            return Result<bool>::failure(make_sdk_error(response, "/order"));
+        }
+        return Result<bool>::success(true);
     }
 
     bool ClobClient::cancel_orders(const std::vector<std::string> &order_ids)

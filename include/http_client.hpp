@@ -19,6 +19,7 @@ namespace polymarket
         std::string body;
         std::string error;
         double elapsed_ms;
+        std::map<std::string, std::string> headers;
 
         bool ok() const { return status_code >= 200 && status_code < 300; }
     };
@@ -138,6 +139,7 @@ namespace polymarket
         HttpResponse perform(const std::string &method, const std::string &path, const std::string &url);
 
         static size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdata);
+        static size_t header_callback(char *ptr, size_t size, size_t nmemb, void *userdata);
     };
 
     // Global initialization (call once at startup)
