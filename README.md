@@ -7,15 +7,17 @@ Reusable C++20 client for Polymarket: REST, WebSocket streaming, and order signi
 
 ## Features
 
-- **REST**: market discovery, orderbook/price queries, auth key management.
-- **WebSocket**: orderbook streaming via IXWebSocket.
-- **Signing**: EIP-712 order signing (secp256k1, keccak).
+- **REST**: market discovery, orderbook/price queries, auth key management, and trading endpoints.
+- **Transport controls**: configurable libcurl timeouts, keepalive, connection reuse, proxy/user-agent, request metrics, and cumulative stats.
+- **WebSocket**: orderbook streaming via IXWebSocket with reconnect, subscription replay, typed callbacks, and backpressure counters.
+- **Signing**: CLOB V2 EIP-712 order signing (secp256k1, keccak).
+- **Structured errors**: opt-in `Result<T>` APIs with typed SDK error classification.
 - **EVM JSON-RPC**: Polygon HTTP catch-up and WebSocket subscriptions for logs, heads, and pending transaction hashes.
 - **Resolution Events**: Decoders for UMA adapter and Conditional Tokens resolution/redemption logs.
 - **Proxy Support**: HTTP/HTTPS proxy with authentication for geo-restricted access.
 - **Neg-Risk Markets**: Automatic exchange selection for neg_risk markets.
 - **Examples**: REST (`rest_example`), signing (`sign_example`), WebSocket (`ws_example`), onchain watchers.
-- **Tests**: small utility test (`test_utils`) plus runnable examples.
+- **Benchmarks and tests**: local benchmark targets plus `ctest` coverage.
 
 ## Requirements
 
@@ -72,6 +74,8 @@ cmake -S . -B build -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON -DPOLYMARKET_CLIENT_BU
 cmake --build build --parallel
 # optional tests
 ctest --test-dir build
+# optional benchmarks
+cmake -S . -B build -DPOLYMARKET_CLIENT_BUILD_BENCHMARKS=ON
 # install (into system or a prefix you configure)
 cmake --install build --prefix <install_prefix>
 ```
@@ -179,19 +183,22 @@ If no cursor exists and `--start-block` is omitted, the example starts at the cu
 
 ## Tests
 
-`test_utils` exercises basic utility helpers. `test_evm_events` covers EVM topic hashing, log filter serialization, and UMA/CTF event decoding. `test_evm_event_indexer` covers block range planning and file-backed cursors. Run via `ctest --test-dir build`.
+`test_utils` exercises basic utility helpers. `test_evm_events` covers EVM topic hashing, log filter serialization, and UMA/CTF event decoding. `test_evm_event_indexer` covers block range planning and file-backed cursors. Transport, order execution, typed error, signing, and WebSocket resilience tests are included when `POLYMARKET_CLIENT_BUILD_TESTS=ON`. Run via `ctest --test-dir build`.
 
 ## Key components
 
 - `include/` headers for client API
 - `src/http_client.cpp`: libcurl HTTP client
+- `src/sdk_error.cpp`: typed SDK error helpers
 - `src/websocket_client.cpp`: IXWebSocket wrapper
+- `src/websocket_client_resilience.cpp`: reconnect, queue, and subscription helpers
 - `src/json_rpc_client.cpp`: EVM HTTP/WS JSON-RPC helpers
 - `src/evm_event_indexer.cpp`: persistent log catch-up and live indexing
 - `src/evm_utils.cpp`: ABI/log utilities
 - `src/polymarket_events.cpp`: UMA/CTF event decoders
 - `src/order_signer.cpp`: EIP-712 signing (secp256k1, keccak)
-- `src/clob_client.cpp`: REST + trading endpoints
+- `src/clob_client.cpp`: REST endpoints and parsing
+- `src/clob_order_execution.cpp`: trading/order execution endpoints
 - `src/orderbook.cpp`: WS orderbook management
 
 ## Proxy Configuration
@@ -311,7 +318,7 @@ This is handled automatically in `create_order()` - no manual intervention neede
 
 ## GitHub Actions
 
-- **build.yml**: CI build on every push/PR (macOS)
+- **build.yml**: Debug and Release builds on Linux and macOS, with examples, tests, benchmark targets, and `ctest`.
 - **release.yml**: Automated releases when you push a version tag
 
 ### Creating a Release
