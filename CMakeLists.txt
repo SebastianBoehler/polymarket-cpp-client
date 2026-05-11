@@ -11,6 +11,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(POLYMARKET_CLIENT_BUILD_EXAMPLES "Build example/test executables" ON)
 option(POLYMARKET_CLIENT_BUILD_TESTS "Build test executables" ON)
+option(POLYMARKET_CLIENT_BUILD_BENCHMARKS "Build local benchmark executables" OFF)
 
 include(CMakePackageConfigHelpers)
 
@@ -184,6 +185,20 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_include_directories(test_websocket_resilience PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_websocket_resilience PRIVATE polymarket::client)
     add_test(NAME test_websocket_resilience COMMAND test_websocket_resilience)
+endif()
+
+if(POLYMARKET_CLIENT_BUILD_BENCHMARKS)
+    add_executable(benchmark_v2_signing benchmarks/benchmark_v2_signing.cpp)
+    target_link_libraries(benchmark_v2_signing PRIVATE polymarket::client)
+
+    add_executable(benchmark_order_payload benchmarks/benchmark_order_payload.cpp)
+    target_link_libraries(benchmark_order_payload PRIVATE polymarket::client)
+
+    add_executable(benchmark_http_fixture benchmarks/benchmark_http_fixture.cpp)
+    target_link_libraries(benchmark_http_fixture PRIVATE polymarket::client)
+
+    add_executable(benchmark_ws_parse benchmarks/benchmark_ws_parse.cpp)
+    target_link_libraries(benchmark_ws_parse PRIVATE polymarket::client)
 endif()
 
 # Install library, headers, and dependency targets into a single export set
