@@ -5,6 +5,7 @@
 #include "order_signer.hpp"
 #include <iostream>
 #include <csignal>
+#include <cmath>
 #include <thread>
 #include <atomic>
 #include <iomanip>
