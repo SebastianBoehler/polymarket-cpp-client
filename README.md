@@ -206,8 +206,16 @@ For high-frequency trading, minimize latency by keeping TCP/TLS connections warm
 ```cpp
 #include "clob_client.hpp"
 
+polymarket::HttpClientOptions http_options;
+http_options.timeout_ms = 2500;
+http_options.connect_timeout_ms = 1000;
+http_options.dns_cache_timeout_seconds = 120;
+http_options.tcp_nodelay = true;
+http_options.tcp_keepalive = true;
+
 polymarket::ClobClient client("https://clob.polymarket.com", 137,
                                private_key, creds);
+client.configure_transport(http_options);
 
 // 1. Pre-warm connection after startup (establishes TCP/TLS)
 client.warm_connection();
@@ -222,6 +230,11 @@ auto response = client.create_and_post_order(params);
 auto stats = client.get_connection_stats();
 std::cout << "Avg latency: " << stats.avg_latency_ms << "ms\n";
 std::cout << "Reused connections: " << stats.reused_connections << "\n";
+std::cout << "Bytes received: " << stats.bytes_received << "\n";
+
+auto last = client.get_last_request_metrics();
+std::cout << "Last request: " << last.method << " " << last.path
+          << " in " << last.elapsed_ms << "ms\n";
 
 // 5. Stop heartbeat when done
 client.stop_heartbeat();

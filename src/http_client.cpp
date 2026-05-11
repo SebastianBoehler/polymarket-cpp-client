@@ -1,4 +1,5 @@
 #include "http_client.hpp"
+#include <algorithm>
 #include <chrono>
 #include <stdexcept>
 #include <thread>
@@ -28,14 +29,21 @@ namespace polymarket
     }
 
     HttpClient::HttpClient()
-        : curl_(nullptr), headers_(nullptr), timeout_ms_(5000),
-          dns_cache_timeout_(60), keepalive_interval_(20),
+        : curl_(nullptr), headers_(nullptr),
           heartbeat_running_(false),
           total_requests_(0), reused_connections_(0),
+          curl_errors_(0), bytes_received_(0),
           total_latency_ms_(0.0), last_latency_ms_(0.0),
+          min_latency_ms_(0.0), max_latency_ms_(0.0),
           connection_warm_(false)
     {
         init();
+    }
+
+    HttpClient::HttpClient(const HttpClientOptions &options)
+        : HttpClient()
+    {
+        configure(options);
     }
 
     HttpClient::~HttpClient()
@@ -46,12 +54,14 @@ namespace polymarket
 
     HttpClient::HttpClient(HttpClient &&other) noexcept
         : curl_(other.curl_), headers_(other.headers_), base_url_(std::move(other.base_url_)),
-          proxy_url_(std::move(other.proxy_url_)), timeout_ms_(other.timeout_ms_),
-          dns_cache_timeout_(other.dns_cache_timeout_), keepalive_interval_(other.keepalive_interval_),
+          proxy_url_(std::move(other.proxy_url_)), options_(other.options_),
           heartbeat_running_(false),
           total_requests_(other.total_requests_), reused_connections_(other.reused_connections_),
+          curl_errors_(other.curl_errors_), bytes_received_(other.bytes_received_),
+          status_counts_(std::move(other.status_counts_)),
           total_latency_ms_(other.total_latency_ms_), last_latency_ms_(other.last_latency_ms_),
-          connection_warm_(other.connection_warm_)
+          min_latency_ms_(other.min_latency_ms_), max_latency_ms_(other.max_latency_ms_),
+          connection_warm_(other.connection_warm_), last_metrics_(std::move(other.last_metrics_))
     {
         other.stop_heartbeat();
         other.curl_ = nullptr;
@@ -69,14 +79,18 @@ namespace polymarket
             headers_ = other.headers_;
             base_url_ = std::move(other.base_url_);
             proxy_url_ = std::move(other.proxy_url_);
-            timeout_ms_ = other.timeout_ms_;
-            dns_cache_timeout_ = other.dns_cache_timeout_;
-            keepalive_interval_ = other.keepalive_interval_;
+            options_ = other.options_;
             total_requests_ = other.total_requests_;
             reused_connections_ = other.reused_connections_;
+            curl_errors_ = other.curl_errors_;
+            bytes_received_ = other.bytes_received_;
+            status_counts_ = std::move(other.status_counts_);
             total_latency_ms_ = other.total_latency_ms_;
             last_latency_ms_ = other.last_latency_ms_;
+            min_latency_ms_ = other.min_latency_ms_;
+            max_latency_ms_ = other.max_latency_ms_;
             connection_warm_ = other.connection_warm_;
+            last_metrics_ = std::move(other.last_metrics_);
             other.curl_ = nullptr;
             other.headers_ = nullptr;
         }
@@ -91,19 +105,10 @@ namespace polymarket
             throw std::runtime_error("Failed to initialize CURL");
         }
 
-        // Set default options for performance
-        curl_easy_setopt(curl_, CURLOPT_TCP_NODELAY, 1L);    // Disable Nagle's algorithm
-        curl_easy_setopt(curl_, CURLOPT_TCP_KEEPALIVE, 1L);  // Enable TCP keepalive
-        curl_easy_setopt(curl_, CURLOPT_TCP_KEEPIDLE, 20L);  // Start keepalive after 20s idle
-        curl_easy_setopt(curl_, CURLOPT_TCP_KEEPINTVL, 20L); // Keepalive probe interval
         curl_easy_setopt(curl_, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl_, CURLOPT_MAXREDIRS, 3L);
         curl_easy_setopt(curl_, CURLOPT_WRITEFUNCTION, write_callback);
-
-        // Connection reuse - critical for keeping TCP/TLS hot
-        curl_easy_setopt(curl_, CURLOPT_FORBID_REUSE, 0L);                      // Allow connection reuse
-        curl_easy_setopt(curl_, CURLOPT_FRESH_CONNECT, 0L);                     // Reuse existing connections
-        curl_easy_setopt(curl_, CURLOPT_DNS_CACHE_TIMEOUT, dns_cache_timeout_); // DNS cache TTL
+        apply_options();
 
         // HTTP/1.1 keep-alive
         add_header("Connection: keep-alive");
@@ -133,7 +138,8 @@ namespace polymarket
 
     void HttpClient::set_timeout_ms(long timeout_ms)
     {
-        timeout_ms_ = timeout_ms;
+        options_.timeout_ms = timeout_ms;
+        apply_options();
     }
 
     void HttpClient::set_base_url(const std::string &base_url)
@@ -153,9 +159,18 @@ namespace polymarket
 
     void HttpClient::set_proxy(const std::string &proxy_url)
     {
+        options_.proxy_url = proxy_url;
         proxy_url_ = proxy_url;
-        if (!proxy_url_.empty() && curl_)
+        if (curl_)
         {
+            if (proxy_url_.empty())
+            {
+                curl_easy_setopt(curl_, CURLOPT_PROXY, nullptr);
+                curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYPEER, 1L);
+                curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYHOST, 2L);
+                return;
+            }
+
             curl_easy_setopt(curl_, CURLOPT_PROXY, proxy_url_.c_str());
 
             // Detect proxy type from URL scheme
@@ -185,29 +200,49 @@ namespace polymarket
 
     void HttpClient::set_user_agent(const std::string &user_agent)
     {
+        options_.user_agent = user_agent;
         if (curl_)
         {
-            curl_easy_setopt(curl_, CURLOPT_USERAGENT, user_agent.c_str());
+            curl_easy_setopt(curl_, CURLOPT_USERAGENT, user_agent.empty() ? nullptr : user_agent.c_str());
         }
     }
 
     void HttpClient::set_dns_cache_timeout(long seconds)
     {
-        dns_cache_timeout_ = seconds;
-        if (curl_)
-        {
-            curl_easy_setopt(curl_, CURLOPT_DNS_CACHE_TIMEOUT, seconds);
-        }
+        options_.dns_cache_timeout_seconds = seconds;
+        apply_options();
     }
 
     void HttpClient::set_keepalive_interval(long seconds)
     {
-        keepalive_interval_ = seconds;
-        if (curl_)
-        {
-            curl_easy_setopt(curl_, CURLOPT_TCP_KEEPIDLE, seconds);
-            curl_easy_setopt(curl_, CURLOPT_TCP_KEEPINTVL, seconds);
-        }
+        options_.tcp_keepidle_seconds = seconds;
+        options_.tcp_keepintvl_seconds = seconds;
+        apply_options();
+    }
+
+    void HttpClient::configure(const HttpClientOptions &options)
+    {
+        options_ = options;
+        proxy_url_ = options.proxy_url;
+        apply_options();
+    }
+
+    void HttpClient::apply_options()
+    {
+        if (!curl_)
+            return;
+
+        curl_easy_setopt(curl_, CURLOPT_TIMEOUT_MS, options_.timeout_ms);
+        curl_easy_setopt(curl_, CURLOPT_CONNECTTIMEOUT_MS, options_.connect_timeout_ms);
+        curl_easy_setopt(curl_, CURLOPT_DNS_CACHE_TIMEOUT, options_.dns_cache_timeout_seconds);
+        curl_easy_setopt(curl_, CURLOPT_TCP_NODELAY, options_.tcp_nodelay ? 1L : 0L);
+        curl_easy_setopt(curl_, CURLOPT_TCP_KEEPALIVE, options_.tcp_keepalive ? 1L : 0L);
+        curl_easy_setopt(curl_, CURLOPT_TCP_KEEPIDLE, options_.tcp_keepidle_seconds);
+        curl_easy_setopt(curl_, CURLOPT_TCP_KEEPINTVL, options_.tcp_keepintvl_seconds);
+        curl_easy_setopt(curl_, CURLOPT_FORBID_REUSE, options_.allow_connection_reuse ? 0L : 1L);
+        curl_easy_setopt(curl_, CURLOPT_FRESH_CONNECT, options_.allow_connection_reuse ? 0L : 1L);
+        curl_easy_setopt(curl_, CURLOPT_USERAGENT, options_.user_agent.empty() ? nullptr : options_.user_agent.c_str());
+        set_proxy(options_.proxy_url);
     }
 
     size_t HttpClient::write_callback(char *ptr, size_t size, size_t nmemb, void *userdata)
@@ -218,16 +253,16 @@ namespace polymarket
         return total_size;
     }
 
-    HttpResponse HttpClient::perform(const std::string &url)
+    HttpResponse HttpClient::perform(const std::string &method, const std::string &path, const std::string &url)
     {
         HttpResponse response;
         response.status_code = 0;
+        response.elapsed_ms = 0.0;
 
         auto start = std::chrono::high_resolution_clock::now();
 
         curl_easy_setopt(curl_, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, headers_);
-        curl_easy_setopt(curl_, CURLOPT_TIMEOUT_MS, timeout_ms_);
         curl_easy_setopt(curl_, CURLOPT_WRITEDATA, &response.body);
 
         CURLcode res = curl_easy_perform(curl_);
@@ -235,13 +270,10 @@ namespace polymarket
         auto end = std::chrono::high_resolution_clock::now();
         response.elapsed_ms = std::chrono::duration<double, std::milli>(end - start).count();
 
-        if (res != CURLE_OK)
-        {
-            response.error = curl_easy_strerror(res);
-            return response;
-        }
-
+        long num_connects = 0;
+        curl_easy_getinfo(curl_, CURLINFO_NUM_CONNECTS, &num_connects);
         curl_easy_getinfo(curl_, CURLINFO_RESPONSE_CODE, &response.status_code);
+        response.error = res == CURLE_OK ? "" : curl_easy_strerror(res);
 
         // Track connection reuse stats
         {
@@ -249,14 +281,28 @@ namespace polymarket
             total_requests_++;
             total_latency_ms_ += response.elapsed_ms;
             last_latency_ms_ = response.elapsed_ms;
+            min_latency_ms_ = total_requests_ == 1 ? response.elapsed_ms : std::min(min_latency_ms_, response.elapsed_ms);
+            max_latency_ms_ = std::max(max_latency_ms_, response.elapsed_ms);
+            bytes_received_ += static_cast<long>(response.body.size());
+            status_counts_[response.status_code]++;
+            if (res != CURLE_OK)
+            {
+                curl_errors_++;
+            }
 
             // Check if connection was reused
-            long reused = 0;
-            curl_easy_getinfo(curl_, CURLINFO_NUM_CONNECTS, &reused);
-            if (reused == 0)
+            bool reused_connection = num_connects == 0;
+            if (reused_connection)
             {
                 reused_connections_++;
             }
+            last_metrics_.method = method;
+            last_metrics_.path = path;
+            last_metrics_.status_code = response.status_code;
+            last_metrics_.elapsed_ms = response.elapsed_ms;
+            last_metrics_.bytes_received = static_cast<long>(response.body.size());
+            last_metrics_.curl_code = static_cast<int>(res);
+            last_metrics_.reused_connection = reused_connection;
         }
 
         return response;
@@ -269,7 +315,7 @@ namespace polymarket
         curl_easy_setopt(curl_, CURLOPT_HTTPGET, 1L);
         curl_easy_setopt(curl_, CURLOPT_POST, 0L);
 
-        return perform(url);
+        return perform("GET", path, url);
     }
 
     HttpResponse HttpClient::get(const std::string &path, const std::map<std::string, std::string> &custom_headers)
@@ -307,7 +353,7 @@ namespace polymarket
         curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, body.c_str());
         curl_easy_setopt(curl_, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
 
-        return perform(url);
+        return perform("POST", path, url);
     }
 
     HttpResponse HttpClient::post(const std::string &path, const std::string &body, const std::map<std::string, std::string> &custom_headers)
@@ -348,7 +394,7 @@ namespace polymarket
             curl_easy_setopt(curl_, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
         }
 
-        auto response = perform(url);
+        auto response = perform("DELETE", path, url);
 
         // Reset to default
         curl_easy_setopt(curl_, CURLOPT_CUSTOMREQUEST, nullptr);
@@ -457,10 +503,21 @@ namespace polymarket
         ConnectionStats stats;
         stats.total_requests = total_requests_;
         stats.reused_connections = reused_connections_;
+        stats.curl_errors = curl_errors_;
+        stats.bytes_received = bytes_received_;
+        stats.status_counts = status_counts_;
         stats.avg_latency_ms = total_requests_ > 0 ? total_latency_ms_ / total_requests_ : 0.0;
         stats.last_latency_ms = last_latency_ms_;
+        stats.min_latency_ms = min_latency_ms_;
+        stats.max_latency_ms = max_latency_ms_;
         stats.connection_warm = connection_warm_;
         return stats;
+    }
+
+    RequestMetrics HttpClient::get_last_request_metrics() const
+    {
+        std::lock_guard<std::mutex> lock(stats_mutex_);
+        return last_metrics_;
     }
 
 } // namespace polymarket

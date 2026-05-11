@@ -28,6 +28,13 @@ namespace polymarket
         http_.set_timeout_ms(10000);
     }
 
+    ClobClient::ClobClient(const std::string &base_url, int chain_id, const HttpClientOptions &http_options)
+        : chain_id_(chain_id), base_url_(base_url), sig_type_(SignatureType::EOA)
+    {
+        http_.configure(http_options);
+        http_.set_base_url(base_url);
+    }
+
     ClobClient::ClobClient(const std::string &base_url, int chain_id,
                            const std::string &private_key,
                            const ApiCredentials &creds,
@@ -37,6 +44,21 @@ namespace polymarket
     {
         http_.set_base_url(base_url);
         http_.set_timeout_ms(10000);
+
+        order_signer_ = std::make_unique<OrderSigner>(private_key, chain_id);
+        api_creds_ = std::make_unique<ApiCredentials>(creds);
+    }
+
+    ClobClient::ClobClient(const std::string &base_url, int chain_id,
+                           const std::string &private_key,
+                           const ApiCredentials &creds,
+                           SignatureType sig_type,
+                           const std::string &funder_address,
+                           const HttpClientOptions &http_options)
+        : chain_id_(chain_id), base_url_(base_url), funder_address_(funder_address), sig_type_(sig_type)
+    {
+        http_.configure(http_options);
+        http_.set_base_url(base_url);
 
         order_signer_ = std::make_unique<OrderSigner>(private_key, chain_id);
         api_creds_ = std::make_unique<ApiCredentials>(creds);

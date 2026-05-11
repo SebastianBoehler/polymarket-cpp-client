@@ -148,6 +148,7 @@ namespace polymarket
     public:
         // Constructor for public (unauthenticated) access
         ClobClient(const std::string &base_url = "https://clob.polymarket.com", int chain_id = 137);
+        ClobClient(const std::string &base_url, int chain_id, const HttpClientOptions &http_options);
 
         // Constructor for authenticated access
         ClobClient(const std::string &base_url, int chain_id,
@@ -155,6 +156,12 @@ namespace polymarket
                    const ApiCredentials &creds,
                    SignatureType sig_type = SignatureType::EOA,
                    const std::string &funder_address = "");
+        ClobClient(const std::string &base_url, int chain_id,
+                   const std::string &private_key,
+                   const ApiCredentials &creds,
+                   SignatureType sig_type,
+                   const std::string &funder_address,
+                   const HttpClientOptions &http_options);
 
         ~ClobClient();
 
@@ -317,6 +324,9 @@ namespace polymarket
         // Set timeout
         void set_timeout_ms(long timeout_ms) { http_.set_timeout_ms(timeout_ms); }
 
+        // Apply transport options in one call
+        void configure_transport(const HttpClientOptions &options) { http_.configure(options); }
+
         // Set proxy for HTTP requests (e.g., "http://user:pass@proxy.example.com:8080")
         void set_proxy(const std::string &proxy_url) { http_.set_proxy(proxy_url); }
 
@@ -349,6 +359,7 @@ namespace polymarket
 
         // Get connection statistics
         HttpClient::ConnectionStats get_connection_stats() const { return http_.get_stats(); }
+        RequestMetrics get_last_request_metrics() const { return http_.get_last_request_metrics(); }
 
         // Get exchange address for the chain
         std::string get_exchange_address() const;
