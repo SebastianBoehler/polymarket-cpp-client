@@ -23,11 +23,37 @@ namespace polymarket
         bool ok() const { return status_code >= 200 && status_code < 300; }
     };
 
+    struct HttpClientOptions
+    {
+        long timeout_ms = 5000;
+        long connect_timeout_ms = 2000;
+        long dns_cache_timeout_seconds = 60;
+        bool tcp_keepalive = true;
+        long tcp_keepidle_seconds = 20;
+        long tcp_keepintvl_seconds = 20;
+        bool tcp_nodelay = true;
+        bool allow_connection_reuse = true;
+        std::string proxy_url;
+        std::string user_agent;
+    };
+
+    struct RequestMetrics
+    {
+        std::string method;
+        std::string path;
+        long status_code = 0;
+        double elapsed_ms = 0.0;
+        long bytes_received = 0;
+        int curl_code = 0;
+        bool reused_connection = false;
+    };
+
     // High-performance HTTP client using libcurl
     class HttpClient
     {
     public:
         HttpClient();
+        explicit HttpClient(const HttpClientOptions &options);
         ~HttpClient();
 
         // Disable copy
@@ -39,6 +65,8 @@ namespace polymarket
         HttpClient &operator=(HttpClient &&other) noexcept;
 
         // Configuration
+        void configure(const HttpClientOptions &options);
+        HttpClientOptions options() const { return options_; }
         void set_timeout_ms(long timeout_ms);
         void set_base_url(const std::string &base_url);
         void add_header(const std::string &header);
@@ -66,20 +94,24 @@ namespace polymarket
         {
             long total_requests;
             long reused_connections;
+            long curl_errors;
+            long bytes_received;
+            std::map<long, long> status_counts;
             double avg_latency_ms;
             double last_latency_ms;
+            double min_latency_ms;
+            double max_latency_ms;
             bool connection_warm;
         };
         ConnectionStats get_stats() const;
+        RequestMetrics get_last_request_metrics() const;
 
     private:
         CURL *curl_;
         struct curl_slist *headers_;
         std::string base_url_;
         std::string proxy_url_;
-        long timeout_ms_;
-        long dns_cache_timeout_;
-        long keepalive_interval_;
+        HttpClientOptions options_;
 
         // Heartbeat thread
         std::atomic<bool> heartbeat_running_;
@@ -90,13 +122,20 @@ namespace polymarket
         mutable std::mutex stats_mutex_;
         long total_requests_;
         long reused_connections_;
+        long curl_errors_;
+        long bytes_received_;
+        std::map<long, long> status_counts_;
         double total_latency_ms_;
         double last_latency_ms_;
+        double min_latency_ms_;
+        double max_latency_ms_;
         bool connection_warm_;
+        RequestMetrics last_metrics_;
 
         void init();
         void cleanup();
-        HttpResponse perform(const std::string &url);
+        void apply_options();
+        HttpResponse perform(const std::string &method, const std::string &path, const std::string &url);
 
         static size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdata);
     };

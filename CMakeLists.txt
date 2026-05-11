@@ -161,6 +161,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     add_executable(test_order_signer_v2 tests/test_order_signer_v2.cpp)
     target_link_libraries(test_order_signer_v2 PRIVATE polymarket::client)
     add_test(NAME test_order_signer_v2 COMMAND test_order_signer_v2)
+
+    add_executable(test_http_client_transport tests/test_http_client_transport.cpp)
+    target_link_libraries(test_http_client_transport PRIVATE polymarket::client)
+    add_test(NAME test_http_client_transport COMMAND test_http_client_transport)
 endif()
 
 # Install library, headers, and dependency targets into a single export set
