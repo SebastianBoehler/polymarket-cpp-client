@@ -270,6 +270,35 @@ client.stop_heartbeat();
 
 **Expected gains**: First request ~40-60ms → subsequent requests ~25-35ms.
 
+## WebSocket Resilience
+
+`WebSocketClient` supports additive production-safety options for market-data
+consumers: automatic reconnect backoff, ping interval, bounded message queue,
+subscription replay, typed message callbacks, and counters for reconnects,
+dropped messages, parse errors, last message time, messages, and bytes.
+
+```cpp
+polymarket::WebSocketClient ws;
+polymarket::WebSocketOptions options;
+options.message_queue_limit = 4096;
+options.min_backoff_ms = 250;
+options.max_backoff_ms = 5000;
+ws.configure(options);
+
+ws.on_message([](const std::string& raw) {
+    // Raw callback remains available.
+});
+ws.on_typed_message([](const polymarket::TypedWebSocketMessage& msg) {
+    if (msg.topic == "clob_market" && msg.type == "agg_orderbook") {
+        // Use msg.asset_id and msg.payload.
+    }
+});
+```
+
+Call `track_subscription(subscription_json)` after sending a subscription if
+you use `WebSocketClient` directly. `OrderbookManager` tracks its subscription
+message and restores it automatically after reconnect.
+
 ## Neg-Risk Markets
 
 The client automatically detects neg_risk markets and uses the appropriate exchange address for order signing:

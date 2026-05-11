@@ -1,13 +1,18 @@
 #include "websocket_client.hpp"
 #include "types.hpp"
+#include "websocket_resilience.hpp"
 #include <iostream>
 
 namespace polymarket
 {
 
     WebSocketClient::WebSocketClient()
-        : ping_interval_ms_(5000), auto_reconnect_(true), state_(WsState::DISCONNECTED), running_(false), should_stop_(false)
+        : message_queue_(std::make_unique<detail::BoundedMessageQueue>(options_.message_queue_limit)),
+          state_(WsState::DISCONNECTED),
+          running_(false),
+          should_stop_(false)
     {
+        apply_options();
     }
 
     WebSocketClient::~WebSocketClient()
@@ -23,23 +28,24 @@ namespace polymarket
 
     void WebSocketClient::set_ping_interval_ms(int interval_ms)
     {
-        ping_interval_ms_ = interval_ms;
-        ws_.setPingInterval(interval_ms);
+        options_.ping_interval_ms = interval_ms;
+        apply_options();
     }
 
     void WebSocketClient::set_auto_reconnect(bool enabled)
     {
-        auto_reconnect_ = enabled;
-        ws_.enableAutomaticReconnection();
-        if (!enabled)
-        {
-            ws_.disableAutomaticReconnection();
-        }
+        options_.reconnect_enabled = enabled;
+        apply_options();
     }
 
     void WebSocketClient::on_message(OnMessageCallback callback)
     {
         on_message_cb_ = std::move(callback);
+    }
+
+    void WebSocketClient::on_typed_message(OnTypedMessageCallback callback)
+    {
+        on_typed_message_cb_ = std::move(callback);
     }
 
     void WebSocketClient::on_connect(OnConnectCallback callback)
@@ -71,6 +77,11 @@ namespace polymarket
             {
             case ix::WebSocketMessageType::Open:
                 state_.store(WsState::CONNECTED);
+                if (has_connected_.exchange(true))
+                {
+                    reconnects_++;
+                }
+                restore_subscriptions();
                 if (on_connect_cb_)
                 {
                     on_connect_cb_();
@@ -78,7 +89,7 @@ namespace polymarket
                 break;
 
             case ix::WebSocketMessageType::Close:
-                state_.store(WsState::DISCONNECTED);
+                state_.store(options_.reconnect_enabled ? WsState::RECONNECTING : WsState::DISCONNECTED);
                 if (on_disconnect_cb_)
                 {
                     on_disconnect_cb_();
@@ -86,7 +97,7 @@ namespace polymarket
                 break;
 
             case ix::WebSocketMessageType::Error:
-                state_.store(WsState::DISCONNECTED);
+                state_.store(options_.reconnect_enabled ? WsState::RECONNECTING : WsState::DISCONNECTED);
                 if (on_error_cb_)
                 {
                     on_error_cb_(msg->errorInfo.reason);
@@ -96,10 +107,8 @@ namespace polymarket
             case ix::WebSocketMessageType::Message:
                 messages_received_++;
                 bytes_received_ += msg->str.size();
-                if (on_message_cb_)
-                {
-                    on_message_cb_(msg->str);
-                }
+                last_message_time_ns_.store(now_ns());
+                enqueue_message(msg->str);
                 break;
 
             case ix::WebSocketMessageType::Ping:
@@ -110,6 +119,7 @@ namespace polymarket
             } });
 
         state_.store(WsState::CONNECTING);
+        start_message_worker();
         ws_.start();
 
         return true;
@@ -119,6 +129,7 @@ namespace polymarket
     {
         state_.store(WsState::CLOSING);
         ws_.stop();
+        stop_message_worker();
         state_.store(WsState::DISCONNECTED);
     }
 
