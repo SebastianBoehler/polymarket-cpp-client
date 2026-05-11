@@ -6,16 +6,40 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: macos-latest
+  build-test:
+    name: ${{ matrix.os }} ${{ matrix.build_type }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        build_type: [Debug, Release]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup CMake build
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         run: |
-          cmake -S . -B build -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON \
+            -DPOLYMARKET_CLIENT_BUILD_TESTS=ON \
+            -DPOLYMARKET_CLIENT_BUILD_BENCHMARKS=ON
 
       - name: Build
+        run: cmake --build build --parallel --config ${{ matrix.build_type }}
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --build-config ${{ matrix.build_type }}
+
+      - name: Optional live smoke
+        if: vars.POLYMARKET_RUN_LIVE_SMOKE == '1'
         run: |
-          cmake --build build --parallel
+          ./build/rest_example

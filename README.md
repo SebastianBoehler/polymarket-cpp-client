@@ -102,6 +102,7 @@ int main() {
 - `feed_latency_benchmark`: compare local receive timing across Polymarket market WS and Polygon RPC WS
 
 Build them with `POLYMARKET_CLIENT_BUILD_EXAMPLES=ON` and run from `build/`.
+Local benchmark targets are documented in [docs/benchmarks.md](docs/benchmarks.md).
 
 ## CLOB V2 Status
 
