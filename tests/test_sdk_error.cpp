@@ -72,6 +72,24 @@ int main()
         return 1;
     }
 
+    HttpResponse poly1271_response;
+    poly1271_response.status_code = 400;
+    poly1271_response.body = R"({"error":"the order signer address has to be the address of the API KEY"})";
+    const auto poly1271_error = make_sdk_error(poly1271_response, "/order");
+    if (!expect_code("POLY_1271 setup classification",
+                     poly1271_error.code,
+                     SdkErrorCode::DepositWalletSetup) ||
+        !expect_true("POLY_1271 not retryable", !poly1271_error.retryable) ||
+        !expect_true("POLY_1271 explains funder",
+                     poly1271_error.message.find("POLY_1271 deposit wallet order was rejected") != std::string::npos) ||
+        !expect_true("POLY_1271 explains deployed wallet",
+                     poly1271_error.message.find("deployed deposit wallet") != std::string::npos) ||
+        !expect_true("POLY_1271 explains balance sync",
+                     poly1271_error.message.find("update_balance_allowance") != std::string::npos))
+    {
+        return 1;
+    }
+
     HttpResponse curl_response;
     curl_response.error = "Operation timed out";
     const auto curl_error = make_sdk_error(curl_response, "/markets");

@@ -13,6 +13,7 @@ namespace polymarket
         HttpTransport,
         ApiResponse,
         Auth,
+        DepositWalletSetup,
         RateLimit,
         Parse,
         Signing,
