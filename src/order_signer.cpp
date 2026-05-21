@@ -331,13 +331,15 @@ namespace polymarket
         return keccak256(encoded);
     }
 
-    std::array<uint8_t, 32> OrderSigner::hash_clob_auth(const std::string &timestamp, uint64_t nonce)
+    std::array<uint8_t, 32> OrderSigner::hash_clob_auth(const std::string &address,
+                                                        const std::string &timestamp,
+                                                        uint64_t nonce)
     {
         auto type_hash = keccak256(std::string(
             "ClobAuth(address address,string timestamp,uint256 nonce,string message)"));
 
         // Encode address (padded to 32 bytes)
-        auto addr_bytes = from_hex(address_);
+        auto addr_bytes = from_hex(address);
         std::vector<uint8_t> addr_padded(32, 0);
         std::memcpy(addr_padded.data() + 12, addr_bytes.data(), std::min(addr_bytes.size(), size_t(20)));
 
@@ -369,17 +371,16 @@ namespace polymarket
         auto now = std::chrono::system_clock::now();
         auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
         std::string ts_str = std::to_string(timestamp);
+        const std::string auth_address = override_address.empty() ? address_ : override_address;
 
         auto domain_hash = hash_clob_auth_domain();
-        auto struct_hash = hash_clob_auth(ts_str, nonce);
+        auto struct_hash = hash_clob_auth(auth_address, ts_str, nonce);
         auto message_hash = encode_eip712(domain_hash, struct_hash);
 
         std::string signature = sign_hash(message_hash);
 
         L1Headers headers;
-        // Always use signer address for L1 auth (even for proxy wallets)
-        // The override_address parameter is ignored for L1 - it's only for reference
-        headers.poly_address = address_;
+        headers.poly_address = auth_address;
         headers.poly_signature = signature;
         headers.poly_timestamp = ts_str;
         headers.poly_nonce = std::to_string(nonce);
@@ -493,8 +494,7 @@ namespace polymarket
         std::string signature = base64_encode(hmac_vec, true);
 
         L2Headers headers;
-        // Always use signer address for L2 auth - the API key is associated with the signer
-        headers.poly_address = address_;
+        headers.poly_address = funder_address.empty() ? address_ : funder_address;
         headers.poly_timestamp = std::to_string(timestamp);
         headers.poly_api_key = creds.api_key;
         headers.poly_passphrase = creds.api_passphrase;
