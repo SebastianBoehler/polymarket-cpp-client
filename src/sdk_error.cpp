@@ -68,6 +68,26 @@ namespace polymarket
 
             return "";
         }
+
+        bool is_deposit_wallet_signer_mismatch(const std::string &endpoint,
+                                               long status_code,
+                                               const std::string &message)
+        {
+            const auto normalized = lower(message);
+            return endpoint == "/order" &&
+                   status_code == 400 &&
+                   normalized.find("order signer address") != std::string::npos &&
+                   normalized.find("address of the api key") != std::string::npos;
+        }
+
+        std::string deposit_wallet_setup_message()
+        {
+            return "POLY_1271 deposit wallet order was rejected because the order signer "
+                   "does not match the CLOB API key address. Check that the funder is the "
+                   "deployed deposit wallet/proxy address, the wallet contract has bytecode "
+                   "on Polygon, approvals and pUSD balance are set on that wallet, and "
+                   "update_balance_allowance was called with signature_type=3 before posting.";
+        }
     }
 
     SdkError make_sdk_error(const HttpResponse &response, const std::string &endpoint)
@@ -92,6 +112,14 @@ namespace polymarket
 
         const auto api_message = parse_api_error_message(response.body);
         error.message = api_message.empty() ? "API request failed" : api_message;
+
+        if (is_deposit_wallet_signer_mismatch(endpoint, response.status_code, error.message))
+        {
+            error.code = SdkErrorCode::DepositWalletSetup;
+            error.message = deposit_wallet_setup_message();
+            error.retryable = false;
+            return error;
+        }
 
         if (response.status_code == 401 || response.status_code == 403)
         {
@@ -137,6 +165,8 @@ namespace polymarket
             return "api_response";
         case SdkErrorCode::Auth:
             return "auth";
+        case SdkErrorCode::DepositWalletSetup:
+            return "deposit_wallet_setup";
         case SdkErrorCode::RateLimit:
             return "rate_limit";
         case SdkErrorCode::Parse:

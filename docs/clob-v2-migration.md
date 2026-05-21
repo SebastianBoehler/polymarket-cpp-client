@@ -36,6 +36,9 @@ Implemented changes:
   creation params.
 - `POLY_1271` deposit-wallet signatures use the V2 wrapper format from the
   official V2 SDK.
+- `POLY_1271` signer/API-key rejections are classified as
+  `SdkErrorCode::DepositWalletSetup` with guidance to check the deployed
+  funder wallet, approvals, balance, and CLOB balance sync.
 - `post_order` and `post_orders` serialize V2 order payloads with `owner`,
   `deferExec`, and `postOnly`.
 - The balance/allowance endpoint signs the bare path and appends
