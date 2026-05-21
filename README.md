@@ -38,7 +38,7 @@ include(FetchContent)
 FetchContent_Declare(
     polymarket_client
     GIT_REPOSITORY https://github.com/SebastianBoehler/polymarket-cpp-client.git
-    GIT_TAG v1.1.0  # or any release tag
+    GIT_TAG v1.2.0  # or any release tag
 )
 FetchContent_MakeAvailable(polymarket_client)
 
@@ -52,11 +52,11 @@ Download pre-built binaries from [Releases](https://github.com/SebastianBoehler/
 
 ```bash
 # macOS
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.1.0/polymarket-cpp-client-macos-arm64.tar.gz
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.2.0/polymarket-cpp-client-macos-arm64.tar.gz
 tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C /usr/local
 
 # Linux
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.1.0/polymarket-cpp-client-linux-x64.tar.gz
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.2.0/polymarket-cpp-client-linux-x64.tar.gz
 tar -xzf polymarket-cpp-client-linux-x64.tar.gz -C /usr/local
 ```
 
@@ -217,19 +217,10 @@ client.set_proxy("http://user:pass@proxy.example.com:8080");
 client.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...");
 ```
 
-Or directly on HttpClient:
-
-```cpp
-#include "http_client.hpp"
-
-polymarket::HttpClient http;
-http.set_base_url("https://clob.polymarket.com");
-http.set_proxy("http://user:pass@proxy.example.com:8080");
-```
-
 ## Low-Latency Trading (Keep TCP/TLS Hot)
 
-For high-frequency trading, minimize latency by keeping TCP/TLS connections warm:
+Keep TCP/TLS connections warm by configuring transport options once, pre-warming
+the connection, and optionally running a heartbeat:
 
 ```cpp
 #include "clob_client.hpp"
@@ -244,39 +235,15 @@ http_options.tcp_keepalive = true;
 polymarket::ClobClient client("https://clob.polymarket.com", 137,
                                private_key, creds);
 client.configure_transport(http_options);
-
-// 1. Pre-warm connection after startup (establishes TCP/TLS)
 client.warm_connection();
-
-// 2. Start background heartbeat to keep connection alive (every 25s)
 client.start_heartbeat(25);
 
-// 3. Now your orders will hit ~25-35ms instead of ~40-60ms
 auto response = client.create_and_post_order(params);
-
-// 4. Check connection stats
 auto stats = client.get_connection_stats();
 std::cout << "Avg latency: " << stats.avg_latency_ms << "ms\n";
-std::cout << "Reused connections: " << stats.reused_connections << "\n";
-std::cout << "Bytes received: " << stats.bytes_received << "\n";
 
-auto last = client.get_last_request_metrics();
-std::cout << "Last request: " << last.method << " " << last.path
-          << " in " << last.elapsed_ms << "ms\n";
-
-// 5. Stop heartbeat when done
 client.stop_heartbeat();
 ```
-
-**Key optimizations enabled:**
-
-- **Connection reuse**: Single CURL handle with `FORBID_REUSE=0`
-- **HTTP/1.1 keep-alive**: `Connection: keep-alive` header
-- **TCP keepalive**: Probes every 20s to prevent socket close
-- **DNS caching**: 60s TTL (configurable via `set_dns_cache_timeout()`)
-- **TCP_NODELAY**: Nagle's algorithm disabled for low latency
-
-**Expected gains**: First request ~40-60ms → subsequent requests ~25-35ms.
 
 ## WebSocket Resilience
 
@@ -321,15 +288,8 @@ This is handled automatically in `create_order()` - no manual intervention neede
 - **build.yml**: Debug and Release builds on Linux and macOS, with examples, tests, benchmark targets, and `ctest`.
 - **release.yml**: Automated releases when you push a version tag
 
-### Creating a Release
-
-```bash
-# Update version in CMakeLists.txt, then:
-git tag v1.1.0
-git push origin v1.1.0
-```
-
-This triggers the release workflow which builds for macOS and Linux, then creates a GitHub release with downloadable artifacts.
+Push a version tag to trigger the release workflow, which builds macOS/Linux
+artifacts and creates the GitHub release.
 
 ## License
 
