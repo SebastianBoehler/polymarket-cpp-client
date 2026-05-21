@@ -55,6 +55,23 @@ int main()
         return 1;
     }
 
+    constexpr const char *kFunder = "0x1111111111111111111111111111111111111111";
+    const auto l1_headers = signer.generate_l1_headers(0, kFunder);
+    if (!expect_equal("L1 auth funder address", l1_headers.poly_address, kFunder))
+    {
+        return 1;
+    }
+
+    ApiCredentials creds;
+    creds.api_key = "test-key";
+    creds.api_secret = "c2VjcmV0";
+    creds.api_passphrase = "test-passphrase";
+    const auto l2_headers = signer.generate_l2_headers(creds, "GET", "/orders", "", kFunder);
+    if (!expect_equal("L2 auth funder address", l2_headers.poly_address, kFunder))
+    {
+        return 1;
+    }
+
     const auto eoa = signer.sign_order_with_salt(base_order(SignatureType::EOA), kExchangeV2, "123456789");
     if (!expect_equal("EOA V2 signature", eoa.signature,
                       "0x92daffe6e8b80fb13506e91647e066ff58d3f7050021043fac41a24990b279e33f3624578b7f0fc5a59b225d2d96f063c09147308e936d5a42527e369aff3d4a1c"))

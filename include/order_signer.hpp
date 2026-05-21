@@ -145,7 +145,9 @@ namespace polymarket
 
         // L1 auth helpers
         std::array<uint8_t, 32> hash_clob_auth_domain();
-        std::array<uint8_t, 32> hash_clob_auth(const std::string &timestamp, uint64_t nonce);
+        std::array<uint8_t, 32> hash_clob_auth(const std::string &address,
+                                               const std::string &timestamp,
+                                               uint64_t nonce);
     };
 
     // Utility functions
