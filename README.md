@@ -39,7 +39,7 @@ include(FetchContent)
 FetchContent_Declare(
     polymarket_client
     GIT_REPOSITORY https://github.com/SebastianBoehler/polymarket-cpp-client.git
-    GIT_TAG v1.2.1  # or any release tag
+    GIT_TAG v1.2.2  # or any release tag
 )
 FetchContent_MakeAvailable(polymarket_client)
 
@@ -53,11 +53,11 @@ Download pre-built binaries from [Releases](https://github.com/SebastianBoehler/
 
 ```bash
 # macOS
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.2.1/polymarket-cpp-client-macos-arm64.tar.gz
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.2.2/polymarket-cpp-client-macos-arm64.tar.gz
 tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C /usr/local
 
 # Linux
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.2.1/polymarket-cpp-client-linux-x64.tar.gz
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.2.2/polymarket-cpp-client-linux-x64.tar.gz
 tar -xzf polymarket-cpp-client-linux-x64.tar.gz -C /usr/local
 ```
 
