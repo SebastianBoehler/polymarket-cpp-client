@@ -11,6 +11,7 @@ Reusable C++20 client for Polymarket: REST, WebSocket streaming, and order signi
 - **Transport controls**: configurable libcurl timeouts, keepalive, connection reuse, proxy/user-agent, request metrics, and cumulative stats.
 - **WebSocket**: orderbook streaming via IXWebSocket with reconnect, subscription replay, typed callbacks, and backpressure counters.
 - **Signing**: CLOB V2 EIP-712 order signing (secp256k1, keccak).
+- **Decimal math**: shared scaled-integer conversion for trading amounts.
 - **Structured errors**: opt-in `Result<T>` APIs with typed SDK error classification.
 - **EVM JSON-RPC**: Polygon HTTP catch-up and WebSocket subscriptions for logs, heads, and pending transaction hashes.
 - **Resolution Events**: Decoders for UMA adapter and Conditional Tokens resolution/redemption logs.

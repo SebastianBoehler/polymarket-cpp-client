@@ -71,6 +71,7 @@ FetchContent_MakeAvailable(json ixwebsocket secp256k1 ethash)
 
 # Core client library
 set(POLYMARKET_CLIENT_SOURCES
+    src/decimal_math.cpp
     src/evm_event_indexer.cpp
     src/evm_utils.cpp
     src/http_client.cpp
