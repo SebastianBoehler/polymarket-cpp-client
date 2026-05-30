@@ -186,6 +186,14 @@ If no cursor exists and `--start-block` is omitted, the example starts at the cu
 
 `test_utils` exercises basic utility helpers. `test_evm_events` covers EVM topic hashing, log filter serialization, and UMA/CTF event decoding. `test_evm_event_indexer` covers block range planning and file-backed cursors. Transport, order execution, typed error, signing, and WebSocket resilience tests are included when `POLYMARKET_CLIENT_BUILD_TESTS=ON`. Run via `ctest --test-dir build`.
 
+`test_oracle_watcher` validates in-memory normalization against synthetic UMA/CTF fixtures.
+`test_oracle_watcher_historical` performs a live historical smoke check using defaults:
+- `POLYMARKET_POLYGON_RPC_HTTP=https://polygon-bor.publicnode.com`
+- `POLYMARKET_UMA_CTF_ADAPTER=0x6a9d222616c90fca5754cd1333cfd9b7fb6a4f74`
+- `POLYMARKET_CONDITIONAL_TOKENS=0x4d97dcd97ec945f40cf65f87097ace5ea0476045`
+
+Set these env vars explicitly if you need another RPC or contract set.
+
 ## Key components
 
 - `include/` headers for client API

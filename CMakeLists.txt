@@ -88,6 +88,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/order_signer_v2.cpp
     src/sdk_error.cpp
     src/clob_client.cpp
+    src/oracle_watcher.cpp
 )
 
 add_library(polymarket_client ${POLYMARKET_CLIENT_SOURCES})
@@ -186,6 +187,14 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_include_directories(test_websocket_resilience PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_websocket_resilience PRIVATE polymarket::client)
     add_test(NAME test_websocket_resilience COMMAND test_websocket_resilience)
+
+    add_executable(test_oracle_watcher tests/test_oracle_watcher.cpp)
+    target_link_libraries(test_oracle_watcher PRIVATE polymarket::client)
+    add_test(NAME test_oracle_watcher COMMAND test_oracle_watcher)
+
+    add_executable(test_oracle_watcher_historical tests/test_oracle_watcher_historical.cpp)
+    target_link_libraries(test_oracle_watcher_historical PRIVATE polymarket::client)
+    add_test(NAME test_oracle_watcher_historical COMMAND test_oracle_watcher_historical)
 endif()
 
 if(POLYMARKET_CLIENT_BUILD_BENCHMARKS)
