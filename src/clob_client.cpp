@@ -620,7 +620,7 @@ namespace polymarket
         {
             throw std::runtime_error("Client not authenticated");
         }
-        return order_signer_->create_api_credentials(http_, nonce, funder_address_);
+        return order_signer_->create_api_credentials(http_, nonce);
     }
 
     ApiCredentials ClobClient::derive_api_key()
@@ -629,7 +629,7 @@ namespace polymarket
         {
             throw std::runtime_error("Client not authenticated");
         }
-        return order_signer_->derive_api_credentials(http_, funder_address_);
+        return order_signer_->derive_api_credentials(http_);
     }
 
     ApiCredentials ClobClient::create_or_derive_api_key()
@@ -638,7 +638,7 @@ namespace polymarket
         {
             throw std::runtime_error("Client not authenticated");
         }
-        return order_signer_->create_or_derive_api_credentials(http_, funder_address_);
+        return order_signer_->create_or_derive_api_credentials(http_);
     }
 
     std::vector<std::string> ClobClient::get_api_keys()

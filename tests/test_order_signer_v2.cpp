@@ -67,7 +67,7 @@ int main()
     creds.api_secret = "c2VjcmV0";
     creds.api_passphrase = "test-passphrase";
     const auto l2_headers = signer.generate_l2_headers(creds, "GET", "/orders", "", kFunder);
-    if (!expect_equal("L2 auth funder address", l2_headers.poly_address, kFunder))
+    if (!expect_equal("L2 auth signer address", l2_headers.poly_address, kSigner))
     {
         return 1;
     }
