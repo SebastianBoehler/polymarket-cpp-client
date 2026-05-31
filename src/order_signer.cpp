@@ -426,7 +426,7 @@ namespace polymarket
                                                             const std::string &method,
                                                             const std::string &path,
                                                             const std::string &body,
-                                                            const std::string &funder_address)
+                                                            const std::string & /*funder_address*/)
     {
         auto now = std::chrono::system_clock::now();
         auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
@@ -452,7 +452,7 @@ namespace polymarket
         std::string signature = base64_encode(hmac_vec, true);
 
         L2Headers headers;
-        headers.poly_address = funder_address.empty() ? address_ : funder_address;
+        headers.poly_address = address_;
         headers.poly_timestamp = std::to_string(timestamp);
         headers.poly_api_key = creds.api_key;
         headers.poly_passphrase = creds.api_passphrase;

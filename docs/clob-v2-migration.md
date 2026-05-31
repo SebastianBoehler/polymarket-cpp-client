@@ -36,9 +36,10 @@ Implemented changes:
   creation params.
 - `POLY_1271` deposit-wallet signatures use the V2 wrapper format from the
   official V2 SDK.
-- L1/L2 auth header generation honors the configured funder/proxy address so
-  API-key derivation and authenticated requests use the same wallet identity as
-  `POLY_1271` orders.
+- L2 auth header generation keeps `POLY_ADDRESS` on the signer/API-key owner
+  address even when a funder/proxy wallet is configured for order funding.
+- High-level API-key creation and derivation also use the signer identity; the
+  funder/proxy address remains an order-funding parameter.
 - `POLY_1271` signer/API-key rejections are classified as
   `SdkErrorCode::DepositWalletSetup` with guidance to check the deployed
   funder wallet, approvals, balance, and CLOB balance sync.
