@@ -119,6 +119,7 @@ namespace polymarket
         double price;
         double size;
         OrderSide side;
+        std::string tick_size = "0.01";
         std::string expiration = "0";
         std::string metadata = "0x0000000000000000000000000000000000000000000000000000000000000000";
         std::string builder_code = "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -132,6 +133,7 @@ namespace polymarket
         double amount; // USDC for BUY, shares for SELL
         OrderSide side;
         std::optional<double> price; // Optional price limit
+        std::string tick_size = "0.01";
         std::string metadata = "0x0000000000000000000000000000000000000000000000000000000000000000";
         std::string builder_code = "0x0000000000000000000000000000000000000000000000000000000000000000";
     };

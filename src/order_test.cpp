@@ -12,6 +12,7 @@
  */
 
 #include "order_signer.hpp"
+#include "order_execution.hpp"
 #include "http_client.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -356,26 +357,33 @@ int main(int argc, char *argv[])
             std::string exchange_address = is_neg_risk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE;
             std::cout << "    Exchange: " << exchange_address << "\n";
 
-            // Calculate shares for $1 order - match TS client's rounding for tick size 0.01
-            // Config: price=2, size=2, amount=4
+            // Calculate amounts with the same tick-size precision rules as the official clients.
             double order_usd = 1.0;
-            double raw_price = std::floor(best_ask * 100) / 100;  // roundDown to 2 decimals
-            double raw_maker = std::floor(order_usd * 100) / 100; // roundDown to 2 decimals
-            double raw_taker = raw_maker / raw_price;
+            const std::string live_order_type = "FAK";
+            const auto rounding = detail::rounding_config_for_tick_size("0.01");
+            detail::OrderAmounts amounts;
 
-            // TS rounding: roundUp to (amount+4)=8 decimals, then roundDown to amount=4 decimals
-            raw_taker = std::ceil(raw_taker * 100000000) / 100000000; // roundUp to 8 decimals
-            raw_taker = std::floor(raw_taker * 10000) / 10000;        // roundDown to 4 decimals
+            if (live_order_type == "GTC")
+            {
+                const double raw_price = std::floor(best_ask * 100) / 100;
+                const double shares = std::floor((order_usd / raw_price) * 100) / 100;
+                amounts = detail::calculate_limit_order_amounts(OrderSide::BUY, best_ask, shares, rounding);
+            }
+            else
+            {
+                amounts = detail::calculate_market_order_amounts(OrderSide::BUY, order_usd, best_ask, rounding);
+            }
 
-            std::cout << "    Placing FAK order: $" << order_usd << " @ " << raw_price << " = " << raw_taker << " shares\n";
+            std::cout << "    Placing " << live_order_type << " order: $" << amounts.maker
+                      << " for " << amounts.taker << " shares\n";
 
             // Create order
             OrderData real_order;
             real_order.maker = funder_address;
             real_order.taker = "0x0000000000000000000000000000000000000000";
             real_order.token_id = yes_token;
-            real_order.maker_amount = to_wei(raw_maker, 6);
-            real_order.taker_amount = to_wei(raw_taker, 6);
+            real_order.maker_amount = to_wei(amounts.maker, 6);
+            real_order.taker_amount = to_wei(amounts.taker, 6);
             real_order.side = OrderSide::BUY;
             real_order.signer = signer.address();
             real_order.expiration = "0";
@@ -420,7 +428,7 @@ int main(int argc, char *argv[])
             post_body["postOnly"] = false;
             post_body["order"] = order_obj;
             post_body["owner"] = creds.api_key;
-            post_body["orderType"] = "FAK";
+            post_body["orderType"] = live_order_type;
 
             std::string body_str = post_body.dump();
             std::cout << "    Full order body:\n"

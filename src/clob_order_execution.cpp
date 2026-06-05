@@ -55,7 +55,11 @@ namespace polymarket
         }
 
         const auto context = build_execution_context(*this, *order_signer_, funder_address_, sig_type_);
-        const auto amounts = detail::calculate_limit_order_amounts(params.side, params.price, params.size);
+        const auto amounts = detail::calculate_limit_order_amounts(
+            params.side,
+            params.price,
+            params.size,
+            detail::rounding_config_for_tick_size(params.tick_size));
 
         OrderData order_data;
         order_data.maker = context.maker_address();
@@ -121,15 +125,30 @@ namespace polymarket
             }
         }
 
-        CreateOrderParams order_params;
-        order_params.token_id = params.token_id;
-        order_params.price = price;
-        order_params.size = params.side == OrderSide::BUY ? params.amount / price : params.amount;
-        order_params.side = params.side;
-        order_params.metadata = params.metadata;
-        order_params.builder_code = params.builder_code;
+        bool is_neg_risk = false;
+        auto neg_risk_info = get_neg_risk(params.token_id);
+        is_neg_risk = neg_risk_info && neg_risk_info->neg_risk;
 
-        return create_order(order_params);
+        const auto context = build_execution_context(*this, *order_signer_, funder_address_, sig_type_);
+        const auto amounts = detail::calculate_market_order_amounts(
+            params.side,
+            params.amount,
+            price,
+            detail::rounding_config_for_tick_size(params.tick_size));
+
+        OrderData order_data;
+        order_data.maker = context.maker_address();
+        order_data.taker = ZERO_ADDRESS;
+        order_data.token_id = params.token_id;
+        order_data.maker_amount = to_wei(amounts.maker, 6);
+        order_data.taker_amount = to_wei(amounts.taker, 6);
+        order_data.side = params.side;
+        order_data.signer = context.signer_for_order();
+        order_data.metadata = params.metadata;
+        order_data.builder = params.builder_code;
+        order_data.signature_type = sig_type_;
+
+        return order_signer_->sign_order(order_data, context.exchange_for(is_neg_risk));
     }
 
     Result<SignedOrder> ClobClient::create_market_order_result(const CreateMarketOrderParams &params)
