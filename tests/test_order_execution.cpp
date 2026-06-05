@@ -72,6 +72,28 @@ int main()
         return 1;
     }
 
+    const auto reported_gtc = detail::calculate_limit_order_amounts(OrderSide::BUY, 0.1700000850000425, 5.8823);
+    if (!expect_close("reported GTC maker amount", reported_gtc.maker, 0.9996) ||
+        !expect_close("reported GTC taker amount", reported_gtc.taker, 5.88) ||
+        !expect_equal("reported GTC maker wei", to_wei(reported_gtc.maker, 6), "999600") ||
+        !expect_equal("reported GTC taker wei", to_wei(reported_gtc.taker, 6), "5880000"))
+    {
+        return 1;
+    }
+
+    const auto reported_fak = detail::calculate_market_order_amounts(
+        OrderSide::BUY,
+        1.0,
+        0.1700000850000425,
+        detail::rounding_config_for_tick_size("0.01"));
+    if (!expect_close("reported FAK maker amount", reported_fak.maker, 1.0) ||
+        !expect_close("reported FAK taker amount", reported_fak.taker, 5.8823) ||
+        !expect_equal("reported FAK maker wei", to_wei(reported_fak.maker, 6), "1000000") ||
+        !expect_equal("reported FAK taker wei", to_wei(reported_fak.taker, 6), "5882300"))
+    {
+        return 1;
+    }
+
     const auto sell_amounts = detail::calculate_limit_order_amounts(OrderSide::SELL, 0.42, 10.0);
     if (!expect_close("sell maker amount", sell_amounts.maker, 10.0) ||
         !expect_close("sell taker amount", sell_amounts.taker, 4.2))

@@ -47,6 +47,9 @@ Implemented changes:
   `deferExec`, and `postOnly`.
 - The balance/allowance endpoint signs the bare path and appends
   `signature_type` in the query string.
+- Limit and market order amount builders apply the same tick-size keyed
+  rounding config as the official clients; callers can pass cached `tick_size`
+  metadata without adding an order-time lookup.
 
 Legacy `nonce` and `fee_rate_bps` fields remain on lower-level structs only for
 source compatibility with existing code that constructs `OrderData` directly;

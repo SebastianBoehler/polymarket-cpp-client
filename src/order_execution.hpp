@@ -25,7 +25,23 @@ namespace polymarket::detail
         double taker;
     };
 
+    struct OrderRoundingConfig
+    {
+        int price_decimals;
+        int size_decimals;
+        int amount_decimals;
+    };
+
+    OrderRoundingConfig rounding_config_for_tick_size(const std::string &tick_size);
     OrderAmounts calculate_limit_order_amounts(OrderSide side, double price, double size);
+    OrderAmounts calculate_limit_order_amounts(OrderSide side,
+                                               double price,
+                                               double size,
+                                               const OrderRoundingConfig &rounding);
+    OrderAmounts calculate_market_order_amounts(OrderSide side,
+                                                double amount,
+                                                double price,
+                                                const OrderRoundingConfig &rounding);
     nlohmann::json signed_order_json(const SignedOrder &order);
     nlohmann::json order_payload_json(const SignedOrder &order,
                                       const std::string &owner,

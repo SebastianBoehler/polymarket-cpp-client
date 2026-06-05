@@ -1,10 +1,46 @@
 #include "order_execution.hpp"
 
+#include <cmath>
+#include <stdexcept>
+
 namespace polymarket::detail
 {
     namespace
     {
         constexpr const char *ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+        double decimal_scale(int decimals)
+        {
+            double scale = 1.0;
+            for (int i = 0; i < decimals; ++i)
+            {
+                scale *= 10.0;
+            }
+            return scale;
+        }
+
+        double round_down(double value, int decimals)
+        {
+            const double scale = decimal_scale(decimals);
+            return std::floor(value * scale) / scale;
+        }
+
+        double round_up(double value, int decimals)
+        {
+            const double scale = decimal_scale(decimals);
+            return std::ceil(value * scale) / scale;
+        }
+
+        double round_nearest(double value, int decimals)
+        {
+            const double scale = decimal_scale(decimals);
+            return std::round(value * scale) / scale;
+        }
+
+        double round_order_amount(double value, int decimals)
+        {
+            return round_down(round_up(value, decimals + 4), decimals);
+        }
     }
 
     std::string OrderExecutionContext::maker_address() const
@@ -24,11 +60,58 @@ namespace polymarket::detail
 
     OrderAmounts calculate_limit_order_amounts(OrderSide side, double price, double size)
     {
+        return calculate_limit_order_amounts(side, price, size, rounding_config_for_tick_size("0.01"));
+    }
+
+    OrderRoundingConfig rounding_config_for_tick_size(const std::string &tick_size)
+    {
+        if (tick_size == "0.1")
+        {
+            return {1, 2, 3};
+        }
+        if (tick_size == "0.01")
+        {
+            return {2, 2, 4};
+        }
+        if (tick_size == "0.001")
+        {
+            return {3, 2, 5};
+        }
+        if (tick_size == "0.0001")
+        {
+            return {4, 2, 6};
+        }
+        throw std::invalid_argument("unsupported tick size: " + tick_size);
+    }
+
+    OrderAmounts calculate_limit_order_amounts(OrderSide side,
+                                               double price,
+                                               double size,
+                                               const OrderRoundingConfig &rounding)
+    {
+        const double raw_price = round_nearest(price, rounding.price_decimals);
         if (side == OrderSide::BUY)
         {
-            return {size * price, size};
+            const double raw_taker = round_down(size, rounding.size_decimals);
+            return {round_order_amount(raw_taker * raw_price, rounding.amount_decimals), raw_taker};
         }
-        return {size, size * price};
+
+        const double raw_maker = round_down(size, rounding.size_decimals);
+        return {raw_maker, round_order_amount(raw_maker * raw_price, rounding.amount_decimals)};
+    }
+
+    OrderAmounts calculate_market_order_amounts(OrderSide side,
+                                                double amount,
+                                                double price,
+                                                const OrderRoundingConfig &rounding)
+    {
+        const double raw_price = round_down(price, rounding.price_decimals);
+        const double raw_maker = round_down(amount, rounding.size_decimals);
+        if (side == OrderSide::BUY)
+        {
+            return {raw_maker, round_order_amount(raw_maker / raw_price, rounding.amount_decimals)};
+        }
+        return {raw_maker, round_order_amount(raw_maker * raw_price, rounding.amount_decimals)};
     }
 
     nlohmann::json signed_order_json(const SignedOrder &order)
