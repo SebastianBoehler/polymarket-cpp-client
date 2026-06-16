@@ -12,7 +12,7 @@
  */
 
 #include "order_signer.hpp"
-#include "order_execution.hpp"
+#include "clob_client.hpp"
 #include "http_client.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -357,121 +357,55 @@ int main(int argc, char *argv[])
             std::string exchange_address = is_neg_risk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE;
             std::cout << "    Exchange: " << exchange_address << "\n";
 
-            // Calculate amounts with the same tick-size precision rules as the official clients.
-            double order_usd = 1.0;
-            const std::string live_order_type = "FAK";
-            const auto rounding = detail::rounding_config_for_tick_size("0.01");
-            detail::OrderAmounts amounts;
-
-            if (live_order_type == "GTC")
+            if (!have_creds)
             {
-                const double raw_price = std::floor(best_ask * 100) / 100;
-                const double shares = std::floor((order_usd / raw_price) * 100) / 100;
-                amounts = detail::calculate_limit_order_amounts(OrderSide::BUY, best_ask, shares, rounding);
-            }
-            else
-            {
-                amounts = detail::calculate_market_order_amounts(OrderSide::BUY, order_usd, best_ask, rounding);
+                std::cerr << "    Live mode requires API credentials\n";
+                http_global_cleanup();
+                return 1;
             }
 
-            std::cout << "    Placing " << live_order_type << " order: $" << amounts.maker
-                      << " for " << amounts.taker << " shares\n";
+            const double order_usd = 1.0;
+            const SignatureType live_signature_type = (funder_address != signer.address())
+                                                          ? SignatureType::POLY_GNOSIS_SAFE
+                                                          : SignatureType::EOA;
+            ClobClient order_client(CLOB_API, 137, private_key, creds, live_signature_type, funder_address);
 
-            // Create order
-            OrderData real_order;
-            real_order.maker = funder_address;
-            real_order.taker = "0x0000000000000000000000000000000000000000";
-            real_order.token_id = yes_token;
-            real_order.maker_amount = to_wei(amounts.maker, 6);
-            real_order.taker_amount = to_wei(amounts.taker, 6);
-            real_order.side = OrderSide::BUY;
-            real_order.signer = signer.address();
-            real_order.expiration = "0";
-            // Use POLY_GNOSIS_SAFE (2) when funder != signer (proxy wallet)
-            real_order.signature_type = (funder_address != signer.address())
-                                            ? SignatureType::POLY_GNOSIS_SAFE
-                                            : SignatureType::EOA;
+            CreateMarketOrderParams market_order;
+            market_order.token_id = yes_token;
+            market_order.amount = order_usd;
+            market_order.side = OrderSide::BUY;
+            market_order.price = best_ask;
+            market_order.tick_size = "0.01";
+            market_order.neg_risk = is_neg_risk;
+
+            std::cout << "    Placing FAK market order: $" << order_usd << "\n";
+
+            auto real_signed = order_client.create_market_order(market_order);
 
             // Debug: print order data before signing
             std::cout << "    Order data for signing:\n";
-            std::cout << "      maker: " << real_order.maker << "\n";
-            std::cout << "      signer: " << real_order.signer << "\n";
-            std::cout << "      taker: " << real_order.taker << "\n";
-            std::cout << "      tokenId: " << real_order.token_id << "\n";
-            std::cout << "      makerAmount: " << real_order.maker_amount << "\n";
-            std::cout << "      takerAmount: " << real_order.taker_amount << "\n";
-            std::cout << "      side: " << static_cast<int>(real_order.side) << "\n";
-            std::cout << "      signatureType: " << static_cast<int>(real_order.signature_type) << "\n";
+            std::cout << "      maker: " << real_signed.maker << "\n";
+            std::cout << "      signer: " << real_signed.signer << "\n";
+            std::cout << "      taker: " << real_signed.taker << "\n";
+            std::cout << "      tokenId: " << real_signed.token_id << "\n";
+            std::cout << "      makerAmount: " << real_signed.maker_amount << "\n";
+            std::cout << "      takerAmount: " << real_signed.taker_amount << "\n";
+            std::cout << "      side: " << static_cast<int>(real_signed.side) << "\n";
+            std::cout << "      signatureType: " << static_cast<int>(real_signed.signature_type) << "\n";
             std::cout << "      exchange: " << exchange_address << "\n";
 
-            auto real_signed = signer.sign_order(real_order, exchange_address);
-
-            // Build POST body - must match TS client's orderToJson format exactly
-            // Use ordered_json to preserve field order (API may be sensitive to this)
-            nlohmann::ordered_json post_body;
-            nlohmann::ordered_json order_obj;
-            order_obj["salt"] = std::stoll(real_signed.salt);
-            order_obj["maker"] = real_signed.maker;
-            order_obj["signer"] = real_signed.signer;
-            order_obj["taker"] = real_signed.taker;
-            order_obj["tokenId"] = real_signed.token_id;
-            order_obj["makerAmount"] = real_signed.maker_amount;
-            order_obj["takerAmount"] = real_signed.taker_amount;
-            order_obj["side"] = real_signed.side == 0 ? "BUY" : "SELL";
-            order_obj["expiration"] = real_signed.expiration;
-            order_obj["signatureType"] = real_signed.signature_type;
-            order_obj["timestamp"] = real_signed.timestamp;
-            order_obj["metadata"] = real_signed.metadata;
-            order_obj["builder"] = real_signed.builder;
-            order_obj["signature"] = real_signed.signature;
-            post_body["deferExec"] = false;
-            post_body["postOnly"] = false;
-            post_body["order"] = order_obj;
-            post_body["owner"] = creds.api_key;
-            post_body["orderType"] = live_order_type;
-
-            std::string body_str = post_body.dump();
-            std::cout << "    Full order body:\n"
-                      << post_body.dump(2) << "\n";
-
-            HttpClient order_http;
-            order_http.set_base_url(CLOB_API);
-            order_http.set_timeout_ms(15000);
-
-            std::map<std::string, std::string> post_headers;
-            post_headers["Content-Type"] = "application/json";
-
-            // Add L2 auth headers if we have credentials
-            if (have_creds)
+            auto post_response = order_client.post_order(real_signed, OrderType::FAK);
+            if (post_response.success)
             {
-                auto l2 = signer.generate_l2_headers(creds, "POST", "/order", body_str, funder_address);
-                post_headers["POLY_ADDRESS"] = l2.poly_address;
-                post_headers["POLY_SIGNATURE"] = l2.poly_signature;
-                post_headers["POLY_TIMESTAMP"] = l2.poly_timestamp;
-                post_headers["POLY_API_KEY"] = l2.poly_api_key;
-                post_headers["POLY_PASSPHRASE"] = l2.poly_passphrase;
-                std::cout << "    Using L2 auth with address: " << l2.poly_address << "\n";
+                std::cout << "\n    ✅ ORDER PLACED SUCCESSFULLY!\n";
+                std::cout << "    Order ID: " << post_response.order_id << "\n";
+                std::cout << "    Status: " << post_response.status << "\n";
+                std::cout << "    Cost: $" << post_response.making_amount << "\n";
+                std::cout << "    Shares: " << post_response.taking_amount << "\n";
             }
-
-            auto post_response = order_http.post("/order", body_str, post_headers);
-
-            std::cout << "\n    Order placement response: " << post_response.status_code << "\n";
-            std::cout << "    Response: " << post_response.body << "\n";
-
-            if (post_response.ok())
+            else
             {
-                auto result = json::parse(post_response.body);
-                if (result.contains("success") && result["success"].get<bool>())
-                {
-                    std::cout << "\n    ✅ ORDER PLACED SUCCESSFULLY!\n";
-                    std::cout << "    Order ID: " << result["orderID"].get<std::string>() << "\n";
-                    if (result.contains("status"))
-                        std::cout << "    Status: " << result["status"].get<std::string>() << "\n";
-                    if (result.contains("makingAmount"))
-                        std::cout << "    Cost: $" << result["makingAmount"].get<std::string>() << "\n";
-                    if (result.contains("takingAmount"))
-                        std::cout << "    Shares: " << result["takingAmount"].get<std::string>() << "\n";
-                }
+                std::cerr << "\n    Order placement failed: " << post_response.error_msg << "\n";
             }
         }
 

@@ -126,8 +126,15 @@ namespace polymarket
         }
 
         bool is_neg_risk = false;
-        auto neg_risk_info = get_neg_risk(params.token_id);
-        is_neg_risk = neg_risk_info && neg_risk_info->neg_risk;
+        if (params.neg_risk.has_value())
+        {
+            is_neg_risk = params.neg_risk.value();
+        }
+        else
+        {
+            auto neg_risk_info = get_neg_risk(params.token_id);
+            is_neg_risk = neg_risk_info && neg_risk_info->neg_risk;
+        }
 
         const auto context = build_execution_context(*this, *order_signer_, funder_address_, sig_type_);
         const auto amounts = detail::calculate_market_order_amounts(
