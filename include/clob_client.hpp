@@ -136,6 +136,7 @@ namespace polymarket
         std::string tick_size = "0.01";
         std::string metadata = "0x0000000000000000000000000000000000000000000000000000000000000000";
         std::string builder_code = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::optional<bool> neg_risk; // If set, skips API call to fetch neg_risk
     };
 
     // Batch order entry
