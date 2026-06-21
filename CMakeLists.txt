@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 # Policy for older CMake compatibility in dependencies
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
-project(polymarket_cpp_client VERSION 1.2.5 LANGUAGES CXX C)
+project(polymarket_cpp_client VERSION 1.3.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -178,6 +178,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_include_directories(test_order_execution PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_order_execution PRIVATE polymarket::client)
     add_test(NAME test_order_execution COMMAND test_order_execution)
+
+    add_executable(test_order_type_serialization tests/test_order_type_serialization.cpp)
+    target_link_libraries(test_order_type_serialization PRIVATE polymarket::client)
+    add_test(NAME test_order_type_serialization COMMAND test_order_type_serialization)
 
     add_executable(test_sdk_error tests/test_sdk_error.cpp)
     target_link_libraries(test_sdk_error PRIVATE polymarket::client)

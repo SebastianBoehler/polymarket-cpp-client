@@ -19,7 +19,7 @@ namespace polymarket
         GTC, // Good-Til-Cancelled
         GTD, // Good-Til-Date
         FOK, // Fill-Or-Kill
-        FAK  // Fill-And-Kill (IOC)
+        FAK  // Fill-And-Kill
     };
 
     // Order response from API
