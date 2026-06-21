@@ -69,6 +69,7 @@ bool is_transient_rpc_error(const std::string &message)
         "Operation timed out",
         "request timed out",
         "timed out",
+        "status=403",
     };
     for (const auto *pattern : patterns)
     {

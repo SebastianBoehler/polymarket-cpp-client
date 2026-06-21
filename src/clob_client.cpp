@@ -130,7 +130,7 @@ namespace polymarket
         case OrderType::FOK:
             return "FOK";
         case OrderType::FAK:
-            return "IOC";
+            return "FAK";
         default:
             return "GTC";
         }
