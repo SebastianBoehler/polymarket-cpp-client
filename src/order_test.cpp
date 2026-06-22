@@ -15,8 +15,12 @@
 #include "clob_client.hpp"
 #include "http_client.hpp"
 #include <nlohmann/json.hpp>
+#include <algorithm>
+#include <ctime>
 #include <iostream>
 #include <cstdlib>
+#include <string>
+#include <vector>
 
 using json = nlohmann::json;
 using namespace polymarket;
@@ -25,6 +29,15 @@ using namespace polymarket;
 const std::string CLOB_API = "https://clob.polymarket.com";
 const std::string NEG_RISK_CTF_EXCHANGE = "0xe2222d279d744050d28e00520010520000310F59";
 const std::string CTF_EXCHANGE = "0xE111180000d2663C0091e4f400237545B87B996B";
+
+struct LiveMarketData
+{
+    std::string token_id;
+    std::string slug;
+    double best_ask = 0.0;
+    std::string tick_size;
+    bool neg_risk = false;
+};
 
 void print_usage()
 {
@@ -261,10 +274,11 @@ int main(int argc, char *argv[])
             std::cout << "    Fetching nearest active BTC 15m market...\n";
 
             // Find markets with at least 2 min left before expiry
-            std::string yes_token;
-            std::string market_slug;
+            LiveMarketData live_market;
             uint64_t now_ts = static_cast<uint64_t>(std::time(nullptr));
             uint64_t min_time_left = 2 * 60; // 2 minutes minimum
+            ClobClient market_data_client(CLOB_API, 137);
+            market_data_client.set_user_agent("polymarket-cpp-client/order-test");
 
             // Try current and next few 15-minute windows
             std::vector<std::pair<uint64_t, uint64_t>> candidates; // (start_ts, expiry_ts)
@@ -285,8 +299,6 @@ int main(int argc, char *argv[])
                       [](const auto &a, const auto &b)
                       { return a.second < b.second; });
 
-            double best_ask = 0.0;
-            bool is_neg_risk = false; // Cache neg_risk during discovery
             for (const auto &[target_ts, expiry_ts] : candidates)
             {
                 std::string slug = "btc-updown-15m-" + std::to_string(target_ts);
@@ -295,6 +307,7 @@ int main(int argc, char *argv[])
                 HttpClient gamma_http;
                 gamma_http.set_base_url("https://gamma-api.polymarket.com");
                 gamma_http.set_timeout_ms(10000);
+                gamma_http.set_user_agent("polymarket-cpp-client/order-test");
 
                 auto gamma_response = gamma_http.get("/events?slug=" + slug);
 
@@ -310,51 +323,61 @@ int main(int argc, char *argv[])
                             auto token_ids = json::parse(market["clobTokenIds"].get<std::string>());
                             std::string candidate_token = token_ids[0].get<std::string>();
 
-                            // Check if this market has liquidity
-                            auto book_response = http.get("/book?token_id=" + candidate_token);
-                            if (book_response.ok())
+                            auto book = market_data_client.get_order_book(candidate_token);
+                            if (!book || book->asks.empty())
                             {
-                                auto book_json = json::parse(book_response.body);
-                                if (book_json.contains("asks") && !book_json["asks"].empty())
-                                {
-                                    best_ask = std::stod(book_json["asks"][0]["price"].get<std::string>());
-                                    if (best_ask > 0.0 && best_ask < 1.0)
-                                    {
-                                        yes_token = candidate_token;
-                                        market_slug = slug;
-
-                                        // Cache neg_risk during discovery (not during order placement)
-                                        auto neg_risk_response = http.get("/neg-risk?token_id=" + candidate_token);
-                                        if (neg_risk_response.ok())
-                                        {
-                                            auto neg_risk_json = json::parse(neg_risk_response.body);
-                                            is_neg_risk = neg_risk_json.value("neg_risk", false);
-                                        }
-
-                                        std::cout << "    Found market with liquidity: " << slug << " (expires in " << time_left / 60 << "min)\n";
-                                        std::cout << "    Best ask: " << best_ask << "\n";
-                                        std::cout << "    neg_risk: " << (is_neg_risk ? "true" : "false") << "\n";
-                                        break;
-                                    }
-                                }
+                                std::cout << "    Skipping " << slug << " - no ask liquidity\n";
+                                continue;
                             }
-                            std::cout << "    Skipping " << slug << " - no liquidity\n";
+
+                            const double candidate_best_ask = book->best_ask();
+                            if (candidate_best_ask <= 0.0 || candidate_best_ask >= 1.0)
+                            {
+                                std::cout << "    Skipping " << slug << " - invalid best ask " << candidate_best_ask << "\n";
+                                continue;
+                            }
+
+                            auto tick_size = market_data_client.get_tick_size(candidate_token);
+                            if (!tick_size || tick_size->minimum_tick_size.empty())
+                            {
+                                std::cout << "    Skipping " << slug << " - could not fetch tick size\n";
+                                continue;
+                            }
+
+                            auto neg_risk = market_data_client.get_neg_risk(candidate_token);
+                            if (!neg_risk)
+                            {
+                                std::cout << "    Skipping " << slug << " - could not fetch neg_risk\n";
+                                continue;
+                            }
+
+                            live_market.token_id = candidate_token;
+                            live_market.slug = slug;
+                            live_market.best_ask = candidate_best_ask;
+                            live_market.tick_size = tick_size->minimum_tick_size;
+                            live_market.neg_risk = neg_risk->neg_risk;
+
+                            std::cout << "    Found market with liquidity: " << slug << " (expires in " << time_left / 60 << "min)\n";
+                            std::cout << "    Best ask: " << live_market.best_ask << "\n";
+                            std::cout << "    Tick size: " << live_market.tick_size << "\n";
+                            std::cout << "    neg_risk: " << (live_market.neg_risk ? "true" : "false") << "\n";
+                            break;
                         }
                     }
                 }
             }
 
-            if (yes_token.empty() || best_ask <= 0.0)
+            if (live_market.token_id.empty() || live_market.best_ask <= 0.0 || live_market.tick_size.empty())
             {
-                std::cerr << "    Could not find active BTC 15m market with liquidity\n";
+                std::cerr << "    Could not find active BTC 15m market with complete trading metadata\n";
                 http_global_cleanup();
                 return 1;
             }
 
-            std::cout << "    YES token: " << yes_token.substr(0, 30) << "...\n";
+            std::cout << "    YES token: " << live_market.token_id.substr(0, 30) << "...\n";
 
-            // Use cached neg_risk value from discovery
-            std::string exchange_address = is_neg_risk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE;
+            // Use cached market metadata from discovery for order construction.
+            std::string exchange_address = live_market.neg_risk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE;
             std::cout << "    Exchange: " << exchange_address << "\n";
 
             if (!have_creds)
@@ -371,12 +394,12 @@ int main(int argc, char *argv[])
             ClobClient order_client(CLOB_API, 137, private_key, creds, live_signature_type, funder_address);
 
             CreateMarketOrderParams market_order;
-            market_order.token_id = yes_token;
+            market_order.token_id = live_market.token_id;
             market_order.amount = order_usd;
             market_order.side = OrderSide::BUY;
-            market_order.price = best_ask;
-            market_order.tick_size = "0.01";
-            market_order.neg_risk = is_neg_risk;
+            market_order.price = live_market.best_ask;
+            market_order.tick_size = live_market.tick_size;
+            market_order.neg_risk = live_market.neg_risk;
 
             std::cout << "    Placing FAK market order: $" << order_usd << "\n";
 
