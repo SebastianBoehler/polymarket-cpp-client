@@ -12,12 +12,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-22.04, macos-15]
         build_type: [Debug, Release]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -27,19 +29,25 @@ jobs:
 
       - name: Configure
         run: |
+          deployment_args=()
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            deployment_args+=("-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0")
+          fi
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON \
             -DPOLYMARKET_CLIENT_BUILD_TESTS=ON \
-            -DPOLYMARKET_CLIENT_BUILD_BENCHMARKS=ON
+            -DPOLYMARKET_CLIENT_BUILD_BENCHMARKS=ON \
+            "${deployment_args[@]}"
 
       - name: Build
         run: cmake --build build --parallel --config ${{ matrix.build_type }}
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure --build-config ${{ matrix.build_type }}
+        run: ctest --test-dir build --output-on-failure --build-config ${{ matrix.build_type }} -LE live
 
       - name: Optional live smoke
         if: vars.POLYMARKET_RUN_LIVE_SMOKE == '1'
         run: |
           ./build/rest_example
+          POLYMARKET_RUN_LIVE_SMOKE=1 ctest --test-dir build --output-on-failure --build-config ${{ matrix.build_type }} -L live

@@ -22,9 +22,10 @@ Reusable C++20 client for Polymarket: REST, WebSocket streaming, and order signi
 
 ## Requirements
 
-- CMake 3.16+
+- CMake 3.22+
 - C++20 compiler
-- libcurl, OpenSSL
+- libcurl, OpenSSL, zlib
+- Prebuilt release targets: macOS 12+ arm64 and Linux x86-64
 
 ## Installation
 
@@ -39,7 +40,7 @@ include(FetchContent)
 FetchContent_Declare(
     polymarket_client
     GIT_REPOSITORY https://github.com/SebastianBoehler/polymarket-cpp-client.git
-    GIT_TAG v1.3.0  # or any release tag
+    GIT_TAG v2.0.0  # or any release tag
 )
 FetchContent_MakeAvailable(polymarket_client)
 
@@ -53,17 +54,22 @@ Download pre-built binaries from [Releases](https://github.com/SebastianBoehler/
 
 ```bash
 # macOS
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.3.0/polymarket-cpp-client-macos-arm64.tar.gz
-tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C /usr/local
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v2.0.0/polymarket-cpp-client-macos-arm64.tar.gz
+mkdir -p polymarket-cpp-client-2.0.0
+tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C polymarket-cpp-client-2.0.0
 
 # Linux
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v1.3.0/polymarket-cpp-client-linux-x64.tar.gz
-tar -xzf polymarket-cpp-client-linux-x64.tar.gz -C /usr/local
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v2.0.0/polymarket-cpp-client-linux-x64.tar.gz
+mkdir -p polymarket-cpp-client-2.0.0
+tar -xzf polymarket-cpp-client-linux-x64.tar.gz -C polymarket-cpp-client-2.0.0
 ```
 
-Then in your CMake:
+Keep this as a dedicated prefix because the archive contains its pinned static
+dependencies and headers. Then point CMake at it:
 
 ```cmake
+# Configure with:
+# cmake -S . -B build -DCMAKE_PREFIX_PATH=/absolute/path/to/polymarket-cpp-client-2.0.0
 find_package(polymarket_client REQUIRED)
 target_link_libraries(your_target PRIVATE polymarket::client)
 ```
@@ -82,6 +88,34 @@ cmake --install build --prefix <install_prefix>
 ```
 
 ## Version Info
+
+### v2 migration
+
+Version 2 is not binary-compatible with v1: several public concrete types grew
+to support safe concurrency, stream recovery, metadata caching, and resumable
+indexing. Recompile consumers against the v2 headers and archive. `OrderSigner`
+is now explicitly non-copyable (moving remains supported), and balance/allowance
+methods accept an optional conditional-token ID. `BalanceAllowance::allowances`
+is now a per-spender map matching the V2 response. `RewardsInfo` and
+`EarningsInfo` now expose V2 reward configs, market metadata, addresses, and
+rates; the invented v1 `reward_epoch` and `epoch` fields were removed.
+`Position` now includes the Data API's total/realized PnL, icon, event slug,
+and opposite-outcome fields. Market-list methods now return `ClobMarketPage`
+so callers retain `next_cursor`; read markets from its `data` member.
+`create_market_order` now returns `PreparedOrder`, which keeps the FAK/FOK
+execution policy beside the signature, and posting a raw `SignedOrder` requires
+an explicit `OrderType`; its no-type overload defaults to FAK, matching the
+combined create-and-post helper. Unsupported order-type enum values throw
+instead of silently becoming GTC. `OrderResponse` now retains asynchronous
+`trade_ids`, and `OpenOrder` retains owner/maker identities, associated trades,
+and outcome. `Trade` now matches the V2 response, including nested
+maker orders, owner/maker identities, bucket index, trader side, and optional
+error information. The no-op `Config::max_combined` and `Config::size_usdc`
+members were removed. `get_fee_rate` now requires a token ID;
+`get_rewards_markets()` is replaced by `get_rewards_markets_current()` or the
+condition-ID overload; and `Notification` now carries numeric `type`, `owner`,
+and structured `payload` fields. Authentication now requires both signer and
+API credentials, and an empty order tick size resolves market metadata.
 
 Check library version at runtime:
 
@@ -105,9 +139,23 @@ int main() {
 - `condition_resolution_watch`: stream Conditional Tokens resolution/redemption events
 - `evm_event_indexer_example`: persistent HTTP catch-up + live WS indexer with a cursor file
 - `feed_latency_benchmark`: compare local receive timing across Polymarket market WS and Polygon RPC WS
+- `polymarket_arb`: discover one crypto/neg-risk market and analyze hypothetical complementary YES/NO FOK batches
 
 Build them with `POLYMARKET_CLIENT_BUILD_EXAMPLES=ON` and run from `build/`.
 Local benchmark targets are documented in [docs/benchmarks.md](docs/benchmarks.md).
+
+The arbitrage example defaults to a BTC 15-minute market and dry-run mode:
+
+```bash
+./build/polymarket_arb --15m --symbol btc --fetch-only
+./build/polymarket_arb --neg-risk --max 5 --dry-run
+```
+
+`polymarket_arb` is analysis-only. It rejects `--live` before authentication or
+network access because the CLOB batch endpoint processes orders independently;
+two complementary FOK orders are not an atomic trade and can leave directional
+exposure. `order_test --live` remains available for an explicitly requested
+single-order smoke test, not paired arbitrage execution.
 
 ## CLOB V2 Status
 
@@ -182,12 +230,27 @@ The reusable `EvmEventIndexer` handles the catch-up/live handoff for any `EvmLog
 
 If no cursor exists and `--start-block` is omitted, the example starts at the current latest block to avoid accidental full-history backfills. Pass `--start-block` explicitly when you want historical replay.
 
+Indexer delivery is at-least-once across process restarts. The cursor file
+persists position, not recent log bodies, so synthetic orphan retractions are
+available only for logs retained by the running process. Use confirmations and
+an idempotent downstream store; rebuild from source logs if a restart spans a
+reorg inside your unconfirmed window.
+
+`OracleResolutionDashboard` retains the newest 1,024 canonical events per key
+for rollback and timeline reconstruction while its aggregate counters cover all
+accepted events. A removal at or before that compacted boundary is ignored; use
+persistent source logs and rebuild the dashboard when deeper reorg recovery is
+required.
+
 ## Tests
 
 `test_utils` exercises basic utility helpers. `test_evm_events` covers EVM topic hashing, log filter serialization, and UMA/CTF event decoding. `test_evm_event_indexer` covers block range planning and file-backed cursors. Transport, order execution, typed error, signing, and WebSocket resilience tests are included when `POLYMARKET_CLIENT_BUILD_TESTS=ON`. Run via `ctest --test-dir build`.
 
 `test_oracle_watcher` validates in-memory normalization against synthetic UMA/CTF fixtures.
-`test_oracle_watcher_historical` performs a live historical smoke check using defaults:
+`test_oracle_watcher_historical` is labeled `live` and only performs its
+historical RPC smoke check when `POLYMARKET_RUN_LIVE_SMOKE=1` is set. Run it
+explicitly with `POLYMARKET_RUN_LIVE_SMOKE=1 ctest --test-dir build -L live`.
+It uses these defaults unless overridden:
 - `POLYMARKET_POLYGON_RPC_HTTP=https://polygon-bor.publicnode.com`
 - `POLYMARKET_UMA_CTF_ADAPTER=0x6a9d222616c90fca5754cd1333cfd9b7fb6a4f74`
 - `POLYMARKET_CONDITIONAL_TOKENS=0x4d97dcd97ec945f40cf65f87097ace5ea0476045`
@@ -257,9 +320,9 @@ client.stop_heartbeat();
 ## Order Precision
 
 Limit and market order helpers round prices, share sizes, and maker/taker
-amounts with Polymarket's tick-size precision rules. `CreateOrderParams` and
-`CreateMarketOrderParams` default to `tick_size = "0.01"`; set this from cached
-market metadata when trading markets with a different minimum tick size.
+amounts with Polymarket's tick-size precision rules. Leave `tick_size` empty to
+resolve it from the client's market-metadata cache, or provide the exact cached
+minimum tick size explicitly.
 
 ## WebSocket Resilience
 
@@ -270,25 +333,35 @@ dropped messages, parse errors, last message time, messages, and bytes.
 
 ```cpp
 polymarket::WebSocketClient ws;
+ws.set_url("wss://ws-subscriptions-clob.polymarket.com/ws/market");
 polymarket::WebSocketOptions options;
 options.message_queue_limit = 4096;
 options.min_backoff_ms = 250;
 options.max_backoff_ms = 5000;
+options.max_reconnect_attempts = 5;
 ws.configure(options);
+
+const std::string subscription = R"({
+  "assets_ids":["yes-token-id","no-token-id"],
+  "type":"market",
+  "custom_feature_enabled":true
+})";
+ws.track_subscription(subscription); // Sent on connect and replayed on reconnect.
 
 ws.on_message([](const std::string& raw) {
     // Raw callback remains available.
 });
 ws.on_typed_message([](const polymarket::TypedWebSocketMessage& msg) {
-    if (msg.topic == "clob_market" && msg.type == "agg_orderbook") {
-        // Use msg.asset_id and msg.payload.
+    if (msg.event_type == "book" || msg.event_type == "price_change") {
+        // Current CLOB market-channel event for msg.asset_id.
     }
 });
+ws.connect();
 ```
 
-Call `track_subscription(subscription_json)` after sending a subscription if
-you use `WebSocketClient` directly. `OrderbookManager` tracks its subscription
-message and restores it automatically after reconnect.
+Track a subscription before connecting when using `WebSocketClient` directly.
+`OrderbookManager` tracks the current token set, sends real dynamic
+subscribe/unsubscribe operations, and restores the set after reconnect.
 
 ## Neg-Risk Markets
 
