@@ -78,7 +78,8 @@ namespace websocket_test
                                                     { return client.state() == polymarket::WsState::DISCONNECTED; },
                                                     1s);
         const bool restarted = stopped_cleanly && client.connect() &&
-                               server.wait_for_connections(2, 1s);
+                               server.wait_for_connections(2, 1s) &&
+                               client.wait_until_connected(1s);
 
         // A non-worker call must reap any worker which completed after stopping itself.
         client.stop();

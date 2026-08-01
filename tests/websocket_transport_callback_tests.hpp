@@ -123,7 +123,8 @@ namespace websocket_test
         LocalWebSocketServer recovery_server;
         client.set_url(recovery_server.url());
         const bool restarted = disconnected && client.connect() &&
-                               recovery_server.wait_for_connections(1, std::chrono::seconds(1));
+                               recovery_server.wait_for_connections(1, std::chrono::seconds(1)) &&
+                               client.wait_until_connected(std::chrono::seconds(1));
         client.stop();
 
         if (!callback_returned || !disconnected || !restarted)

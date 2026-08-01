@@ -3,6 +3,8 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -46,7 +48,15 @@ namespace websocket_test
             server_.start();
         }
 
-        ~LocalWebSocketServer() { server_.stop(); }
+        ~LocalWebSocketServer()
+        {
+            if (!wait_for_no_clients(std::chrono::seconds(5)))
+            {
+                std::fputs("Local WebSocket server clients did not stop\n", stderr);
+                std::abort();
+            }
+            server_.stop();
+        }
 
         std::string url() const
         {
