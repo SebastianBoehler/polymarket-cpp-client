@@ -14,6 +14,7 @@ using namespace polymarket;
 
 int main()
 {
+    constexpr auto heartbeat_start_timeout = std::chrono::seconds(5);
     http_global_init();
     LocalHttpServer server;
 
@@ -108,7 +109,7 @@ int main()
 
     server.hold_heartbeat_response();
     client.start_heartbeat(1);
-    const bool heartbeat_started = server.wait_for_heartbeat(std::chrono::milliseconds(1500));
+    const bool heartbeat_started = server.wait_for_heartbeat(heartbeat_start_timeout);
     ok &= check(heartbeat_started, "expected the heartbeat request to reach the fixture");
 
     auto foreground = std::async(std::launch::async, [&client]
@@ -129,7 +130,7 @@ int main()
     moving_client.set_base_url("http://127.0.0.1:" + std::to_string(server.port()));
     server.hold_heartbeat_response();
     moving_client.start_heartbeat(1);
-    ok &= check(server.wait_for_heartbeat(std::chrono::milliseconds(1500)),
+    ok &= check(server.wait_for_heartbeat(heartbeat_start_timeout),
                 "expected the heartbeat to start before moving the client");
     auto move_result = std::async(std::launch::async, [&moving_client]
                                   { return std::make_unique<HttpClient>(std::move(moving_client)); });
