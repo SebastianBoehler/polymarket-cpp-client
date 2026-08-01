@@ -10,6 +10,32 @@
 
 namespace polymarket::detail
 {
+    namespace
+    {
+        class ThreadJoiner
+        {
+        public:
+            explicit ThreadJoiner(std::vector<std::thread> &threads)
+                : threads_(threads) {}
+            ThreadJoiner(const ThreadJoiner &) = delete;
+            ThreadJoiner &operator=(const ThreadJoiner &) = delete;
+
+            ~ThreadJoiner()
+            {
+                for (auto &thread : threads_)
+                {
+                    if (thread.joinable())
+                    {
+                        thread.join();
+                    }
+                }
+            }
+
+        private:
+            std::vector<std::thread> &threads_;
+        };
+    }
+
     void run_bounded_tasks(std::size_t task_count,
                            std::size_t worker_limit,
                            const BoundedTask &task)
@@ -28,52 +54,48 @@ namespace polymarket::detail
         std::atomic<bool> cancelled{false};
         std::mutex failure_mutex;
         std::exception_ptr failure;
-        // A later thread construction can throw after earlier workers started.
-        // jthread makes unwinding join those already-created workers instead of
-        // destroying joinable std::thread objects and terminating the process.
-        std::vector<std::jthread> workers;
+        std::vector<std::thread> workers;
         workers.reserve(worker_count);
 
-        try
         {
-            for (std::size_t worker = 0; worker < worker_count; ++worker)
+            ThreadJoiner joiner(workers);
+            try
             {
-                workers.emplace_back([&, worker]
+                for (std::size_t worker = 0; worker < worker_count; ++worker)
                 {
-                    while (!cancelled.load(std::memory_order_relaxed))
+                    workers.emplace_back([&, worker]
                     {
-                        const auto index = next_task.fetch_add(1, std::memory_order_relaxed);
-                        if (index >= task_count)
+                        while (!cancelled.load(std::memory_order_relaxed))
                         {
-                            return;
-                        }
-                        try
-                        {
-                            task(index, worker);
-                        }
-                        catch (...)
-                        {
+                            const auto index = next_task.fetch_add(1, std::memory_order_relaxed);
+                            if (index >= task_count)
                             {
-                                std::lock_guard lock(failure_mutex);
-                                if (!failure)
-                                {
-                                    failure = std::current_exception();
-                                }
+                                return;
                             }
-                            cancelled.store(true, std::memory_order_relaxed);
+                            try
+                            {
+                                task(index, worker);
+                            }
+                            catch (...)
+                            {
+                                {
+                                    std::lock_guard lock(failure_mutex);
+                                    if (!failure)
+                                    {
+                                        failure = std::current_exception();
+                                    }
+                                }
+                                cancelled.store(true, std::memory_order_relaxed);
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
-        }
-        catch (...)
-        {
-            cancelled.store(true, std::memory_order_relaxed);
-            throw;
-        }
-        for (auto &worker : workers)
-        {
-            worker.join();
+            catch (...)
+            {
+                cancelled.store(true, std::memory_order_relaxed);
+                throw;
+            }
         }
         if (failure)
         {
