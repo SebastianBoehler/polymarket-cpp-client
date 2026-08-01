@@ -45,6 +45,11 @@ Implemented changes:
   funder wallet, approvals, balance, and CLOB balance sync.
 - `post_order` and `post_orders` serialize V2 order payloads with `owner`,
   `deferExec`, and `postOnly`.
+- Prepared market orders retain their FAK/FOK policy; the no-type helper defaults
+  to FAK. Order responses retain asynchronous trade IDs, and open-order responses
+  retain owner/maker identities, associated trades, and outcome.
+- Cancellation responses accept both `notCanceled` and `not_canceled`; missing or
+  null cancellation collections are treated as empty, matching the official SDKs.
 - The balance/allowance endpoint signs the bare path and appends
   `signature_type` in the query string.
 - Limit and market order amount builders apply the same tick-size keyed

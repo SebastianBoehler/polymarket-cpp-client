@@ -12,8 +12,8 @@ namespace polymarket
     // Price level in orderbook
     struct PriceLevel
     {
-        double price;
-        double size;
+        double price{0.0};
+        double size{0.0};
     };
 
     // Orderbook for a single token
@@ -22,7 +22,7 @@ namespace polymarket
         std::string asset_id;
         std::vector<PriceLevel> bids;
         std::vector<PriceLevel> asks;
-        uint64_t timestamp_ns;
+        uint64_t timestamp_ns{0};
 
         // Best bid = highest bid price
         double best_bid() const
@@ -101,9 +101,17 @@ namespace polymarket
         std::string question;
         std::string market_slug;
         std::vector<Token> tokens;
-        bool neg_risk;
-        bool active;
-        bool closed;
+        bool neg_risk{false};
+        bool active{false};
+        bool closed{false};
+        double minimum_order_size{0.0};
+        std::string minimum_tick_size;
+        uint64_t end_time_ms{0};
+        bool fees_enabled{false};
+        double maker_base_fee{0.0};
+        double taker_base_fee{0.0};
+        double fee_rate{0.0};
+        int fee_exponent{1};
 
         std::string token_yes() const
         {
@@ -126,6 +134,12 @@ namespace polymarket
         }
     };
 
+    struct ClobMarketPage
+    {
+        std::vector<ClobMarket> data;
+        std::string next_cursor;
+    };
+
     // Market state for arbitrage tracking (copyable version for fetching)
     struct MarketState
     {
@@ -142,8 +156,19 @@ namespace polymarket
         double best_ask_yes_size{0.0};
         double best_ask_no_size{0.0};
 
+        double minimum_order_size{0.0};
+        std::string minimum_tick_size;
+        uint64_t end_time_ms{0};
+        bool neg_risk{false};
+        bool fees_enabled{false};
+        double fee_rate{0.0};
+        int fee_exponent{1};
+
         // Tracking
+        // Compatibility aggregate: latest timestamp from either leg.
         uint64_t last_update_ns{0};
+        uint64_t last_update_yes_ns{0};
+        uint64_t last_update_no_ns{0};
         uint32_t update_count{0};
 
         double combined() const
@@ -173,20 +198,39 @@ namespace polymarket
         std::atomic<double> best_ask_yes_size{0.0};
         std::atomic<double> best_ask_no_size{0.0};
 
+        double minimum_order_size{0.0};
+        std::string minimum_tick_size;
+        uint64_t end_time_ms{0};
+        bool neg_risk{false};
+        bool fees_enabled{false};
+        double fee_rate{0.0};
+        int fee_exponent{1};
+
         // Tracking
+        // Compatibility aggregate: latest timestamp from either leg.
         std::atomic<uint64_t> last_update_ns{0};
+        std::atomic<uint64_t> last_update_yes_ns{0};
+        std::atomic<uint64_t> last_update_no_ns{0};
         std::atomic<uint32_t> update_count{0};
 
         // Constructor from MarketState
         LiveMarketState() = default;
 
         explicit LiveMarketState(const MarketState &m)
-            : slug(m.slug), title(m.title), symbol(m.symbol), condition_id(m.condition_id), token_yes(m.token_yes), token_no(m.token_no)
+            : slug(m.slug), title(m.title), symbol(m.symbol), condition_id(m.condition_id), token_yes(m.token_yes), token_no(m.token_no),
+              minimum_order_size(m.minimum_order_size), minimum_tick_size(m.minimum_tick_size), end_time_ms(m.end_time_ms),
+              neg_risk(m.neg_risk), fees_enabled(m.fees_enabled), fee_rate(m.fee_rate), fee_exponent(m.fee_exponent)
         {
             best_ask_yes.store(m.best_ask_yes);
             best_ask_no.store(m.best_ask_no);
             best_ask_yes_size.store(m.best_ask_yes_size);
             best_ask_no_size.store(m.best_ask_no_size);
+            uint64_t latest = m.last_update_ns;
+            if (m.last_update_yes_ns > latest) latest = m.last_update_yes_ns;
+            if (m.last_update_no_ns > latest) latest = m.last_update_no_ns;
+            last_update_ns.store(latest);
+            last_update_yes_ns.store(m.last_update_yes_ns);
+            last_update_no_ns.store(m.last_update_no_ns);
         }
 
         double combined() const
@@ -221,11 +265,11 @@ namespace polymarket
 
         // Trading parameters
         double trigger_combined = 0.98;
-        double max_combined = 0.99;
-        double size_usdc = 5.0;
 
         // Connection settings
-        int ws_ping_interval_ms = 5000;
+        int ws_ping_interval_ms = 10000;
+        int ws_connect_timeout_ms = 5000;
+        uint64_t max_book_age_ms = 2000;
         int http_timeout_ms = 5000;
         int max_markets = 50;
 
@@ -235,11 +279,11 @@ namespace polymarket
             "ada", "avax", "matic", "link", "dot", "ltc"};
     };
 
-    // Utility: get current time in nanoseconds
+    // Monotonic nanoseconds for receipt ages and latency measurements.
     inline uint64_t now_ns()
     {
         return std::chrono::duration_cast<std::chrono::nanoseconds>(
-                   std::chrono::high_resolution_clock::now().time_since_epoch())
+                   std::chrono::steady_clock::now().time_since_epoch())
             .count();
     }
 

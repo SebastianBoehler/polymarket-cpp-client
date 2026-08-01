@@ -1,5 +1,6 @@
 #include "order_signer.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <iomanip>
@@ -26,12 +27,19 @@ namespace polymarket
             if (value.size() >= 2 && value.substr(0, 2) == "0x")
             {
                 auto bytes = from_hex(value);
-                size_t offset = 32 - std::min(bytes.size(), size_t(32));
-                std::memcpy(result.data() + offset, bytes.data(), std::min(bytes.size(), size_t(32)));
+                if (bytes.size() > result.size())
+                    throw std::invalid_argument("uint256 value exceeds 32 bytes");
+                const size_t offset = result.size() - bytes.size();
+                std::memcpy(result.data() + offset, bytes.data(), bytes.size());
                 return result;
             }
 
             std::string num = value;
+            if (!std::all_of(num.begin(), num.end(), [](char digit)
+                             { return digit >= '0' && digit <= '9'; }))
+            {
+                throw std::invalid_argument("uint256 value must be an unsigned decimal integer");
+            }
             std::vector<uint8_t> bytes;
             while (!num.empty() && num != "0")
             {
@@ -47,7 +55,9 @@ namespace polymarket
                 bytes.push_back(static_cast<uint8_t>(remainder));
                 num = quotient.empty() ? "0" : quotient;
             }
-            for (size_t i = 0; i < std::min(bytes.size(), size_t(32)); i++)
+            if (bytes.size() > result.size())
+                throw std::invalid_argument("uint256 value exceeds 32 bytes");
+            for (size_t i = 0; i < bytes.size(); i++)
                 result[31 - i] = bytes[i];
             return result;
         }
@@ -55,18 +65,19 @@ namespace polymarket
         std::vector<uint8_t> encode_address(const std::string &addr)
         {
             auto bytes = from_hex(addr);
+            if (bytes.size() != 20)
+                throw std::invalid_argument("order address must be exactly 20 bytes");
             std::vector<uint8_t> result(32, 0);
-            std::memcpy(result.data() + 12, bytes.data(), std::min(bytes.size(), size_t(20)));
+            std::memcpy(result.data() + 12, bytes.data(), bytes.size());
             return result;
         }
 
         std::vector<uint8_t> encode_bytes32(const std::string &value)
         {
             auto bytes = from_hex(value.empty() ? BYTES32_ZERO : value);
-            std::vector<uint8_t> result(32, 0);
-            size_t offset = 32 - std::min(bytes.size(), size_t(32));
-            std::memcpy(result.data() + offset, bytes.data(), std::min(bytes.size(), size_t(32)));
-            return result;
+            if (bytes.size() != 32)
+                throw std::invalid_argument("bytes32 value must be exactly 32 bytes");
+            return bytes;
         }
 
         std::string strip_0x(const std::string &hex)
@@ -90,12 +101,23 @@ namespace polymarket
             auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
             return std::to_string(millis);
         }
+
+        void validate_order_enums(const OrderData &order)
+        {
+            if (order.side != OrderSide::BUY && order.side != OrderSide::SELL)
+                throw std::invalid_argument("order side must be BUY or SELL");
+            if (order.signature_type != SignatureType::EOA &&
+                order.signature_type != SignatureType::POLY_PROXY &&
+                order.signature_type != SignatureType::POLY_GNOSIS_SAFE &&
+                order.signature_type != SignatureType::POLY_1271)
+                throw std::invalid_argument("unsupported order signature type");
+        }
     }
 
     std::array<uint8_t, 32> OrderSigner::hash_order_v2(const OrderData &order, const std::string &salt)
     {
         std::vector<uint8_t> encoded;
-        auto type_hash = keccak256(V2_ORDER_TYPE);
+        static const auto type_hash = keccak256(V2_ORDER_TYPE);
         encoded.insert(encoded.end(), type_hash.begin(), type_hash.end());
 
         const auto fields = {
@@ -135,6 +157,7 @@ namespace polymarket
 
     SignedOrder OrderSigner::sign_order_with_salt(const OrderData &order, const std::string &exchange_address, const std::string &salt)
     {
+        validate_order_enums(order);
         OrderData resolved = order;
         if (resolved.taker.empty())
             resolved.taker = ZERO_ADDRESS;
@@ -149,7 +172,7 @@ namespace polymarket
         if (resolved.signer.empty())
             resolved.signer = resolved.maker;
 
-        auto domain_hash = hash_domain("Polymarket CTF Exchange", "2", chain_id_, exchange_address);
+        auto domain_hash = v2_domain_hash(exchange_address);
         auto order_hash = hash_order_v2(resolved, salt);
         std::string signature;
 

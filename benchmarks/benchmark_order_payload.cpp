@@ -35,7 +35,6 @@ namespace
             {"salt", std::stoll(order.salt)},
             {"maker", order.maker},
             {"signer", order.signer},
-            {"taker", order.taker},
             {"tokenId", order.token_id},
             {"makerAmount", order.maker_amount},
             {"takerAmount", order.taker_amount},

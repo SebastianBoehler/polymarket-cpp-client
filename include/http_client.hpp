@@ -15,13 +15,16 @@ namespace polymarket
     // HTTP response
     struct HttpResponse
     {
-        long status_code;
+        long status_code{0};
         std::string body;
         std::string error;
-        double elapsed_ms;
+        double elapsed_ms{0.0};
         std::map<std::string, std::string> headers;
 
-        bool ok() const { return status_code >= 200 && status_code < 300; }
+        bool ok() const
+        {
+            return error.empty() && status_code >= 200 && status_code < 300;
+        }
     };
 
     struct HttpClientOptions
@@ -93,16 +96,16 @@ namespace polymarket
         // Connection stats
         struct ConnectionStats
         {
-            long total_requests;
-            long reused_connections;
-            long curl_errors;
-            long bytes_received;
+            long total_requests{0};
+            long reused_connections{0};
+            long curl_errors{0};
+            long bytes_received{0};
             std::map<long, long> status_counts;
-            double avg_latency_ms;
-            double last_latency_ms;
-            double min_latency_ms;
-            double max_latency_ms;
-            bool connection_warm;
+            double avg_latency_ms{0.0};
+            double last_latency_ms{0.0};
+            double min_latency_ms{0.0};
+            double max_latency_ms{0.0};
+            bool connection_warm{false};
         };
         ConnectionStats get_stats() const;
         RequestMetrics get_last_request_metrics() const;
@@ -110,6 +113,7 @@ namespace polymarket
     private:
         CURL *curl_;
         struct curl_slist *headers_;
+        bool global_acquired_;
         std::string base_url_;
         std::string proxy_url_;
         HttpClientOptions options_;
@@ -117,7 +121,8 @@ namespace polymarket
         // Heartbeat thread
         std::atomic<bool> heartbeat_running_;
         std::thread heartbeat_thread_;
-        mutable std::mutex curl_mutex_;
+        mutable std::recursive_mutex curl_mutex_;
+        std::atomic<uint32_t> foreground_waiters_{0};
 
         // Connection stats
         mutable std::mutex stats_mutex_;
@@ -136,13 +141,16 @@ namespace polymarket
         void init();
         void cleanup();
         void apply_options();
+        void heartbeat_once();
         HttpResponse perform(const std::string &method, const std::string &path, const std::string &url);
 
+        static int heartbeat_progress(void *client, curl_off_t, curl_off_t,
+                                      curl_off_t, curl_off_t);
         static size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdata);
         static size_t header_callback(char *ptr, size_t size, size_t nmemb, void *userdata);
     };
 
-    // Global initialization (call once at startup)
+    // Optional process-wide lifetime pin. HttpClient also manages this automatically.
     void http_global_init();
     void http_global_cleanup();
 

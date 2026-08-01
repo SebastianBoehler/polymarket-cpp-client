@@ -4,6 +4,9 @@
 #include <vector>
 #include <cstdint>
 #include <array>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
 
 namespace polymarket
 {
@@ -34,7 +37,7 @@ namespace polymarket
         std::string token_id;     // Token to trade
         std::string maker_amount; // Amount in wei (6 decimals for USDC)
         std::string taker_amount; // Amount in wei
-        OrderSide side;
+        OrderSide side{OrderSide::BUY};
         std::string fee_rate_bps; // Fee in basis points (usually "0")
         std::string nonce;        // Order nonce
         std::string signer;       // Address of the signer
@@ -42,7 +45,7 @@ namespace polymarket
         std::string timestamp;    // V2 order creation time in milliseconds
         std::string metadata;     // V2 bytes32 metadata
         std::string builder;      // V2 bytes32 builder code
-        SignatureType signature_type;
+        SignatureType signature_type{SignatureType::EOA};
     };
 
     // Signed order ready to be posted
@@ -58,8 +61,8 @@ namespace polymarket
         std::string expiration;
         std::string nonce;
         std::string fee_rate_bps;
-        int side;
-        int signature_type;
+        int side{0};
+        int signature_type{0};
         std::string timestamp;
         std::string metadata;
         std::string builder;
@@ -80,6 +83,11 @@ namespace polymarket
         OrderSigner(const std::string &private_key, int chain_id = 137);
         ~OrderSigner();
 
+        OrderSigner(const OrderSigner &) = delete;
+        OrderSigner &operator=(const OrderSigner &) = delete;
+        OrderSigner(OrderSigner &&other);
+        OrderSigner &operator=(OrderSigner &&other);
+
         // Get the signer's address
         std::string address() const { return address_; }
 
@@ -99,16 +107,22 @@ namespace polymarket
             std::string poly_timestamp;
             std::string poly_nonce;
         };
-        L1Headers generate_l1_headers(uint64_t nonce = 0, const std::string &override_address = "");
+        // The legacy address argument is retained for source compatibility and ignored.
+        // L1 authentication always proves control of address().
+        L1Headers generate_l1_headers(uint64_t nonce = 0,
+                                      const std::string &legacy_ignored_address = "");
 
         // Derive existing API credentials from the server
-        ApiCredentials derive_api_credentials(HttpClient &http, const std::string &funder_address = "");
+        ApiCredentials derive_api_credentials(HttpClient &http,
+                                              const std::string &legacy_ignored_address = "");
 
         // Create new API credentials on the server
-        ApiCredentials create_api_credentials(HttpClient &http, uint64_t nonce = 0, const std::string &funder_address = "");
+        ApiCredentials create_api_credentials(HttpClient &http, uint64_t nonce = 0,
+                                              const std::string &legacy_ignored_address = "");
 
         // Create or derive (tries derive first, then create)
-        ApiCredentials create_or_derive_api_credentials(HttpClient &http, const std::string &funder_address = "");
+        ApiCredentials create_or_derive_api_credentials(
+            HttpClient &http, const std::string &legacy_ignored_address = "");
 
         // Generate L2 authentication headers
         struct L2Headers
@@ -122,13 +136,33 @@ namespace polymarket
         };
         L2Headers generate_l2_headers(const ApiCredentials &creds, const std::string &method,
                                       const std::string &path, const std::string &body = "",
-                                      const std::string &funder_address = "");
+                                      const std::string &legacy_ignored_address = "");
 
     private:
-        std::string private_key_;
+        struct SecurePrivateKey
+        {
+            std::array<uint8_t, 32> bytes{};
+
+            SecurePrivateKey() = default;
+            ~SecurePrivateKey();
+            SecurePrivateKey(const SecurePrivateKey &) = delete;
+            SecurePrivateKey &operator=(const SecurePrivateKey &) = delete;
+            SecurePrivateKey(SecurePrivateKey &&other) noexcept;
+            SecurePrivateKey &operator=(SecurePrivateKey &&other) noexcept;
+            void clear() noexcept;
+        };
+
+        struct Secp256k1ContextDeleter
+        {
+            void operator()(void *context) const noexcept;
+        };
+
+        SecurePrivateKey private_key_;
         std::string address_;
         int chain_id_;
-        void *secp256k1_ctx_; // secp256k1_context*
+        std::unique_ptr<void, Secp256k1ContextDeleter> secp256k1_ctx_{nullptr};
+        std::mutex domain_cache_mutex_;
+        std::unordered_map<std::string, std::array<uint8_t, 32>> domain_cache_;
 
         // Derive address from private key
         std::string derive_address();
@@ -136,6 +170,7 @@ namespace polymarket
         // EIP-712 encoding helpers
         std::array<uint8_t, 32> hash_domain(const std::string &name, const std::string &version,
                                             int chain_id, const std::string &verifying_contract);
+        std::array<uint8_t, 32> v2_domain_hash(const std::string &exchange_address);
         std::array<uint8_t, 32> hash_order_v2(const OrderData &order, const std::string &salt);
         std::array<uint8_t, 32> encode_eip712(const std::array<uint8_t, 32> &domain_hash,
                                               const std::array<uint8_t, 32> &struct_hash);

@@ -12,32 +12,15 @@
  */
 
 #include "order_signer.hpp"
-#include "clob_client.hpp"
+#include "order_test_live.hpp"
 #include "http_client.hpp"
 #include <nlohmann/json.hpp>
-#include <algorithm>
-#include <ctime>
 #include <iostream>
 #include <cstdlib>
 #include <string>
-#include <vector>
 
 using json = nlohmann::json;
 using namespace polymarket;
-
-// Polymarket contract addresses (Polygon mainnet)
-const std::string CLOB_API = "https://clob.polymarket.com";
-const std::string NEG_RISK_CTF_EXCHANGE = "0xe2222d279d744050d28e00520010520000310F59";
-const std::string CTF_EXCHANGE = "0xE111180000d2663C0091e4f400237545B87B996B";
-
-struct LiveMarketData
-{
-    std::string token_id;
-    std::string slug;
-    double best_ask = 0.0;
-    std::string tick_size;
-    bool neg_risk = false;
-};
 
 void print_usage()
 {
@@ -126,7 +109,7 @@ int main(int argc, char *argv[])
         order.signature_type = SignatureType::EOA;
 
         // Use neg_risk exchange for crypto markets
-        auto signed_order = signer.sign_order(order, NEG_RISK_CTF_EXCHANGE);
+        auto signed_order = signer.sign_order(order, order_test::NEG_RISK_CTF_EXCHANGE);
 
         // Also test with FIXED parameters for comparison with TypeScript
         std::cout << "\n[2b] Testing with FIXED params for TypeScript comparison...\n";
@@ -145,7 +128,7 @@ int main(int argc, char *argv[])
         fixed_order.timestamp = "1713398400000";
 
         std::string fixed_salt = "123456789";
-        auto signed_order_fixed = signer.sign_order_with_salt(fixed_order, NEG_RISK_CTF_EXCHANGE, fixed_salt);
+        auto signed_order_fixed = signer.sign_order_with_salt(fixed_order, order_test::NEG_RISK_CTF_EXCHANGE, fixed_salt);
         std::cout << "    Fixed salt: " << fixed_salt << "\n";
         std::cout << "    C++ Signature: " << signed_order_fixed.signature << "\n";
         std::cout << "    Expected (official V2 SDK): 0x172933dc26efdf531dc959a95743b5c13147c5027a1eaa172701f1e599a130851f8126ce1c4fa043e360e4ee30211f49151d6f192a32b1cbad2123463e3d45641c\n";
@@ -168,7 +151,6 @@ int main(int argc, char *argv[])
         order_json["salt"] = signed_order.salt;
         order_json["maker"] = signed_order.maker;
         order_json["signer"] = signed_order.signer;
-        order_json["taker"] = signed_order.taker;
         order_json["tokenId"] = signed_order.token_id;
         order_json["makerAmount"] = signed_order.maker_amount;
         order_json["takerAmount"] = signed_order.taker_amount;
@@ -188,7 +170,7 @@ int main(int argc, char *argv[])
 
         http_global_init();
         HttpClient http;
-        http.set_base_url(CLOB_API);
+        http.set_base_url(order_test::CLOB_API);
         http.set_timeout_ms(5000);
 
         auto response = http.get("/");
@@ -214,12 +196,13 @@ int main(int argc, char *argv[])
         }
         else
         {
-            std::cout << "\n[5] Attempting to derive API credentials (L1 auth) for funder: " << funder_address << "\n";
+            std::cout << "\n[5] Attempting to derive API credentials for signer: " << signer.address() << "\n";
             try
             {
-                // Pass funder_address so API key is associated with the correct address
-                creds = signer.create_or_derive_api_credentials(http, funder_address);
-                std::cout << "    API key derived: " << creds.api_key.substr(0, 8) << "...\n";
+                creds = live_mode
+                            ? signer.create_or_derive_api_credentials(http)
+                            : signer.derive_api_credentials(http);
+                std::cout << "    API credentials derived\n";
                 have_creds = true;
             }
             catch (const std::exception &e)
@@ -231,19 +214,15 @@ int main(int argc, char *argv[])
 
         if (have_creds)
         {
-            std::cout << "    API Secret (first 20): " << creds.api_secret.substr(0, 20) << "\n";
-            std::cout << "    API Passphrase: " << creds.api_passphrase << "\n";
-
             // Test fetching open orders (requires L2 auth)
             std::cout << "\n[6] Testing authenticated API call (GET /data/orders)...\n";
 
             // Generate L2 headers for the actual endpoint we're calling
             auto headers = signer.generate_l2_headers(creds, "GET", "/data/orders", "", funder_address);
             std::cout << "    POLY_ADDRESS: " << headers.poly_address << "\n";
-            std::cout << "    POLY_SIGNATURE: " << headers.poly_signature.substr(0, 30) << "...\n";
 
             HttpClient auth_http;
-            auth_http.set_base_url(CLOB_API);
+            auth_http.set_base_url(order_test::CLOB_API);
             auth_http.set_timeout_ms(10000);
 
             std::map<std::string, std::string> auth_headers;
@@ -268,167 +247,10 @@ int main(int argc, char *argv[])
 
         if (live_mode)
         {
-            std::cout << "\n[7] LIVE MODE - Placing $1 test order on BTC market...\n";
-
-            // Get a real token ID from a 15m market (like arb-smoke.ts)
-            std::cout << "    Fetching nearest active BTC 15m market...\n";
-
-            // Find markets with at least 2 min left before expiry
-            LiveMarketData live_market;
-            uint64_t now_ts = static_cast<uint64_t>(std::time(nullptr));
-            uint64_t min_time_left = 2 * 60; // 2 minutes minimum
-            ClobClient market_data_client(CLOB_API, 137);
-            market_data_client.set_user_agent("polymarket-cpp-client/order-test");
-
-            // Try current and next few 15-minute windows
-            std::vector<std::pair<uint64_t, uint64_t>> candidates; // (start_ts, expiry_ts)
-            uint64_t current_window = (now_ts / 900) * 900;
-            for (int i = 0; i <= 3; i++)
+            if (!order_test::run_live_order(private_key, funder_address, creds, have_creds, signer))
             {
-                uint64_t start_ts = current_window + i * 900;
-                uint64_t expiry_ts = start_ts + 900; // 15 min after start
-                // Only consider if expiry > now + min_time_left
-                if (expiry_ts > now_ts + min_time_left)
-                {
-                    candidates.push_back({start_ts, expiry_ts});
-                }
-            }
-
-            // Sort by expiry (soonest first)
-            std::sort(candidates.begin(), candidates.end(),
-                      [](const auto &a, const auto &b)
-                      { return a.second < b.second; });
-
-            for (const auto &[target_ts, expiry_ts] : candidates)
-            {
-                std::string slug = "btc-updown-15m-" + std::to_string(target_ts);
-                uint64_t time_left = expiry_ts - now_ts;
-
-                HttpClient gamma_http;
-                gamma_http.set_base_url("https://gamma-api.polymarket.com");
-                gamma_http.set_timeout_ms(10000);
-                gamma_http.set_user_agent("polymarket-cpp-client/order-test");
-
-                auto gamma_response = gamma_http.get("/events?slug=" + slug);
-
-                if (gamma_response.ok())
-                {
-                    auto gamma_json = json::parse(gamma_response.body);
-                    if (gamma_json.is_array() && !gamma_json.empty())
-                    {
-                        auto &event = gamma_json[0];
-                        if (event.contains("markets") && !event["markets"].empty())
-                        {
-                            auto &market = event["markets"][0];
-                            auto token_ids = json::parse(market["clobTokenIds"].get<std::string>());
-                            std::string candidate_token = token_ids[0].get<std::string>();
-
-                            auto book = market_data_client.get_order_book(candidate_token);
-                            if (!book || book->asks.empty())
-                            {
-                                std::cout << "    Skipping " << slug << " - no ask liquidity\n";
-                                continue;
-                            }
-
-                            const double candidate_best_ask = book->best_ask();
-                            if (candidate_best_ask <= 0.0 || candidate_best_ask >= 1.0)
-                            {
-                                std::cout << "    Skipping " << slug << " - invalid best ask " << candidate_best_ask << "\n";
-                                continue;
-                            }
-
-                            auto tick_size = market_data_client.get_tick_size(candidate_token);
-                            if (!tick_size || tick_size->minimum_tick_size.empty())
-                            {
-                                std::cout << "    Skipping " << slug << " - could not fetch tick size\n";
-                                continue;
-                            }
-
-                            auto neg_risk = market_data_client.get_neg_risk(candidate_token);
-                            if (!neg_risk)
-                            {
-                                std::cout << "    Skipping " << slug << " - could not fetch neg_risk\n";
-                                continue;
-                            }
-
-                            live_market.token_id = candidate_token;
-                            live_market.slug = slug;
-                            live_market.best_ask = candidate_best_ask;
-                            live_market.tick_size = tick_size->minimum_tick_size;
-                            live_market.neg_risk = neg_risk->neg_risk;
-
-                            std::cout << "    Found market with liquidity: " << slug << " (expires in " << time_left / 60 << "min)\n";
-                            std::cout << "    Best ask: " << live_market.best_ask << "\n";
-                            std::cout << "    Tick size: " << live_market.tick_size << "\n";
-                            std::cout << "    neg_risk: " << (live_market.neg_risk ? "true" : "false") << "\n";
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (live_market.token_id.empty() || live_market.best_ask <= 0.0 || live_market.tick_size.empty())
-            {
-                std::cerr << "    Could not find active BTC 15m market with complete trading metadata\n";
                 http_global_cleanup();
                 return 1;
-            }
-
-            std::cout << "    YES token: " << live_market.token_id.substr(0, 30) << "...\n";
-
-            // Use cached market metadata from discovery for order construction.
-            std::string exchange_address = live_market.neg_risk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE;
-            std::cout << "    Exchange: " << exchange_address << "\n";
-
-            if (!have_creds)
-            {
-                std::cerr << "    Live mode requires API credentials\n";
-                http_global_cleanup();
-                return 1;
-            }
-
-            const double order_usd = 1.0;
-            const SignatureType live_signature_type = (funder_address != signer.address())
-                                                          ? SignatureType::POLY_GNOSIS_SAFE
-                                                          : SignatureType::EOA;
-            ClobClient order_client(CLOB_API, 137, private_key, creds, live_signature_type, funder_address);
-
-            CreateMarketOrderParams market_order;
-            market_order.token_id = live_market.token_id;
-            market_order.amount = order_usd;
-            market_order.side = OrderSide::BUY;
-            market_order.price = live_market.best_ask;
-            market_order.tick_size = live_market.tick_size;
-            market_order.neg_risk = live_market.neg_risk;
-
-            std::cout << "    Placing FAK market order: $" << order_usd << "\n";
-
-            auto real_signed = order_client.create_market_order(market_order);
-
-            // Debug: print order data before signing
-            std::cout << "    Order data for signing:\n";
-            std::cout << "      maker: " << real_signed.maker << "\n";
-            std::cout << "      signer: " << real_signed.signer << "\n";
-            std::cout << "      taker: " << real_signed.taker << "\n";
-            std::cout << "      tokenId: " << real_signed.token_id << "\n";
-            std::cout << "      makerAmount: " << real_signed.maker_amount << "\n";
-            std::cout << "      takerAmount: " << real_signed.taker_amount << "\n";
-            std::cout << "      side: " << static_cast<int>(real_signed.side) << "\n";
-            std::cout << "      signatureType: " << static_cast<int>(real_signed.signature_type) << "\n";
-            std::cout << "      exchange: " << exchange_address << "\n";
-
-            auto post_response = order_client.post_order(real_signed, OrderType::FAK);
-            if (post_response.success)
-            {
-                std::cout << "\n    ✅ ORDER PLACED SUCCESSFULLY!\n";
-                std::cout << "    Order ID: " << post_response.order_id << "\n";
-                std::cout << "    Status: " << post_response.status << "\n";
-                std::cout << "    Cost: $" << post_response.making_amount << "\n";
-                std::cout << "    Shares: " << post_response.taking_amount << "\n";
-            }
-            else
-            {
-                std::cerr << "\n    Order placement failed: " << post_response.error_msg << "\n";
             }
         }
 

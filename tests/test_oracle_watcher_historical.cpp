@@ -85,6 +85,14 @@ int main()
 {
     using namespace polymarket;
 
+    const char *run_live = std::getenv("POLYMARKET_RUN_LIVE_SMOKE");
+    if (!run_live || std::string_view(run_live) != "1")
+    {
+        std::cout << "test_oracle_watcher_historical skipped: set "
+                     "POLYMARKET_RUN_LIVE_SMOKE=1 to enable live RPC calls\n";
+        return 0;
+    }
+
     const char *rpc_http = std::getenv("POLYMARKET_POLYGON_RPC_HTTP");
     const char *uma_adapter = std::getenv("POLYMARKET_UMA_CTF_ADAPTER");
     const char *ctf_address = std::getenv("POLYMARKET_CONDITIONAL_TOKENS");

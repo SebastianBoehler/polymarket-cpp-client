@@ -83,10 +83,9 @@ namespace polymarket
         switch (kind)
         {
         case PolymarketEventKind::QuestionInitialized:
-            return OracleResolutionPhase::Proposed;
         case PolymarketEventKind::QuestionFlagged:
         case PolymarketEventKind::QuestionReset:
-            return OracleResolutionPhase::Disputed;
+            return OracleResolutionPhase::Pending;
         case PolymarketEventKind::QuestionResolved:
         case PolymarketEventKind::ConditionResolution:
             return OracleResolutionPhase::Resolved;
@@ -145,12 +144,6 @@ namespace polymarket
             }
         }
 
-        if (event.kind == PolymarketEventKind::QuestionFlagged ||
-            event.kind == PolymarketEventKind::QuestionReset)
-        {
-            state.dispute_count++;
-        }
-
         if (!event.settled_price.empty())
         {
             state.settled_price = event.settled_price;
@@ -169,8 +162,8 @@ namespace polymarket
             state.key = state_key(event);
         }
 
-            state.timeline.push_back({
-            {oracle_resolution_phase_to_string(state.phase)},
+        state.timeline.push_back({
+            oracle_resolution_phase_to_string(state.phase),
             event.name,
             live,
             received_at_ms,
@@ -182,20 +175,6 @@ namespace polymarket
             event.payouts,
             event.payout,
             event.raw_log.removed});
-    }
-
-    void OracleResolutionDashboard::ingest_event(const PolymarketDecodedEvent &event,
-                                                bool live, uint64_t received_at_ms)
-    {
-        if (event.raw_log.removed)
-            return;
-        const auto key = state_key(event);
-        if (key.empty())
-            return;
-        auto &state = states_[key];
-        state.key = key;
-        touch_ids(state, event);
-        append_event(state, event, live, received_at_ms);
     }
 
     const OracleResolutionState *OracleResolutionDashboard::get(const std::string &key) const

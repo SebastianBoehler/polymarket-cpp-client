@@ -1,37 +1,121 @@
 #include "clob_client.hpp"
+#include "clob_client_internal.hpp"
+#include "market_fetcher.hpp"
 #include "order_signer.hpp"
+#include "order_signer_auth_internal.hpp"
+
 #include <nlohmann/json.hpp>
-#include <optional>
-#include <memory>
-#include <sstream>
-#include <iomanip>
-#include <stdexcept>
+#include <charconv>
 #include <chrono>
+#include <memory>
+#include <stdexcept>
 
 using json = nlohmann::json;
 
 namespace polymarket
 {
+    using detail::percent_encode_query_value;
 
     // Exchange addresses for Polygon mainnet
     static const std::string EXCHANGE_ADDRESS = "0xE111180000d2663C0091e4f400237545B87B996B";
     static const std::string NEG_RISK_EXCHANGE_ADDRESS = "0xe2222d279d744050d28e00520010520000310F59";
+    static constexpr const char *DATA_API_URL = "https://data-api.polymarket.com";
 
-    // Data API URL for positions
-    static const std::string DATA_API_URL = "https://data-api.polymarket.com";
+    static int validated_chain_id(int chain_id)
+    {
+        if (chain_id != 137 && chain_id != 80002)
+            throw std::invalid_argument("unsupported CLOB chain ID");
+        return chain_id;
+    }
+
+    static std::string validated_funder(SignatureType signature_type,
+                                        const std::string &funder)
+    {
+        switch (signature_type)
+        {
+        case SignatureType::EOA:
+            return funder;
+        case SignatureType::POLY_PROXY:
+        case SignatureType::POLY_GNOSIS_SAFE:
+        case SignatureType::POLY_1271:
+            if (!funder.empty()) return funder;
+            throw std::invalid_argument(
+                "non-EOA signature types require a funder address");
+        }
+        throw std::invalid_argument("unsupported signature type");
+    }
+
+    static void configure_default_transports(HttpClient &clob, HttpClient &data,
+                                             const std::string &clob_url)
+    {
+        clob.set_base_url(clob_url);
+        data.set_base_url(DATA_API_URL);
+        clob.set_timeout_ms(10000);
+        data.set_timeout_ms(10000);
+    }
+
+    static void configure_transports(HttpClient &clob, HttpClient &data,
+                                     const std::string &clob_url,
+                                     const HttpClientOptions &options)
+    {
+        clob.configure(options);
+        data.configure(options);
+        clob.set_base_url(clob_url);
+        data.set_base_url(DATA_API_URL);
+    }
+
+    static ClobMarketPage fetch_market_page(
+        HttpClient &http, const std::string &endpoint,
+        const std::string &next_cursor)
+    {
+        std::string path = endpoint;
+        if (!next_cursor.empty())
+            path += "?next_cursor=" + percent_encode_query_value(next_cursor);
+        const auto response = http.get(path);
+        if (!response.ok()) return {};
+        try
+        {
+            return detail::parse_clob_market_page_json(response.body);
+        }
+        catch (...)
+        {
+            return {};
+        }
+    }
 
     ClobClient::ClobClient(const std::string &base_url, int chain_id)
-        : chain_id_(chain_id), base_url_(base_url), sig_type_(SignatureType::EOA)
+        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url), sig_type_(SignatureType::EOA)
     {
-        http_.set_base_url(base_url);
-        http_.set_timeout_ms(10000);
+        configure_default_transports(http_, data_http_, base_url);
     }
 
     ClobClient::ClobClient(const std::string &base_url, int chain_id, const HttpClientOptions &http_options)
-        : chain_id_(chain_id), base_url_(base_url), sig_type_(SignatureType::EOA)
+        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url), sig_type_(SignatureType::EOA)
     {
-        http_.configure(http_options);
-        http_.set_base_url(base_url);
+        configure_transports(http_, data_http_, base_url, http_options);
+    }
+
+    ClobClient::ClobClient(const std::string &base_url, int chain_id,
+                           const std::string &private_key, SignatureType sig_type,
+                           const std::string &funder_address)
+        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url),
+          funder_address_(validated_funder(sig_type, funder_address)),
+          sig_type_(sig_type)
+    {
+        configure_default_transports(http_, data_http_, base_url);
+        order_signer_ = std::make_unique<OrderSigner>(private_key, chain_id);
+    }
+
+    ClobClient::ClobClient(const std::string &base_url, int chain_id,
+                           const std::string &private_key, SignatureType sig_type,
+                           const std::string &funder_address,
+                           const HttpClientOptions &http_options)
+        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url),
+          funder_address_(validated_funder(sig_type, funder_address)),
+          sig_type_(sig_type)
+    {
+        configure_transports(http_, data_http_, base_url, http_options);
+        order_signer_ = std::make_unique<OrderSigner>(private_key, chain_id);
     }
 
     ClobClient::ClobClient(const std::string &base_url, int chain_id,
@@ -39,12 +123,14 @@ namespace polymarket
                            const ApiCredentials &creds,
                            SignatureType sig_type,
                            const std::string &funder_address)
-        : chain_id_(chain_id), base_url_(base_url), funder_address_(funder_address), sig_type_(sig_type)
+        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url),
+          funder_address_(validated_funder(sig_type, funder_address)),
+          sig_type_(sig_type)
     {
-        http_.set_base_url(base_url);
-        http_.set_timeout_ms(10000);
+        configure_default_transports(http_, data_http_, base_url);
 
         order_signer_ = std::make_unique<OrderSigner>(private_key, chain_id);
+        detail::validate_api_credentials(creds);
         api_creds_ = std::make_unique<ApiCredentials>(creds);
     }
 
@@ -54,12 +140,14 @@ namespace polymarket
                            SignatureType sig_type,
                            const std::string &funder_address,
                            const HttpClientOptions &http_options)
-        : chain_id_(chain_id), base_url_(base_url), funder_address_(funder_address), sig_type_(sig_type)
+        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url),
+          funder_address_(validated_funder(sig_type, funder_address)),
+          sig_type_(sig_type)
     {
-        http_.configure(http_options);
-        http_.set_base_url(base_url);
+        configure_transports(http_, data_http_, base_url, http_options);
 
         order_signer_ = std::make_unique<OrderSigner>(private_key, chain_id);
+        detail::validate_api_credentials(creds);
         api_creds_ = std::make_unique<ApiCredentials>(creds);
     }
 
@@ -77,18 +165,7 @@ namespace polymarket
 
     bool ClobClient::warm_connection()
     {
-        // Step 1: Hit a cheap GET endpoint to establish TCP/TLS
-        auto time_response = get_server_time();
-        if (!time_response.has_value())
-        {
-            return false;
-        }
-
-        // Step 2: Hit markets endpoint to warm Cloudflare cache
-        auto markets = get_markets("");
-
-        // Connection is now warm
-        return true;
+        return get_server_time().has_value();
     }
 
     std::string ClobClient::get_address() const
@@ -132,7 +209,7 @@ namespace polymarket
         case OrderType::FAK:
             return "FAK";
         default:
-            return "GTC";
+            throw std::invalid_argument("Invalid order type");
         }
     }
 
@@ -151,1264 +228,54 @@ namespace polymarket
         if (!response.ok())
             return std::nullopt;
 
-        try
-        {
-            // Server returns plain timestamp, not JSON
-            return std::stoull(response.body);
-        }
-        catch (...)
-        {
+        uint64_t timestamp = 0;
+        const auto begin = response.body.data();
+        const auto end = begin + response.body.size();
+        const auto parsed = std::from_chars(begin, end, timestamp);
+        constexpr uint64_t unix_seconds_2000 = 946'684'800ULL;
+        constexpr uint64_t unix_seconds_9999 = 253'402'300'799ULL;
+        if (response.body.empty() || parsed.ec != std::errc{} ||
+            parsed.ptr != end || timestamp < unix_seconds_2000 ||
+            timestamp > unix_seconds_9999)
             return std::nullopt;
-        }
+        return timestamp;
     }
 
-    std::vector<ClobMarket> ClobClient::get_markets(const std::string &next_cursor)
+    ClobMarketPage ClobClient::get_markets(const std::string &next_cursor)
     {
-        std::string path = "/markets";
-        if (!next_cursor.empty())
-        {
-            path += "?next_cursor=" + next_cursor;
-        }
-
-        auto response = http_.get(path);
-        if (!response.ok())
-            return {};
-
-        return parse_markets(response.body);
+        return fetch_market_page(http_, "/markets", next_cursor);
     }
 
     std::optional<ClobMarket> ClobClient::get_market(const std::string &condition_id)
     {
+        if (condition_id.empty()) return std::nullopt;
         auto response = http_.get("/markets/" + condition_id);
         if (!response.ok())
             return std::nullopt;
 
         auto markets = parse_markets("[" + response.body + "]");
-        if (markets.empty())
+        if (markets.size() != 1 || markets[0].condition_id != condition_id)
             return std::nullopt;
 
         return markets[0];
     }
 
-    std::vector<ClobMarket> ClobClient::get_sampling_markets(const std::string &next_cursor)
+    ClobMarketPage ClobClient::get_sampling_markets(
+        const std::string &next_cursor)
     {
-        std::string path = "/sampling-markets";
-        if (!next_cursor.empty())
-        {
-            path += "?next_cursor=" + next_cursor;
-        }
-
-        auto response = http_.get(path);
-        if (!response.ok())
-            return {};
-
-        return parse_markets(response.body);
+        return fetch_market_page(http_, "/sampling-markets", next_cursor);
     }
 
-    std::vector<ClobMarket> ClobClient::get_simplified_markets(const std::string &next_cursor)
+    ClobMarketPage ClobClient::get_simplified_markets(
+        const std::string &next_cursor)
     {
-        std::string path = "/simplified-markets";
-        if (!next_cursor.empty())
-        {
-            path += "?next_cursor=" + next_cursor;
-        }
-
-        auto response = http_.get(path);
-        if (!response.ok())
-            return {};
-
-        return parse_markets(response.body);
+        return fetch_market_page(http_, "/simplified-markets", next_cursor);
     }
 
-    std::vector<ClobMarket> ClobClient::get_sampling_simplified_markets(const std::string &next_cursor)
+    ClobMarketPage ClobClient::get_sampling_simplified_markets(
+        const std::string &next_cursor)
     {
-        std::string path = "/sampling-simplified-markets";
-        if (!next_cursor.empty())
-        {
-            path += "?next_cursor=" + next_cursor;
-        }
-
-        auto response = http_.get(path);
-        if (!response.ok())
-            return {};
-
-        return parse_markets(response.body);
+        return fetch_market_page(http_, "/sampling-simplified-markets",
+                                 next_cursor);
     }
-
-    std::optional<Orderbook> ClobClient::get_order_book(const std::string &token_id)
-    {
-        auto response = http_.get("/book?token_id=" + token_id);
-        if (!response.ok())
-            return std::nullopt;
-
-        return parse_orderbook(response.body);
-    }
-
-    std::map<std::string, Orderbook> ClobClient::get_order_books(const std::vector<std::string> &token_ids)
-    {
-        std::map<std::string, Orderbook> result;
-
-        // Build comma-separated token IDs
-        std::string ids;
-        for (size_t i = 0; i < token_ids.size(); i++)
-        {
-            if (i > 0)
-                ids += ",";
-            ids += token_ids[i];
-        }
-
-        auto response = http_.get("/books?token_ids=" + ids);
-        if (!response.ok())
-            return result;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.is_array())
-            {
-                for (const auto &item : j)
-                {
-                    if (item.contains("asset_id"))
-                    {
-                        auto book = parse_orderbook(item.dump());
-                        if (book)
-                        {
-                            result[item["asset_id"].get<std::string>()] = *book;
-                        }
-                    }
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    std::optional<PriceInfo> ClobClient::get_price(const std::string &token_id, const std::string &side)
-    {
-        auto response = http_.get("/price?token_id=" + token_id + "&side=" + side);
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            PriceInfo info;
-            info.token_id = token_id;
-            info.price = std::stod(j.value("price", "0"));
-            return info;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    std::vector<PriceInfo> ClobClient::get_prices(const std::vector<std::string> &token_ids, const std::string &side)
-    {
-        std::vector<PriceInfo> result;
-
-        std::string ids;
-        for (size_t i = 0; i < token_ids.size(); i++)
-        {
-            if (i > 0)
-                ids += ",";
-            ids += token_ids[i];
-        }
-
-        auto response = http_.get("/prices?token_ids=" + ids + "&side=" + side);
-        if (!response.ok())
-            return result;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.is_array())
-            {
-                for (size_t i = 0; i < j.size() && i < token_ids.size(); i++)
-                {
-                    PriceInfo info;
-                    info.token_id = token_ids[i];
-                    info.price = std::stod(j[i].value("price", "0"));
-                    result.push_back(info);
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    std::optional<PriceInfo> ClobClient::get_last_trade_price(const std::string &token_id)
-    {
-        auto response = http_.get("/last-trade-price?token_id=" + token_id);
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            PriceInfo info;
-            info.token_id = token_id;
-            info.price = std::stod(j.value("price", "0"));
-            return info;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    std::vector<PriceInfo> ClobClient::get_last_trades_prices(const std::vector<std::string> &token_ids)
-    {
-        std::vector<PriceInfo> result;
-
-        std::string ids;
-        for (size_t i = 0; i < token_ids.size(); i++)
-        {
-            if (i > 0)
-                ids += ",";
-            ids += token_ids[i];
-        }
-
-        auto response = http_.get("/last-trades-prices?token_ids=" + ids);
-        if (!response.ok())
-            return result;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.is_array())
-            {
-                for (size_t i = 0; i < j.size() && i < token_ids.size(); i++)
-                {
-                    PriceInfo info;
-                    info.token_id = token_ids[i];
-                    info.price = std::stod(j[i].value("price", "0"));
-                    result.push_back(info);
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    std::optional<MidpointInfo> ClobClient::get_midpoint(const std::string &token_id)
-    {
-        auto response = http_.get("/midpoint?token_id=" + token_id);
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            MidpointInfo info;
-            info.token_id = token_id;
-            info.mid = std::stod(j.value("mid", "0"));
-            return info;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    std::vector<MidpointInfo> ClobClient::get_midpoints(const std::vector<std::string> &token_ids)
-    {
-        std::vector<MidpointInfo> result;
-
-        std::string ids;
-        for (size_t i = 0; i < token_ids.size(); i++)
-        {
-            if (i > 0)
-                ids += ",";
-            ids += token_ids[i];
-        }
-
-        auto response = http_.get("/midpoints?token_ids=" + ids);
-        if (!response.ok())
-            return result;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.is_array())
-            {
-                for (size_t i = 0; i < j.size() && i < token_ids.size(); i++)
-                {
-                    MidpointInfo info;
-                    info.token_id = token_ids[i];
-                    info.mid = std::stod(j[i].value("mid", "0"));
-                    result.push_back(info);
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    std::optional<SpreadInfo> ClobClient::get_spread(const std::string &token_id)
-    {
-        auto response = http_.get("/spread?token_id=" + token_id);
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            SpreadInfo info;
-            info.token_id = token_id;
-            info.spread = std::stod(j.value("spread", "0"));
-            return info;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    std::vector<SpreadInfo> ClobClient::get_spreads(const std::vector<std::string> &token_ids)
-    {
-        std::vector<SpreadInfo> result;
-
-        std::string ids;
-        for (size_t i = 0; i < token_ids.size(); i++)
-        {
-            if (i > 0)
-                ids += ",";
-            ids += token_ids[i];
-        }
-
-        auto response = http_.get("/spreads?token_ids=" + ids);
-        if (!response.ok())
-            return result;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.is_array())
-            {
-                for (size_t i = 0; i < j.size() && i < token_ids.size(); i++)
-                {
-                    SpreadInfo info;
-                    info.token_id = token_ids[i];
-                    info.spread = std::stod(j[i].value("spread", "0"));
-                    result.push_back(info);
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    std::optional<TickSizeInfo> ClobClient::get_tick_size(const std::string &token_id)
-    {
-        auto response = http_.get("/tick-size?token_id=" + token_id);
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            TickSizeInfo info;
-            info.minimum_tick_size = j.value("minimum_tick_size", "0.01");
-            return info;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    std::optional<NegRiskInfo> ClobClient::get_neg_risk(const std::string &token_id)
-    {
-        auto response = http_.get("/neg-risk?token_id=" + token_id);
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            NegRiskInfo info;
-            info.neg_risk = j.value("neg_risk", false);
-            return info;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    std::vector<ClobClient::PriceHistoryPoint> ClobClient::get_prices_history(
-        const std::string &token_id,
-        uint64_t start_ts,
-        uint64_t end_ts,
-        const std::string &interval,
-        const std::string &fidelity)
-    {
-        std::vector<PriceHistoryPoint> result;
-
-        std::string path = "/prices-history?token_id=" + token_id;
-        if (start_ts > 0)
-            path += "&startTs=" + std::to_string(start_ts);
-        if (end_ts > 0)
-            path += "&endTs=" + std::to_string(end_ts);
-        path += "&interval=" + interval;
-        path += "&fidelity=" + fidelity;
-
-        auto response = http_.get(path);
-        if (!response.ok())
-            return result;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.contains("history") && j["history"].is_array())
-            {
-                for (const auto &item : j["history"])
-                {
-                    PriceHistoryPoint point;
-                    point.timestamp = item.value("t", 0ULL);
-                    point.price = std::stod(item.value("p", "0"));
-                    result.push_back(point);
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    std::vector<Trade> ClobClient::get_market_trades_events(const std::string &condition_id,
-                                                            const std::string &next_cursor)
-    {
-        std::string path = "/trades?market=" + condition_id;
-        if (!next_cursor.empty())
-        {
-            path += "&next_cursor=" + next_cursor;
-        }
-
-        auto response = http_.get(path);
-        if (!response.ok())
-            return {};
-
-        return parse_trades(response.body);
-    }
-
-    // ============================================================
-    // AUTHENTICATED ENDPOINTS (L1)
-    // ============================================================
-
-    ApiCredentials ClobClient::create_api_key(uint64_t nonce)
-    {
-        if (!order_signer_)
-        {
-            throw std::runtime_error("Client not authenticated");
-        }
-        return order_signer_->create_api_credentials(http_, nonce);
-    }
-
-    ApiCredentials ClobClient::derive_api_key()
-    {
-        if (!order_signer_)
-        {
-            throw std::runtime_error("Client not authenticated");
-        }
-        return order_signer_->derive_api_credentials(http_);
-    }
-
-    ApiCredentials ClobClient::create_or_derive_api_key()
-    {
-        if (!order_signer_)
-        {
-            throw std::runtime_error("Client not authenticated");
-        }
-        return order_signer_->create_or_derive_api_credentials(http_);
-    }
-
-    std::vector<std::string> ClobClient::get_api_keys()
-    {
-        std::vector<std::string> result;
-
-        auto headers = get_l2_headers("GET", "/auth/api-keys", "");
-        auto response = http_.get("/auth/api-keys", headers);
-
-        if (!response.ok())
-            return result;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.is_array())
-            {
-                for (const auto &item : j)
-                {
-                    result.push_back(item.get<std::string>());
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    bool ClobClient::delete_api_key()
-    {
-        auto headers = get_l2_headers("DELETE", "/auth/api-key", "");
-
-        // Need to add DELETE method to HttpClient - for now use POST with method override
-        // This is a limitation - would need to extend HttpClient
-        return false; // TODO: Implement DELETE method
-    }
-
-    std::optional<OpenOrder> ClobClient::get_order(const std::string &order_id)
-    {
-        auto result = get_order_result(order_id);
-        return result ? result.value() : std::nullopt;
-    }
-
-    Result<std::optional<OpenOrder>> ClobClient::get_order_result(const std::string &order_id)
-    {
-        if (!order_signer_ || !api_creds_)
-        {
-            return Result<std::optional<OpenOrder>>::failure(make_auth_error("Client not authenticated", "/order/" + order_id));
-        }
-
-        auto headers = get_l2_headers("GET", "/order/" + order_id, "");
-        auto response = http_.get("/order/" + order_id, headers);
-
-        if (!response.ok())
-        {
-            return Result<std::optional<OpenOrder>>::failure(make_sdk_error(response, "/order/" + order_id));
-        }
-
-        try
-        {
-            auto parsed_json = json::parse(response.body);
-            (void)parsed_json;
-        }
-        catch (const std::exception &ex)
-        {
-            return Result<std::optional<OpenOrder>>::failure(make_parse_error(ex.what(), "/order/" + order_id, response.body));
-        }
-
-        auto orders = parse_open_orders("[" + response.body + "]");
-        if (orders.empty())
-        {
-            return Result<std::optional<OpenOrder>>::success(std::nullopt);
-        }
-
-        return Result<std::optional<OpenOrder>>::success(orders[0]);
-    }
-
-    std::vector<OpenOrder> ClobClient::get_open_orders(const std::string &market)
-    {
-        auto result = get_open_orders_result(market);
-        return result ? result.value() : std::vector<OpenOrder>{};
-    }
-
-    Result<std::vector<OpenOrder>> ClobClient::get_open_orders_result(const std::string &market)
-    {
-        if (!order_signer_ || !api_creds_)
-        {
-            return Result<std::vector<OpenOrder>>::failure(make_auth_error("Client not authenticated", "/orders"));
-        }
-
-        std::string path = "/orders";
-        if (!market.empty())
-        {
-            path += "?market=" + market;
-        }
-
-        auto headers = get_l2_headers("GET", path, "");
-        auto response = http_.get(path, headers);
-
-        if (!response.ok())
-        {
-            return Result<std::vector<OpenOrder>>::failure(make_sdk_error(response, path));
-        }
-
-        try
-        {
-            auto parsed_json = json::parse(response.body);
-            (void)parsed_json;
-        }
-        catch (const std::exception &ex)
-        {
-            return Result<std::vector<OpenOrder>>::failure(make_parse_error(ex.what(), path, response.body));
-        }
-
-        return Result<std::vector<OpenOrder>>::success(parse_open_orders(response.body));
-    }
-
-    std::vector<Trade> ClobClient::get_trades(const std::string &next_cursor)
-    {
-        std::string path = "/trades";
-        if (!next_cursor.empty())
-        {
-            path += "?next_cursor=" + next_cursor;
-        }
-
-        auto headers = get_l2_headers("GET", path, "");
-        auto response = http_.get(path, headers);
-
-        if (!response.ok())
-            return {};
-
-        return parse_trades(response.body);
-    }
-
-    std::optional<BalanceAllowance> ClobClient::get_balance_allowance(const std::string &asset_type)
-    {
-        std::string request_path = "/balance-allowance";
-        std::string path = request_path + "?asset_type=" + asset_type +
-                           "&signature_type=" + std::to_string(static_cast<int>(sig_type_));
-        auto headers = get_l2_headers("GET", request_path, "");
-        auto response = http_.get(path, headers);
-
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            BalanceAllowance ba;
-            ba.balance = j.value("balance", "0");
-            ba.allowance = j.value("allowance", "0");
-            return ba;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    bool ClobClient::update_balance_allowance(const std::string &asset_type)
-    {
-        std::string request_path = "/balance-allowance/update";
-        std::string path = request_path + "?asset_type=" + asset_type +
-                           "&signature_type=" + std::to_string(static_cast<int>(sig_type_));
-        auto headers = get_l2_headers("GET", request_path, "");
-        auto response = http_.get(path, headers);
-        return response.ok();
-    }
-
-    std::optional<OrderScoringResult> ClobClient::is_order_scoring(const SignedOrder &order)
-    {
-        json body;
-        body["orderId"] = order.salt; // Use salt as order identifier for scoring check
-
-        std::string body_str = body.dump();
-        auto response = http_.post("/order-scoring", body_str);
-
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            OrderScoringResult result;
-            result.scoring = j.value("scoring", false);
-            return result;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    std::vector<OrderScoringResult> ClobClient::are_orders_scoring(const std::vector<SignedOrder> &orders)
-    {
-        std::vector<OrderScoringResult> results;
-
-        json body = json::array();
-        for (const auto &order : orders)
-        {
-            body.push_back({{"orderId", order.salt}});
-        }
-
-        std::string body_str = body.dump();
-        auto response = http_.post("/orders-scoring", body_str);
-
-        if (!response.ok())
-            return results;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.is_array())
-            {
-                for (const auto &item : j)
-                {
-                    OrderScoringResult result;
-                    result.scoring = item.value("scoring", false);
-                    results.push_back(result);
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return results;
-    }
-
-    std::vector<ClobClient::Notification> ClobClient::get_notifications()
-    {
-        std::vector<Notification> result;
-
-        auto headers = get_l2_headers("GET", "/notifications", "");
-        auto response = http_.get("/notifications", headers);
-
-        if (!response.ok())
-            return result;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.is_array())
-            {
-                for (const auto &item : j)
-                {
-                    Notification n;
-                    n.id = item.value("id", "");
-                    n.type = item.value("type", "");
-                    n.message = item.value("message", "");
-                    n.created_at = item.value("createdAt", "");
-                    result.push_back(n);
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    bool ClobClient::drop_notifications(const std::vector<std::string> &notification_ids)
-    {
-        json body = notification_ids;
-
-        std::string body_str = body.dump();
-        auto headers = get_l2_headers("DELETE", "/notifications", body_str);
-
-        auto response = http_.post("/notifications", body_str, headers);
-        return response.ok();
-    }
-
-    std::vector<ClobClient::RewardsInfo> ClobClient::get_rewards_markets_current()
-    {
-        std::vector<RewardsInfo> result;
-
-        auto response = http_.get("/rewards/markets/current");
-        if (!response.ok())
-            return result;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.is_array())
-            {
-                for (const auto &item : j)
-                {
-                    RewardsInfo info;
-                    info.market = item.value("market", "");
-                    info.min_size = item.value("minSize", "");
-                    info.max_spread = item.value("maxSpread", "");
-                    info.reward_epoch = item.value("rewardEpoch", "");
-                    result.push_back(info);
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    std::vector<ClobClient::RewardsInfo> ClobClient::get_rewards_markets(const std::string &epoch)
-    {
-        std::vector<RewardsInfo> result;
-
-        std::string path = "/rewards/markets";
-        if (!epoch.empty())
-        {
-            path += "?epoch=" + epoch;
-        }
-
-        auto response = http_.get(path);
-        if (!response.ok())
-            return result;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (j.is_array())
-            {
-                for (const auto &item : j)
-                {
-                    RewardsInfo info;
-                    info.market = item.value("market", "");
-                    info.min_size = item.value("minSize", "");
-                    info.max_spread = item.value("maxSpread", "");
-                    info.reward_epoch = item.value("rewardEpoch", "");
-                    result.push_back(info);
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    std::optional<ClobClient::EarningsInfo> ClobClient::get_earnings_for_user_for_day(const std::string &date)
-    {
-        std::string path = "/rewards/earnings";
-        if (!date.empty())
-        {
-            path += "?date=" + date;
-        }
-
-        auto headers = get_l2_headers("GET", path, "");
-        auto response = http_.get(path, headers);
-
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            EarningsInfo info;
-            info.market = j.value("market", "");
-            info.earnings = j.value("earnings", "0");
-            info.epoch = j.value("epoch", "");
-            return info;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    std::optional<ClobClient::EarningsInfo> ClobClient::get_total_earnings_for_user_for_day(const std::string &date)
-    {
-        std::string path = "/rewards/total-earnings";
-        if (!date.empty())
-        {
-            path += "?date=" + date;
-        }
-
-        auto headers = get_l2_headers("GET", path, "");
-        auto response = http_.get(path, headers);
-
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            EarningsInfo info;
-            info.earnings = j.value("earnings", "0");
-            info.epoch = j.value("epoch", "");
-            return info;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    std::optional<ClobClient::FeeRateInfo> ClobClient::get_fee_rate()
-    {
-        auto headers = get_l2_headers("GET", "/fee-rate", "");
-        auto response = http_.get("/fee-rate", headers);
-
-        if (!response.ok())
-            return std::nullopt;
-
-        try
-        {
-            auto j = json::parse(response.body);
-            FeeRateInfo info;
-            info.maker = j.value("maker", "0");
-            info.taker = j.value("taker", "0");
-            return info;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    // ============================================================
-    // POSITION MANAGEMENT (Data API)
-    // ============================================================
-
-    std::vector<ClobClient::Position> ClobClient::get_positions(const std::string &user_address)
-    {
-        std::vector<Position> result;
-
-        std::string address = user_address.empty() ? get_funder_address() : user_address;
-        if (address.empty())
-        {
-            address = get_address();
-        }
-        if (address.empty())
-        {
-            return result;
-        }
-
-        // Use a separate HTTP client for Data API
-        HttpClient data_http;
-        data_http.set_base_url(DATA_API_URL);
-        data_http.set_timeout_ms(10000);
-
-        auto response = data_http.get("/positions?user=" + address);
-        if (!response.ok())
-        {
-            return result;
-        }
-
-        try
-        {
-            auto j = json::parse(response.body);
-            if (!j.is_array())
-            {
-                return result;
-            }
-
-            for (const auto &item : j)
-            {
-                Position pos;
-                pos.proxy_wallet = item.value("proxyWallet", "");
-                pos.asset = item.value("asset", "");
-                pos.condition_id = item.value("conditionId", "");
-                pos.size = item.value("size", 0.0);
-                pos.avg_price = item.value("avgPrice", 0.0);
-                pos.initial_value = item.value("initialValue", 0.0);
-                pos.current_value = item.value("currentValue", 0.0);
-                pos.cash_pnl = item.value("cashPnl", 0.0);
-                pos.percent_pnl = item.value("percentPnl", 0.0);
-                pos.cur_price = item.value("curPrice", 0.0);
-                pos.redeemable = item.value("redeemable", false);
-                pos.mergeable = item.value("mergeable", false);
-                pos.title = item.value("title", "");
-                pos.slug = item.value("slug", "");
-                pos.outcome = item.value("outcome", "");
-                pos.outcome_index = item.value("outcomeIndex", 0);
-                pos.opposite_asset = item.value("oppositeAsset", "");
-                pos.end_date = item.value("endDate", "");
-                pos.negative_risk = item.value("negativeRisk", false);
-                result.push_back(pos);
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    std::vector<ClobClient::Position> ClobClient::get_redeemable_positions(const std::string &user_address)
-    {
-        auto all_positions = get_positions(user_address);
-        std::vector<Position> result;
-
-        for (const auto &pos : all_positions)
-        {
-            if (pos.redeemable)
-            {
-                result.push_back(pos);
-            }
-        }
-
-        return result;
-    }
-
-    std::vector<ClobClient::Position> ClobClient::get_mergeable_positions(const std::string &user_address)
-    {
-        auto all_positions = get_positions(user_address);
-        std::vector<Position> result;
-
-        for (const auto &pos : all_positions)
-        {
-            if (pos.mergeable)
-            {
-                result.push_back(pos);
-            }
-        }
-
-        return result;
-    }
-
-    // ============================================================
-    // JSON PARSING HELPERS
-    // ============================================================
-
-    std::vector<ClobMarket> ClobClient::parse_markets(const std::string &json_str)
-    {
-        std::vector<ClobMarket> markets;
-
-        try
-        {
-            auto j = json::parse(json_str);
-
-            json market_array;
-            if (j.is_array())
-            {
-                market_array = j;
-            }
-            else if (j.contains("data") && j["data"].is_array())
-            {
-                market_array = j["data"];
-            }
-            else
-            {
-                return markets;
-            }
-
-            for (const auto &item : market_array)
-            {
-                ClobMarket market;
-
-                if (item.contains("condition_id"))
-                {
-                    market.condition_id = item["condition_id"].get<std::string>();
-                }
-                if (item.contains("question") && !item["question"].is_null())
-                {
-                    market.question = item["question"].get<std::string>();
-                }
-                if (item.contains("market_slug") && !item["market_slug"].is_null())
-                {
-                    market.market_slug = item["market_slug"].get<std::string>();
-                }
-                if (item.contains("neg_risk"))
-                {
-                    market.neg_risk = item["neg_risk"].get<bool>();
-                }
-                if (item.contains("active"))
-                {
-                    market.active = item["active"].get<bool>();
-                }
-                if (item.contains("closed"))
-                {
-                    market.closed = item["closed"].get<bool>();
-                }
-
-                if (item.contains("tokens") && item["tokens"].is_array())
-                {
-                    for (const auto &t : item["tokens"])
-                    {
-                        Token token;
-                        if (t.contains("token_id"))
-                        {
-                            token.token_id = t["token_id"].get<std::string>();
-                        }
-                        if (t.contains("outcome"))
-                        {
-                            token.outcome = t["outcome"].get<std::string>();
-                        }
-                        market.tokens.push_back(token);
-                    }
-                }
-
-                markets.push_back(std::move(market));
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return markets;
-    }
-
-    std::optional<Orderbook> ClobClient::parse_orderbook(const std::string &json_str)
-    {
-        try
-        {
-            auto j = json::parse(json_str);
-
-            Orderbook book;
-            book.timestamp_ns = now_ns();
-
-            if (j.contains("asset_id"))
-            {
-                book.asset_id = j["asset_id"].get<std::string>();
-            }
-
-            if (j.contains("bids") && j["bids"].is_array())
-            {
-                for (const auto &bid : j["bids"])
-                {
-                    PriceLevel level;
-                    level.price = std::stod(bid["price"].get<std::string>());
-                    level.size = std::stod(bid["size"].get<std::string>());
-                    book.bids.push_back(level);
-                }
-            }
-
-            if (j.contains("asks") && j["asks"].is_array())
-            {
-                for (const auto &ask : j["asks"])
-                {
-                    PriceLevel level;
-                    level.price = std::stod(ask["price"].get<std::string>());
-                    level.size = std::stod(ask["size"].get<std::string>());
-                    book.asks.push_back(level);
-                }
-            }
-
-            return book;
-        }
-        catch (...)
-        {
-            return std::nullopt;
-        }
-    }
-
-    OrderResponse ClobClient::parse_order_response(const std::string &json_str)
-    {
-        OrderResponse result;
-        result.success = false;
-
-        try
-        {
-            auto j = json::parse(json_str);
-
-            result.success = j.value("success", false);
-            result.error_msg = j.value("errorMsg", "");
-            result.order_id = j.value("orderID", "");
-            result.status = j.value("status", "");
-            result.taking_amount = j.value("takingAmount", "0");
-            result.making_amount = j.value("makingAmount", "0");
-
-            if (j.contains("transactionsHashes") && j["transactionsHashes"].is_array())
-            {
-                for (const auto &hash : j["transactionsHashes"])
-                {
-                    result.transaction_hashes.push_back(hash.get<std::string>());
-                }
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return result;
-    }
-
-    std::vector<OpenOrder> ClobClient::parse_open_orders(const std::string &json_str)
-    {
-        std::vector<OpenOrder> orders;
-
-        try
-        {
-            auto j = json::parse(json_str);
-
-            json order_array;
-            if (j.is_array())
-            {
-                order_array = j;
-            }
-            else if (j.contains("data") && j["data"].is_array())
-            {
-                order_array = j["data"];
-            }
-            else
-            {
-                return orders;
-            }
-
-            for (const auto &item : order_array)
-            {
-                OpenOrder order;
-                order.id = item.value("id", "");
-                order.market = item.value("market", "");
-                order.asset_id = item.value("asset_id", "");
-                order.side = item.value("side", "");
-                order.original_size = item.value("original_size", "0");
-                order.size_matched = item.value("size_matched", "0");
-                order.price = item.value("price", "0");
-                order.status = item.value("status", "");
-                order.created_at = item.value("created_at", "");
-                order.expiration = item.value("expiration", "0");
-                order.order_type = item.value("order_type", "GTC");
-                orders.push_back(order);
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return orders;
-    }
-
-    std::vector<Trade> ClobClient::parse_trades(const std::string &json_str)
-    {
-        std::vector<Trade> trades;
-
-        try
-        {
-            auto j = json::parse(json_str);
-
-            json trade_array;
-            if (j.is_array())
-            {
-                trade_array = j;
-            }
-            else if (j.contains("data") && j["data"].is_array())
-            {
-                trade_array = j["data"];
-            }
-            else
-            {
-                return trades;
-            }
-
-            for (const auto &item : trade_array)
-            {
-                Trade trade;
-                trade.id = item.value("id", "");
-                trade.market = item.value("market", "");
-                trade.asset_id = item.value("asset_id", "");
-                trade.side = item.value("side", "");
-                trade.size = item.value("size", "0");
-                trade.price = item.value("price", "0");
-                trade.fee_rate_bps = item.value("fee_rate_bps", "0");
-                trade.status = item.value("status", "");
-                trade.created_at = item.value("created_at", "");
-                trade.match_time = item.value("match_time", "");
-                trade.transaction_hash = item.value("transaction_hash", "");
-                trades.push_back(trade);
-            }
-        }
-        catch (...)
-        {
-        }
-
-        return trades;
-    }
-
-} // namespace polymarket
+}

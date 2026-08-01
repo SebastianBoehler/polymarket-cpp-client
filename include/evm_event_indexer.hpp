@@ -6,12 +6,17 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace polymarket
 {
+    namespace detail
+    {
+        class EvmEventIndexerImpl;
+    }
 
     struct EvmBlockRange
     {
@@ -25,12 +30,30 @@ namespace polymarket
                                                      uint64_t to_block,
                                                      uint64_t batch_size);
 
+    struct EvmLogPosition
+    {
+        uint64_t transaction_index{0};
+        uint64_t log_index{0};
+        std::string block_hash;
+    };
+
+    struct EvmIndexCursor
+    {
+        uint64_t block_number{0};
+        bool block_complete{true};
+        std::optional<EvmLogPosition> last_log;
+    };
+
     class EvmBlockCursorStore
     {
     public:
         virtual ~EvmBlockCursorStore() = default;
         virtual std::optional<uint64_t> load(const std::string &cursor_name) = 0;
         virtual void save(const std::string &cursor_name, uint64_t block_number) = 0;
+
+        virtual std::optional<EvmIndexCursor> load_cursor(const std::string &cursor_name);
+        virtual void save_cursor(const std::string &cursor_name, const EvmIndexCursor &cursor);
+        virtual void rewind(const std::string &cursor_name, uint64_t from_block);
     };
 
     class FileBlockCursorStore : public EvmBlockCursorStore
@@ -40,9 +63,13 @@ namespace polymarket
 
         std::optional<uint64_t> load(const std::string &cursor_name) override;
         void save(const std::string &cursor_name, uint64_t block_number) override;
+        std::optional<EvmIndexCursor> load_cursor(const std::string &cursor_name) override;
+        void save_cursor(const std::string &cursor_name, const EvmIndexCursor &cursor) override;
+        void rewind(const std::string &cursor_name, uint64_t from_block) override;
 
     private:
         std::string path_;
+        std::shared_ptr<std::mutex> mutex_;
     };
 
     struct EvmEventIndexerConfig
@@ -54,6 +81,7 @@ namespace polymarket
         uint64_t start_block{0};
         uint64_t confirmations{0};
         uint64_t batch_size{2000};
+        uint64_t reorg_lookback_blocks{64};
         int ws_ping_interval_ms{5000};
     };
 
@@ -74,12 +102,31 @@ namespace polymarket
 
     using EvmIndexedLogCallback = std::function<void(const EvmIndexedLog &)>;
     using EvmIndexCheckpointCallback = std::function<void(uint64_t block_number)>;
+    using EvmHeadCallback = std::function<void(uint64_t block_number)>;
+
+    // Network boundary used by the indexer. start_logs returns only after the
+    // subscription is active, allowing callers to capture a race-free boundary.
+    class EvmEventIndexerTransport
+    {
+    public:
+        virtual ~EvmEventIndexerTransport() = default;
+        virtual std::string block_number() = 0;
+        virtual std::vector<EvmLog> get_logs(const EvmLogFilter &filter) = 0;
+        virtual bool start_logs(const EvmLogFilter &filter,
+                                EvmLogCallback log_callback,
+                                EvmHeadCallback head_callback,
+                                EvmRpcErrorCallback error_callback) = 0;
+        virtual void stop() = 0;
+    };
 
     class EvmEventIndexer
     {
     public:
         EvmEventIndexer(EvmEventIndexerConfig config,
                         std::shared_ptr<EvmBlockCursorStore> cursor_store);
+        EvmEventIndexer(EvmEventIndexerConfig config,
+                        std::shared_ptr<EvmBlockCursorStore> cursor_store,
+                        std::shared_ptr<EvmEventIndexerTransport> transport);
         ~EvmEventIndexer();
 
         EvmEventIndexer(const EvmEventIndexer &) = delete;
@@ -95,18 +142,7 @@ namespace polymarket
         void stop();
 
     private:
-        EvmEventIndexerConfig config_;
-        std::shared_ptr<EvmBlockCursorStore> cursor_store_;
-        EvmJsonRpcHttpClient http_;
-        EvmJsonRpcWsClient ws_;
-
-        EvmIndexedLogCallback log_cb_;
-        EvmIndexCheckpointCallback checkpoint_cb_;
-        EvmRpcErrorCallback error_cb_;
-
-        void save_checkpoint(uint64_t block_number);
-        void emit_error(const std::string &message);
-        void handle_live_log(const EvmLog &log);
+        std::shared_ptr<detail::EvmEventIndexerImpl> impl_;
     };
 
 } // namespace polymarket

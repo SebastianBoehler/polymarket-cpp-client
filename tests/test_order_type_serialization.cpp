@@ -1,4 +1,5 @@
 #include "http_client.hpp"
+#include "clob_types.hpp"
 #include "order_signer.hpp"
 #include "sdk_error.hpp"
 #include "types.hpp"
@@ -41,6 +42,21 @@ int main()
         !expect_equal("FOK order type", client.order_type_to_string(OrderType::FOK), "FOK") ||
         !expect_equal("FAK order type", client.order_type_to_string(OrderType::FAK), "FAK"))
     {
+        return 1;
+    }
+
+    bool rejected_invalid = false;
+    try
+    {
+        (void)client.order_type_to_string(static_cast<OrderType>(99));
+    }
+    catch (const std::invalid_argument &)
+    {
+        rejected_invalid = true;
+    }
+    if (!rejected_invalid)
+    {
+        std::cerr << "invalid order type was serialized as a valid order\n";
         return 1;
     }
 

@@ -61,10 +61,16 @@ namespace
             return "http://127.0.0.1:" + std::to_string(port_);
         }
 
+        long accepted_connections() const
+        {
+            return accepted_connections_.load();
+        }
+
     private:
         int server_fd_{-1};
         int port_{0};
         std::atomic<bool> running_{true};
+        std::atomic<long> accepted_connections_{0};
         std::thread thread_;
 
         void serve()
@@ -76,17 +82,24 @@ namespace
                 {
                     continue;
                 }
+                accepted_connections_++;
 
-                char buffer[512];
-                (void)::read(client, buffer, sizeof(buffer));
-                const std::string body = R"({"ok":true})";
-                const std::string response =
-                    "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: application/json\r\n"
-                    "Content-Length: " +
-                    std::to_string(body.size()) +
-                    "\r\nConnection: close\r\n\r\n" + body;
-                (void)::write(client, response.data(), response.size());
+                while (running_.load())
+                {
+                    char buffer[512];
+                    const auto bytes = ::read(client, buffer, sizeof(buffer));
+                    if (bytes <= 0)
+                        break;
+
+                    const std::string body = R"({"ok":true})";
+                    const std::string response =
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: application/json\r\n"
+                        "Content-Length: " +
+                        std::to_string(body.size()) +
+                        "\r\nConnection: keep-alive\r\n\r\n" + body;
+                    (void)::write(client, response.data(), response.size());
+                }
                 ::close(client);
             }
         }
@@ -133,10 +146,18 @@ int main(int argc, char **argv)
     LocalHttpFixture fixture;
 
     const auto cold_us = run_cold(fixture.base_url(), iterations);
+    const auto cold_connections = fixture.accepted_connections();
     const auto warm_us = run_warm(fixture.base_url(), iterations);
+    const auto warm_connections = fixture.accepted_connections() - cold_connections;
     if (cold_us < 0 || warm_us < 0)
     {
         std::cerr << "fixture request failed\n";
+        return 1;
+    }
+    if (warm_connections != 1)
+    {
+        std::cerr << "warm benchmark opened " << warm_connections
+                  << " connections; expected one reused connection\n";
         return 1;
     }
 
@@ -144,6 +165,7 @@ int main(int argc, char **argv)
               << " cold_total_us=" << cold_us
               << " warm_total_us=" << warm_us
               << " cold_avg_us=" << static_cast<double>(cold_us) / iterations
-              << " warm_avg_us=" << static_cast<double>(warm_us) / iterations << "\n";
+              << " warm_avg_us=" << static_cast<double>(warm_us) / iterations
+              << " warm_connections=" << warm_connections << "\n";
     return 0;
 }

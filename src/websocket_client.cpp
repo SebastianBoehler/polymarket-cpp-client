@@ -1,185 +1,196 @@
 #include "websocket_client.hpp"
-#include "types.hpp"
-#include "websocket_resilience.hpp"
-#include <iostream>
+#include "websocket_client_state.hpp"
 
 namespace polymarket
 {
-
     WebSocketClient::WebSocketClient()
-        : message_queue_(std::make_unique<detail::BoundedMessageQueue>(options_.message_queue_limit)),
-          state_(WsState::DISCONNECTED),
-          running_(false),
-          should_stop_(false)
+        : state_(detail::WebSocketClientState::create())
     {
-        apply_options();
     }
 
     WebSocketClient::~WebSocketClient()
     {
-        stop();
+        auto state = state_;
+        state->stop();
     }
 
     void WebSocketClient::set_url(const std::string &url)
     {
-        url_ = url;
-        ws_.setUrl(url);
+        auto state = state_;
+        state->set_url(url);
     }
 
     void WebSocketClient::set_ping_interval_ms(int interval_ms)
     {
-        options_.ping_interval_ms = interval_ms;
-        apply_options();
+        auto state = state_;
+        state->set_ping_interval_ms(interval_ms);
     }
 
     void WebSocketClient::set_auto_reconnect(bool enabled)
     {
-        options_.reconnect_enabled = enabled;
-        apply_options();
+        auto state = state_;
+        state->set_auto_reconnect(enabled);
+    }
+
+    void WebSocketClient::configure(const WebSocketOptions &options)
+    {
+        auto state = state_;
+        state->configure(options);
+    }
+
+    WebSocketOptions WebSocketClient::options() const
+    {
+        auto state = state_;
+        return state->options();
     }
 
     void WebSocketClient::on_message(OnMessageCallback callback)
     {
-        on_message_cb_ = std::move(callback);
+        auto state = state_;
+        state->on_message(std::move(callback));
+    }
+
+    void WebSocketClient::on_sequenced_message(OnSequencedMessageCallback callback)
+    {
+        auto state = state_;
+        state->on_sequenced_message(std::move(callback));
     }
 
     void WebSocketClient::on_typed_message(OnTypedMessageCallback callback)
     {
-        on_typed_message_cb_ = std::move(callback);
+        auto state = state_;
+        state->on_typed_message(std::move(callback));
     }
 
     void WebSocketClient::on_connect(OnConnectCallback callback)
     {
-        on_connect_cb_ = std::move(callback);
+        auto state = state_;
+        state->on_connect(std::move(callback));
     }
 
     void WebSocketClient::on_disconnect(OnDisconnectCallback callback)
     {
-        on_disconnect_cb_ = std::move(callback);
+        auto state = state_;
+        state->on_disconnect(std::move(callback));
     }
 
     void WebSocketClient::on_error(OnErrorCallback callback)
     {
-        on_error_cb_ = std::move(callback);
+        auto state = state_;
+        state->on_error(std::move(callback));
+    }
+
+    void WebSocketClient::on_stream_gap(OnStreamGapCallback callback)
+    {
+        auto state = state_;
+        state->on_stream_gap(std::move(callback));
     }
 
     bool WebSocketClient::connect()
     {
-        if (state_.load() == WsState::CONNECTED || state_.load() == WsState::CONNECTING)
-        {
-            return true;
-        }
+        auto state = state_;
+        return state->connect();
+    }
 
-        // Set up message handler
-        ws_.setOnMessageCallback([this](const ix::WebSocketMessagePtr &msg)
-                                 {
-            switch (msg->type)
-            {
-            case ix::WebSocketMessageType::Open:
-                state_.store(WsState::CONNECTED);
-                if (has_connected_.exchange(true))
-                {
-                    reconnects_++;
-                }
-                restore_subscriptions();
-                if (on_connect_cb_)
-                {
-                    on_connect_cb_();
-                }
-                break;
-
-            case ix::WebSocketMessageType::Close:
-                state_.store(options_.reconnect_enabled ? WsState::RECONNECTING : WsState::DISCONNECTED);
-                if (on_disconnect_cb_)
-                {
-                    on_disconnect_cb_();
-                }
-                break;
-
-            case ix::WebSocketMessageType::Error:
-                state_.store(options_.reconnect_enabled ? WsState::RECONNECTING : WsState::DISCONNECTED);
-                if (on_error_cb_)
-                {
-                    on_error_cb_(msg->errorInfo.reason);
-                }
-                break;
-
-            case ix::WebSocketMessageType::Message:
-                messages_received_++;
-                bytes_received_ += msg->str.size();
-                last_message_time_ns_.store(now_ns());
-                enqueue_message(msg->str);
-                break;
-
-            case ix::WebSocketMessageType::Ping:
-            case ix::WebSocketMessageType::Pong:
-            case ix::WebSocketMessageType::Fragment:
-                // Handled internally by IXWebSocket
-                break;
-            } });
-
-        state_.store(WsState::CONNECTING);
-        start_message_worker();
-        ws_.start();
-
-        return true;
+    bool WebSocketClient::wait_until_connected(std::chrono::milliseconds timeout)
+    {
+        auto state = state_;
+        return state->wait_until_connected(timeout);
     }
 
     void WebSocketClient::disconnect()
     {
-        state_.store(WsState::CLOSING);
-        ws_.stop();
-        stop_message_worker();
-        state_.store(WsState::DISCONNECTED);
+        auto state = state_;
+        state->disconnect();
     }
 
     bool WebSocketClient::is_connected() const
     {
-        return state_.load() == WsState::CONNECTED;
+        auto state = state_;
+        return state->is_connected();
     }
 
     WsState WebSocketClient::state() const
     {
-        return state_.load();
+        auto state = state_;
+        return state->state();
     }
 
     bool WebSocketClient::send(const std::string &message)
     {
-        if (!is_connected())
-        {
-            return false;
-        }
+        auto state = state_;
+        return state->send(message);
+    }
 
-        auto result = ws_.send(message);
-        return result.success;
+    void WebSocketClient::track_subscription(const std::string &message)
+    {
+        auto state = state_;
+        state->track_subscription(message);
+    }
+
+    void WebSocketClient::untrack_subscription(const std::string &message)
+    {
+        auto state = state_;
+        state->untrack_subscription(message);
+    }
+
+    void WebSocketClient::clear_subscriptions()
+    {
+        auto state = state_;
+        state->clear_subscriptions();
+    }
+
+    void WebSocketClient::replace_subscriptions(std::vector<std::string> messages)
+    {
+        auto state = state_;
+        state->replace_subscriptions(std::move(messages));
+    }
+
+    std::size_t WebSocketClient::tracked_subscription_count() const
+    {
+        auto state = state_;
+        return state->tracked_subscription_count();
+    }
+
+    void WebSocketClient::request_resnapshot(const std::string &reason)
+    {
+        auto state = state_;
+        state->request_resnapshot(reason);
     }
 
     void WebSocketClient::run()
     {
-        running_.store(true);
-        should_stop_.store(false);
-
-        // IXWebSocket runs in its own thread, so we just wait here
-        while (!should_stop_.load())
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-
-        running_.store(false);
+        auto state = state_;
+        state->run();
     }
 
     void WebSocketClient::stop()
     {
-        should_stop_.store(true);
-        disconnect();
-
-        // Wait for run loop to exit
-        int wait_count = 0;
-        while (running_.load() && wait_count < 100)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            wait_count++;
-        }
+        auto state = state_;
+        state->stop();
     }
 
-} // namespace polymarket
+    uint64_t WebSocketClient::messages_received() const
+    {
+        auto state = state_;
+        return state->messages_received();
+    }
+
+    uint64_t WebSocketClient::bytes_received() const
+    {
+        auto state = state_;
+        return state->bytes_received();
+    }
+
+    uint64_t WebSocketClient::stream_generation() const
+    {
+        auto state = state_;
+        return state->stream_generation();
+    }
+
+    WebSocketStats WebSocketClient::stats() const
+    {
+        auto state = state_;
+        return state->stats();
+    }
+}

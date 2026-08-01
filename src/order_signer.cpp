@@ -1,20 +1,17 @@
 #include "order_signer.hpp"
 #include "decimal_math.hpp"
-#include "http_client.hpp"
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <ethash/keccak.hpp>
-#include <openssl/hmac.h>
-#include <openssl/evp.h>
-#include <nlohmann/json.hpp>
+#include <openssl/crypto.h>
+#include <algorithm>
 #include <random>
 #include <sstream>
 #include <iomanip>
 #include <cstring>
 #include <stdexcept>
-#include <chrono>
-
-using json = nlohmann::json;
+#include <string_view>
+#include <utility>
 
 namespace polymarket
 {
@@ -42,17 +39,30 @@ namespace polymarket
 
     std::vector<uint8_t> from_hex(const std::string &hex)
     {
-        std::string h = hex;
+        std::string_view h = hex;
         if (h.substr(0, 2) == "0x" || h.substr(0, 2) == "0X")
         {
-            h = h.substr(2);
+            h.remove_prefix(2);
         }
+        if (h.size() % 2 != 0)
+            throw std::invalid_argument("hex input must contain complete bytes");
+
+        const auto nibble = [](char character) -> uint8_t
+        {
+            if (character >= '0' && character <= '9')
+                return static_cast<uint8_t>(character - '0');
+            if (character >= 'a' && character <= 'f')
+                return static_cast<uint8_t>(character - 'a' + 10);
+            if (character >= 'A' && character <= 'F')
+                return static_cast<uint8_t>(character - 'A' + 10);
+            throw std::invalid_argument("hex input contains a non-hexadecimal character");
+        };
+
         std::vector<uint8_t> result;
         result.reserve(h.size() / 2);
         for (size_t i = 0; i < h.size(); i += 2)
         {
-            uint8_t byte = static_cast<uint8_t>(std::stoi(h.substr(i, 2), nullptr, 16));
-            result.push_back(byte);
+            result.push_back(static_cast<uint8_t>((nibble(h[i]) << 4) | nibble(h[i + 1])));
         }
         return result;
     }
@@ -80,78 +90,60 @@ namespace polymarket
 
     std::string generate_salt()
     {
-        // Generate a random decimal number (like TS client does)
-        std::random_device rd;
-        std::mt19937_64 gen(rd());
-        std::uniform_int_distribution<uint64_t> dis(0, 999999999999ULL);
+        thread_local std::mt19937_64 gen(std::random_device{}());
+        static constexpr uint64_t kMaxSignedSalt = 0x7fffffffffffffffULL;
+        std::uniform_int_distribution<uint64_t> dis(0, kMaxSignedSalt);
         return std::to_string(dis(gen));
     }
 
-    static std::vector<uint8_t> base64_decode(const std::string &encoded)
+    void OrderSigner::SecurePrivateKey::clear() noexcept
     {
-        // Support both standard (+/) and URL-safe (-_) base64
-        static const std::string base64_chars =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        std::vector<uint8_t> result;
-        std::vector<int> T(256, -1);
-        for (int i = 0; i < 64; i++)
-            T[base64_chars[i]] = i;
-        // Also map URL-safe variants
-        T['-'] = 62;
-        T['_'] = 63;
-        int val = 0, valb = -8;
-        for (unsigned char c : encoded)
-        {
-            if (c == '=')
-                break;
-            if (T[c] == -1)
-                continue;
-            val = (val << 6) + T[c];
-            valb += 6;
-            if (valb >= 0)
-            {
-                result.push_back((val >> valb) & 0xFF);
-                valb -= 8;
-            }
-        }
-        return result;
+        OPENSSL_cleanse(bytes.data(), bytes.size());
     }
 
-    static std::string base64_encode(const std::vector<uint8_t> &data, bool url_safe = false)
+    OrderSigner::SecurePrivateKey::~SecurePrivateKey()
     {
-        // Standard base64 or URL-safe base64
-        static const char *base64_chars_std =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        static const char *base64_chars_url =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-        const char *base64_chars = url_safe ? base64_chars_url : base64_chars_std;
+        clear();
+    }
 
-        std::string result;
-        int val = 0, valb = -6;
-        for (uint8_t c : data)
+    OrderSigner::SecurePrivateKey::SecurePrivateKey(SecurePrivateKey &&other) noexcept
+        : bytes(other.bytes)
+    {
+        other.clear();
+    }
+
+    OrderSigner::SecurePrivateKey &OrderSigner::SecurePrivateKey::operator=(SecurePrivateKey &&other) noexcept
+    {
+        if (this != &other)
         {
-            val = (val << 8) + c;
-            valb += 8;
-            while (valb >= 0)
-            {
-                result.push_back(base64_chars[(val >> valb) & 0x3F]);
-                valb -= 6;
-            }
+            clear();
+            bytes = other.bytes;
+            other.clear();
         }
-        if (valb > -6)
-            result.push_back(base64_chars[((val << 8) >> (valb + 8)) & 0x3F]);
+        return *this;
+    }
 
-        // Add padding
-        while (result.size() % 4 != 0)
-            result.push_back('=');
-
-        return result;
+    void OrderSigner::Secp256k1ContextDeleter::operator()(void *context) const noexcept
+    {
+        if (context)
+            secp256k1_context_destroy(static_cast<secp256k1_context *>(context));
     }
 
     OrderSigner::OrderSigner(const std::string &private_key, int chain_id)
-        : private_key_(private_key), chain_id_(chain_id)
+        : chain_id_(chain_id)
     {
-        secp256k1_ctx_ = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
+        auto private_key_bytes = from_hex(private_key);
+        if (private_key_bytes.size() != private_key_.bytes.size())
+        {
+            if (!private_key_bytes.empty())
+                OPENSSL_cleanse(private_key_bytes.data(), private_key_bytes.size());
+            throw std::runtime_error("Invalid private key length");
+        }
+        std::copy(private_key_bytes.begin(), private_key_bytes.end(), private_key_.bytes.begin());
+        OPENSSL_cleanse(private_key_bytes.data(), private_key_bytes.size());
+
+        secp256k1_ctx_.reset(
+            secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY));
         if (!secp256k1_ctx_)
         {
             throw std::runtime_error("Failed to create secp256k1 context");
@@ -161,22 +153,38 @@ namespace polymarket
 
     OrderSigner::~OrderSigner()
     {
-        if (secp256k1_ctx_)
+        private_key_.clear();
+    }
+
+    OrderSigner::OrderSigner(OrderSigner &&other)
+        : private_key_(std::move(other.private_key_)),
+          address_(std::move(other.address_)),
+          chain_id_(std::exchange(other.chain_id_, 0)),
+          secp256k1_ctx_(std::move(other.secp256k1_ctx_))
+    {
+        std::lock_guard<std::mutex> lock(other.domain_cache_mutex_);
+        domain_cache_ = std::move(other.domain_cache_);
+    }
+
+    OrderSigner &OrderSigner::operator=(OrderSigner &&other)
+    {
+        if (this != &other)
         {
-            secp256k1_context_destroy(static_cast<secp256k1_context *>(secp256k1_ctx_));
+            std::scoped_lock lock(domain_cache_mutex_, other.domain_cache_mutex_);
+            private_key_ = std::move(other.private_key_);
+            address_ = std::move(other.address_);
+            chain_id_ = std::exchange(other.chain_id_, 0);
+            secp256k1_ctx_ = std::move(other.secp256k1_ctx_);
+            domain_cache_ = std::move(other.domain_cache_);
         }
+        return *this;
     }
 
     std::string OrderSigner::derive_address()
     {
-        auto ctx = static_cast<secp256k1_context *>(secp256k1_ctx_);
-        auto pk_bytes = from_hex(private_key_);
-        if (pk_bytes.size() != 32)
-        {
-            throw std::runtime_error("Invalid private key length");
-        }
+        auto ctx = static_cast<secp256k1_context *>(secp256k1_ctx_.get());
         secp256k1_pubkey pubkey;
-        if (!secp256k1_ec_pubkey_create(ctx, &pubkey, pk_bytes.data()))
+        if (!secp256k1_ec_pubkey_create(ctx, &pubkey, private_key_.bytes.data()))
         {
             throw std::runtime_error("Failed to create public key");
         }
@@ -218,10 +226,9 @@ namespace polymarket
 
     std::string OrderSigner::sign_hash(const std::array<uint8_t, 32> &hash)
     {
-        auto ctx = static_cast<secp256k1_context *>(secp256k1_ctx_);
-        auto pk_bytes = from_hex(private_key_);
+        auto ctx = static_cast<secp256k1_context *>(secp256k1_ctx_.get());
         secp256k1_ecdsa_recoverable_signature sig;
-        if (!secp256k1_ecdsa_sign_recoverable(ctx, &sig, hash.data(), pk_bytes.data(), nullptr, nullptr))
+        if (!secp256k1_ecdsa_sign_recoverable(ctx, &sig, hash.data(), private_key_.bytes.data(), nullptr, nullptr))
         {
             throw std::runtime_error("Failed to sign");
         }
@@ -232,234 +239,6 @@ namespace polymarket
         std::memcpy(signature.data(), sig_serialized, 64);
         signature[64] = static_cast<uint8_t>(recid + 27);
         return to_hex(signature);
-    }
-
-    std::array<uint8_t, 32> OrderSigner::hash_domain(const std::string &name, const std::string &version,
-                                                     int chain_id, const std::string &verifying_contract)
-    {
-        auto type_hash = keccak256(std::string("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"));
-        auto name_hash = keccak256(name);
-        auto version_hash = keccak256(version);
-        std::vector<uint8_t> chain_id_bytes(32, 0);
-        for (int i = 0; i < 4; i++)
-        {
-            chain_id_bytes[31 - i] = (chain_id >> (i * 8)) & 0xFF;
-        }
-        auto contract_bytes = from_hex(verifying_contract);
-        std::vector<uint8_t> contract_padded(32, 0);
-        std::memcpy(contract_padded.data() + 12, contract_bytes.data(), 20);
-        std::vector<uint8_t> encoded;
-        encoded.insert(encoded.end(), type_hash.begin(), type_hash.end());
-        encoded.insert(encoded.end(), name_hash.begin(), name_hash.end());
-        encoded.insert(encoded.end(), version_hash.begin(), version_hash.end());
-        encoded.insert(encoded.end(), chain_id_bytes.begin(), chain_id_bytes.end());
-        encoded.insert(encoded.end(), contract_padded.begin(), contract_padded.end());
-        return keccak256(encoded);
-    }
-
-    std::array<uint8_t, 32> OrderSigner::encode_eip712(const std::array<uint8_t, 32> &domain_hash,
-                                                       const std::array<uint8_t, 32> &struct_hash)
-    {
-        std::vector<uint8_t> encoded;
-        encoded.push_back(0x19);
-        encoded.push_back(0x01);
-        encoded.insert(encoded.end(), domain_hash.begin(), domain_hash.end());
-        encoded.insert(encoded.end(), struct_hash.begin(), struct_hash.end());
-        return keccak256(encoded);
-    }
-
-    std::array<uint8_t, 32> OrderSigner::hash_clob_auth_domain()
-    {
-        auto type_hash = keccak256(std::string("EIP712Domain(string name,string version,uint256 chainId)"));
-        auto name_hash = keccak256(std::string("ClobAuthDomain"));
-        auto version_hash = keccak256(std::string("1"));
-
-        std::vector<uint8_t> chain_id_bytes(32, 0);
-        for (int i = 0; i < 4; i++)
-        {
-            chain_id_bytes[31 - i] = (chain_id_ >> (i * 8)) & 0xFF;
-        }
-
-        std::vector<uint8_t> encoded;
-        encoded.insert(encoded.end(), type_hash.begin(), type_hash.end());
-        encoded.insert(encoded.end(), name_hash.begin(), name_hash.end());
-        encoded.insert(encoded.end(), version_hash.begin(), version_hash.end());
-        encoded.insert(encoded.end(), chain_id_bytes.begin(), chain_id_bytes.end());
-
-        return keccak256(encoded);
-    }
-
-    std::array<uint8_t, 32> OrderSigner::hash_clob_auth(const std::string &address,
-                                                        const std::string &timestamp,
-                                                        uint64_t nonce)
-    {
-        auto type_hash = keccak256(std::string(
-            "ClobAuth(address address,string timestamp,uint256 nonce,string message)"));
-
-        // Encode address (padded to 32 bytes)
-        auto addr_bytes = from_hex(address);
-        std::vector<uint8_t> addr_padded(32, 0);
-        std::memcpy(addr_padded.data() + 12, addr_bytes.data(), std::min(addr_bytes.size(), size_t(20)));
-
-        // Hash the timestamp string
-        auto timestamp_hash = keccak256(timestamp);
-
-        // Encode nonce as uint256
-        std::vector<uint8_t> nonce_bytes(32, 0);
-        for (int i = 0; i < 8; i++)
-        {
-            nonce_bytes[31 - i] = (nonce >> (i * 8)) & 0xFF;
-        }
-
-        // Hash the message string
-        auto message_hash = keccak256(std::string("This message attests that I control the given wallet"));
-
-        std::vector<uint8_t> encoded;
-        encoded.insert(encoded.end(), type_hash.begin(), type_hash.end());
-        encoded.insert(encoded.end(), addr_padded.begin(), addr_padded.end());
-        encoded.insert(encoded.end(), timestamp_hash.begin(), timestamp_hash.end());
-        encoded.insert(encoded.end(), nonce_bytes.begin(), nonce_bytes.end());
-        encoded.insert(encoded.end(), message_hash.begin(), message_hash.end());
-
-        return keccak256(encoded);
-    }
-
-    OrderSigner::L1Headers OrderSigner::generate_l1_headers(uint64_t nonce, const std::string &override_address)
-    {
-        auto now = std::chrono::system_clock::now();
-        auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-        std::string ts_str = std::to_string(timestamp);
-        const std::string auth_address = override_address.empty() ? address_ : override_address;
-
-        auto domain_hash = hash_clob_auth_domain();
-        auto struct_hash = hash_clob_auth(auth_address, ts_str, nonce);
-        auto message_hash = encode_eip712(domain_hash, struct_hash);
-
-        std::string signature = sign_hash(message_hash);
-
-        L1Headers headers;
-        headers.poly_address = auth_address;
-        headers.poly_signature = signature;
-        headers.poly_timestamp = ts_str;
-        headers.poly_nonce = std::to_string(nonce);
-
-        return headers;
-    }
-
-    ApiCredentials OrderSigner::derive_api_credentials(HttpClient &http, const std::string &funder_address)
-    {
-        auto headers = generate_l1_headers(0, funder_address);
-
-        std::map<std::string, std::string> req_headers;
-        req_headers["POLY_ADDRESS"] = headers.poly_address;
-        req_headers["POLY_SIGNATURE"] = headers.poly_signature;
-        req_headers["POLY_TIMESTAMP"] = headers.poly_timestamp;
-        req_headers["POLY_NONCE"] = headers.poly_nonce;
-
-        auto response = http.get("/auth/derive-api-key", req_headers);
-
-        if (!response.ok())
-        {
-            throw std::runtime_error("Failed to derive API key: " + response.body);
-        }
-
-        auto j = json::parse(response.body);
-
-        ApiCredentials creds;
-        creds.api_key = j["apiKey"].get<std::string>();
-        creds.api_secret = j["secret"].get<std::string>();
-        creds.api_passphrase = j["passphrase"].get<std::string>();
-
-        return creds;
-    }
-
-    ApiCredentials OrderSigner::create_api_credentials(HttpClient &http, uint64_t nonce, const std::string &funder_address)
-    {
-        auto headers = generate_l1_headers(nonce, funder_address);
-
-        std::map<std::string, std::string> req_headers;
-        req_headers["POLY_ADDRESS"] = headers.poly_address;
-        req_headers["POLY_SIGNATURE"] = headers.poly_signature;
-        req_headers["POLY_TIMESTAMP"] = headers.poly_timestamp;
-        req_headers["POLY_NONCE"] = headers.poly_nonce;
-
-        auto response = http.post("/auth/api-key", "{}", req_headers);
-
-        if (!response.ok())
-        {
-            throw std::runtime_error("Failed to create API key: " + response.body);
-        }
-
-        auto j = json::parse(response.body);
-
-        ApiCredentials creds;
-        creds.api_key = j["apiKey"].get<std::string>();
-        creds.api_secret = j["secret"].get<std::string>();
-        creds.api_passphrase = j["passphrase"].get<std::string>();
-
-        return creds;
-    }
-
-    ApiCredentials OrderSigner::create_or_derive_api_credentials(HttpClient &http, const std::string &funder_address)
-    {
-        // Try to derive first (existing key)
-        try
-        {
-            return derive_api_credentials(http, funder_address);
-        }
-        catch (...)
-        {
-            // If derive fails, try to create
-            try
-            {
-                return create_api_credentials(http, 0, funder_address);
-            }
-            catch (...)
-            {
-                // Some setups may still work without explicit API keys
-                throw std::runtime_error("Could not derive or create API credentials");
-            }
-        }
-    }
-
-    OrderSigner::L2Headers OrderSigner::generate_l2_headers(const ApiCredentials &creds,
-                                                            const std::string &method,
-                                                            const std::string &path,
-                                                            const std::string &body,
-                                                            const std::string & /*funder_address*/)
-    {
-        auto now = std::chrono::system_clock::now();
-        auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-
-        std::string message = std::to_string(timestamp) + method + path;
-        if (!body.empty())
-        {
-            message += body;
-        }
-
-        auto secret_bytes = base64_decode(creds.api_secret);
-
-        unsigned char hmac_result[32];
-        unsigned int hmac_len = 32;
-
-        HMAC(EVP_sha256(),
-             secret_bytes.data(), secret_bytes.size(),
-             reinterpret_cast<const unsigned char *>(message.c_str()), message.size(),
-             hmac_result, &hmac_len);
-
-        std::vector<uint8_t> hmac_vec(hmac_result, hmac_result + 32);
-        // L2 HMAC signature must be URL-safe base64 (- and _ instead of + and /)
-        std::string signature = base64_encode(hmac_vec, true);
-
-        L2Headers headers;
-        headers.poly_address = address_;
-        headers.poly_timestamp = std::to_string(timestamp);
-        headers.poly_api_key = creds.api_key;
-        headers.poly_passphrase = creds.api_passphrase;
-        headers.poly_secret = creds.api_secret;
-        headers.poly_signature = signature;
-
-        return headers;
     }
 
 } // namespace polymarket

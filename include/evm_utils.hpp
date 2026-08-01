@@ -38,6 +38,9 @@ namespace polymarket
     std::vector<std::string> evm_data_words(const std::string &data);
     std::vector<std::string> evm_decode_uint_array(const std::string &data,
                                                    size_t offset_word_index);
+    std::vector<std::string> evm_decode_uint_array(const std::string &data,
+                                                   size_t offset_word_index,
+                                                   size_t head_word_count);
     std::string evm_word_to_address(const std::string &word);
     std::string evm_uint_word_to_decimal(const std::string &word);
     std::string evm_int_word_to_decimal(const std::string &word);

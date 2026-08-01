@@ -26,7 +26,8 @@ int main()
         ClobClient public_client{"https://clob.polymarket.com", 137};
 
         // Get markets
-        auto markets = public_client.get_markets();
+        auto market_page = public_client.get_markets();
+        const auto &markets = market_page.data;
         std::cout << "Fetched markets: " << markets.size() << "\n";
 
         std::string example_token_id;
@@ -129,7 +130,8 @@ int main()
         if (balance)
         {
             std::cout << "Collateral Balance: " << balance->balance << "\n";
-            std::cout << "Collateral Allowance: " << balance->allowance << "\n";
+            for (const auto &[spender, amount] : balance->allowances)
+                std::cout << "Collateral Allowance " << spender << ": " << amount << "\n";
         }
 
         // Get open orders
@@ -192,7 +194,9 @@ int main()
             order_params.side = OrderSide::BUY;
             order_params.neg_risk = example_neg_risk; // Use cached neg_risk to skip API call
 
-            auto signed_order = client.create_order(order_params);
+            const PreparedOrder prepared_order{
+                client.create_order(order_params), OrderType::GTC};
+            const auto &signed_order = prepared_order.order;
             std::cout << "Created signed order:\n";
             std::cout << "  Maker: " << signed_order.maker << "\n";
             std::cout << "  Token ID: " << signed_order.token_id << "\n";
@@ -202,7 +206,7 @@ int main()
             std::cout << "  Signature: " << signed_order.signature.substr(0, 20) << "...\n";
 
             // To actually post the order:
-            // auto response = client.post_order(signed_order, OrderType::GTC);
+            // auto response = client.post_order(prepared_order);
 
             // Or use the combined method:
             // auto response = client.create_and_post_order(order_params, OrderType::GTC);
@@ -230,10 +234,7 @@ int main()
 
                 auto signed_order = client.create_order(params);
 
-                BatchOrderEntry entry;
-                entry.order = signed_order;
-                entry.order_type = OrderType::GTC;
-                batch_orders.push_back(entry);
+                batch_orders.emplace_back(signed_order, OrderType::GTC);
 
                 std::cout << "Batch order " << (i + 1) << ": BUY 5 @ " << params.price << "\n";
             }

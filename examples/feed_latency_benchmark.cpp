@@ -1,5 +1,6 @@
 #include "json_rpc_client.hpp"
 #include "polymarket_events.hpp"
+#include "types.hpp"
 #include "websocket_client.hpp"
 #include <algorithm>
 #include <atomic>
@@ -185,7 +186,7 @@ void print_usage(const char *program)
 {
     std::cerr << "Usage: " << program
               << " --asset-id <id[,id]> --rpc-ws <wss-url> [--ctf <addr>] "
-              << "[--uma-adapter <addr>] [--pending] [--custom-feature] "
+              << "[--uma-adapter <addr>] [--pending] "
               << "[--duration-seconds <n>]\n"
               << "Env: POLYMARKET_POLYGON_RPC_WS, POLYMARKET_CONDITIONAL_TOKENS, "
               << "POLYMARKET_UMA_CTF_ADAPTER\n";
@@ -214,24 +215,23 @@ int main(int argc, char **argv)
 
     FeedStats polymarket_stats("polymarket_market_ws");
     FeedStats polygon_stats("polygon_rpc_ws");
-    std::atomic<bool> poly_connected{false};
-
     polymarket::WebSocketClient poly_ws;
-    poly_ws.set_url("wss://ws-subscriptions-clob.polymarket.com/ws/market");
+    poly_ws.set_url(polymarket::Config{}.clob_ws_url);
+    poly_ws.set_ping_interval_ms(10000);
     poly_ws.set_auto_reconnect(false);
     poly_ws.on_connect([&]()
                        {
-        poly_connected.store(true);
         json subscribe = {
             {"type", "market"},
-            {"assets_ids", asset_ids}};
-        if (has_flag(argc, argv, "--custom-feature"))
-            subscribe["custom_feature_enabled"] = true;
+            {"assets_ids", asset_ids},
+            {"custom_feature_enabled", true}};
         poly_ws.send(subscribe.dump()); });
     poly_ws.on_error([](const std::string &error)
                      { std::cerr << "[polymarket] " << error << "\n"; });
     poly_ws.on_message([&](const std::string &raw)
                        {
+        if (raw == "PONG")
+            return;
         try
         {
             auto message = json::parse(raw);
@@ -266,8 +266,16 @@ int main(int argc, char **argv)
 
     polymarket_stats.start();
     polygon_stats.start();
-    poly_ws.connect();
+    const bool polymarket_started = poly_ws.connect();
     polygon_ws.connect();
+    if (!polymarket_started ||
+        !poly_ws.wait_until_connected(std::chrono::seconds(5)))
+    {
+        std::cerr << "[polymarket] connection handshake timed out\n";
+        poly_ws.stop();
+        polygon_ws.stop();
+        return 1;
+    }
 
     for (int i = 0; i < duration_seconds; ++i)
         std::this_thread::sleep_for(std::chrono::seconds(1));

@@ -1,6 +1,8 @@
 #include "order_signer.hpp"
 #include <cmath>
+#include <functional>
 #include <iostream>
+#include <limits>
 #include <string>
 
 namespace
@@ -15,6 +17,20 @@ namespace
         std::cerr << name << " mismatch\n"
                   << "  expected: " << expected << "\n"
                   << "  actual:   " << actual << "\n";
+        return false;
+    }
+
+    bool expect_throws(const std::string &name, const std::function<void()> &action)
+    {
+        try
+        {
+            action();
+        }
+        catch (const std::exception &)
+        {
+            return true;
+        }
+        std::cerr << "failed: " << name << " did not throw\n";
         return false;
     }
 }
@@ -47,8 +63,27 @@ int main()
         return 1;
     }
 
+    const double genuinely_sub_micro = 0.0000009999999995;
+    if (!expect_equal("round down never crosses a true scaled-unit boundary",
+                      to_wei(genuinely_sub_micro, 6), "0"))
+    {
+        return 1;
+    }
+
     if (!expect_equal("round down", to_wei(1.2345678, 6), "1234567") ||
         !expect_equal("round nearest", to_wei(1.2345678, 6, false), "1234568"))
+    {
+        return 1;
+    }
+
+    if (!expect_equal("0.29 boundary", to_wei(0.29, 2), "29") ||
+        !expect_equal("0.57 boundary", to_wei(0.57, 2), "57") ||
+        !expect_equal("0.58 boundary", to_wei(0.58, 2), "58") ||
+        !expect_equal("5.29 boundary", to_wei(5.29, 2), "529") ||
+        !expect_throws("scaled uint64 exclusive upper bound", []
+                       { (void)to_wei(18446744073709.551, 6); }) ||
+        !expect_throws("infinite decimal", []
+                       { (void)to_wei(std::numeric_limits<double>::infinity(), 6); }))
     {
         return 1;
     }

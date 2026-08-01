@@ -1,50 +1,102 @@
 #include "order_execution.hpp"
+#include "decimal_math.hpp"
 
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <stdexcept>
 
 namespace polymarket::detail
 {
     namespace
     {
-        constexpr const char *ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+        constexpr int depth_decimals = 6;
+        constexpr std::uint64_t depth_scale = 1'000'000;
 
-        double decimal_scale(int decimals)
+        struct AccumulatedNotional
         {
-            double scale = 1.0;
-            for (int i = 0; i < decimals; ++i)
+            std::uint64_t units{0};
+            std::uint64_t fractional_units{0};
+            bool saturated{false};
+
+            bool covers(std::uint64_t target) const
             {
-                scale *= 10.0;
+                return saturated || units >= target;
             }
-            return scale;
+        };
+
+        struct AccumulatedSize
+        {
+            std::uint64_t units{0};
+            bool saturated{false};
+
+            bool covers(std::uint64_t target) const
+            {
+                return saturated || units >= target;
+            }
+        };
+
+        std::uint64_t exact_depth_units(double value)
+        {
+            return exact_decimal_to_scaled_uint64(value, depth_decimals);
         }
 
-        double round_down(double value, int decimals)
+        void add_notional(AccumulatedNotional &total,
+                          std::uint64_t size_units,
+                          std::uint64_t price_units)
         {
-            const double scale = decimal_scale(decimals);
-            return std::floor(value * scale) / scale;
+            if (total.saturated) return;
+
+            const auto size_whole = size_units / depth_scale;
+            const auto size_fraction = size_units % depth_scale;
+            const auto fractional_product = size_fraction * price_units;
+            const auto fractional_whole = fractional_product / depth_scale;
+            const auto contribution_fraction = fractional_product % depth_scale;
+            constexpr auto maximum = std::numeric_limits<std::uint64_t>::max();
+            if (price_units != 0 &&
+                size_whole > (maximum - fractional_whole) / price_units)
+            {
+                total.saturated = true;
+                return;
+            }
+            const auto contribution_units =
+                size_whole * price_units + fractional_whole;
+            if (contribution_units > maximum - total.units)
+            {
+                total.saturated = true;
+                return;
+            }
+            total.units += contribution_units;
+            total.fractional_units += contribution_fraction;
+            if (total.fractional_units < depth_scale) return;
+
+            total.fractional_units -= depth_scale;
+            if (total.units == maximum)
+            {
+                total.saturated = true;
+                return;
+            }
+            ++total.units;
         }
 
-        double round_up(double value, int decimals)
+        void add_size(AccumulatedSize &total, std::uint64_t size_units)
         {
-            const double scale = decimal_scale(decimals);
-            return std::ceil(value * scale) / scale;
-        }
-
-        double round_nearest(double value, int decimals)
-        {
-            const double scale = decimal_scale(decimals);
-            return std::round(value * scale) / scale;
-        }
-
-        double round_order_amount(double value, int decimals)
-        {
-            return round_down(round_up(value, decimals + 4), decimals);
+            if (total.saturated) return;
+            constexpr auto maximum = std::numeric_limits<std::uint64_t>::max();
+            if (size_units > maximum - total.units)
+            {
+                total.saturated = true;
+                return;
+            }
+            total.units += size_units;
         }
     }
 
     std::string OrderExecutionContext::maker_address() const
     {
+        if (funder_address.empty() && signature_type != SignatureType::EOA)
+            throw std::invalid_argument(
+                "non-EOA signature types require a funder address");
         return funder_address.empty() ? signer_address : funder_address;
     }
 
@@ -58,60 +110,58 @@ namespace polymarket::detail
         return neg_risk ? neg_risk_exchange_address : standard_exchange_address;
     }
 
-    OrderAmounts calculate_limit_order_amounts(OrderSide side, double price, double size)
+    double calculate_market_price(const Orderbook &book,
+                                  OrderSide side,
+                                  double amount,
+                                  OrderType order_type,
+                                  const std::string &tick_size)
     {
-        return calculate_limit_order_amounts(side, price, size, rounding_config_for_tick_size("0.01"));
-    }
-
-    OrderRoundingConfig rounding_config_for_tick_size(const std::string &tick_size)
-    {
-        if (tick_size == "0.1")
+        if (!std::isfinite(amount) || amount <= 0.0)
         {
-            return {1, 2, 3};
+            throw std::invalid_argument(
+                "market order amount must be finite and positive");
         }
-        if (tick_size == "0.01")
+        const auto &levels = side == OrderSide::BUY ? book.asks : book.bids;
+        if (levels.empty())
         {
-            return {2, 2, 4};
-        }
-        if (tick_size == "0.001")
-        {
-            return {3, 2, 5};
-        }
-        if (tick_size == "0.0001")
-        {
-            return {4, 2, 6};
-        }
-        throw std::invalid_argument("unsupported tick size: " + tick_size);
-    }
-
-    OrderAmounts calculate_limit_order_amounts(OrderSide side,
-                                               double price,
-                                               double size,
-                                               const OrderRoundingConfig &rounding)
-    {
-        const double raw_price = round_nearest(price, rounding.price_decimals);
-        if (side == OrderSide::BUY)
-        {
-            const double raw_taker = round_down(size, rounding.size_decimals);
-            return {round_order_amount(raw_taker * raw_price, rounding.amount_decimals), raw_taker};
+            throw std::runtime_error("no matching orders");
         }
 
-        const double raw_maker = round_down(size, rounding.size_decimals);
-        return {raw_maker, round_order_amount(raw_maker * raw_price, rounding.amount_decimals)};
-    }
-
-    OrderAmounts calculate_market_order_amounts(OrderSide side,
-                                                double amount,
-                                                double price,
-                                                const OrderRoundingConfig &rounding)
-    {
-        const double raw_price = round_down(price, rounding.price_decimals);
-        const double raw_maker = round_down(amount, rounding.size_decimals);
-        if (side == OrderSide::BUY)
+        AccumulatedNotional available_notional;
+        AccumulatedSize available_size;
+        for (auto level = levels.rbegin(); level != levels.rend(); ++level)
         {
-            return {raw_maker, round_order_amount(raw_maker / raw_price, rounding.amount_decimals)};
+            if (!std::isfinite(level->price) || !std::isfinite(level->size) ||
+                level->price <= 0.0 || level->price >= 1.0 || level->size < 0.0)
+            {
+                throw std::invalid_argument("orderbook level is invalid");
+            }
+            const auto size_units = exact_depth_units(level->size);
+            const auto price_units = exact_depth_units(level->price);
+            if (price_units == 0 || price_units >= depth_scale)
+                throw std::invalid_argument("orderbook level is invalid");
+            const auto candidate_price = validate_order_price(
+                level->price, tick_size);
+            const auto candidate_amounts = calculate_market_order_amounts(
+                side, amount, candidate_price);
+            if (side == OrderSide::BUY)
+                add_notional(available_notional, size_units, price_units);
+            else
+                add_size(available_size, size_units);
+            if ((side == OrderSide::BUY &&
+                 available_notional.covers(candidate_amounts.maker)) ||
+                (side == OrderSide::SELL &&
+                 available_size.covers(candidate_amounts.maker)))
+            {
+                return level->price;
+            }
         }
-        return {raw_maker, round_order_amount(raw_maker * raw_price, rounding.amount_decimals)};
+
+        if (order_type == OrderType::FOK)
+        {
+            throw std::runtime_error("insufficient orderbook depth for FOK order");
+        }
+        return levels.front().price;
     }
 
     nlohmann::json signed_order_json(const SignedOrder &order)
@@ -120,7 +170,6 @@ namespace polymarket::detail
             {"salt", std::stoll(order.salt)},
             {"maker", order.maker},
             {"signer", order.signer},
-            {"taker", order.taker.empty() ? ZERO_ADDRESS : order.taker},
             {"tokenId", order.token_id},
             {"makerAmount", order.maker_amount},
             {"takerAmount", order.taker_amount},

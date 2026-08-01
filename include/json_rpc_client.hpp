@@ -2,16 +2,19 @@
 
 #include "evm_utils.hpp"
 #include "http_client.hpp"
-#include "websocket_client.hpp"
 #include <atomic>
 #include <functional>
-#include <mutex>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
 namespace polymarket
 {
+    namespace detail
+    {
+        class EvmJsonRpcWsRuntime;
+    }
 
     class EvmJsonRpcHttpClient
     {
@@ -28,7 +31,7 @@ namespace polymarket
 
     private:
         HttpClient http_;
-        uint64_t next_id_{1};
+        std::atomic<uint64_t> next_id_{1};
     };
 
     using EvmLogCallback = std::function<void(const EvmLog &)>;
@@ -64,34 +67,7 @@ namespace polymarket
         bool subscribe_new_heads();
 
     private:
-        enum class SubscriptionType
-        {
-            Logs,
-            PendingTransactions,
-            NewHeads
-        };
-
-        struct Subscription
-        {
-            SubscriptionType type;
-            EvmLogFilter filter;
-        };
-
-        WebSocketClient ws_;
-        mutable std::mutex mutex_;
-        std::vector<Subscription> subscriptions_;
-        std::atomic<uint64_t> next_id_{1};
-
-        EvmLogCallback log_cb_;
-        EvmPendingTxCallback pending_tx_cb_;
-        EvmJsonCallback head_cb_;
-        EvmRpcErrorCallback error_cb_;
-
-        void handle_message(const std::string &message);
-        void resubscribe();
-        bool send_subscription(const Subscription &subscription);
-        nlohmann::json subscription_params(const Subscription &subscription) const;
-        void emit_error(const std::string &message);
+        std::shared_ptr<detail::EvmJsonRpcWsRuntime> runtime_;
     };
 
 } // namespace polymarket

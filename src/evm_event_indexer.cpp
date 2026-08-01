@@ -1,226 +1,248 @@
 #include "evm_event_indexer.hpp"
+#include "evm_indexer_transport.hpp"
+#include "evm_log_identity.hpp"
 #include <algorithm>
-#include <chrono>
-#include <filesystem>
-#include <fstream>
-#include <nlohmann/json.hpp>
-#include <sstream>
 #include <stdexcept>
 #include <thread>
 
 namespace polymarket
 {
-    namespace
+    EvmCatchUpReport detail::EvmEventIndexerImpl::catch_up()
     {
-        std::string strip_0x(std::string value)
-        {
-            if (value.rfind("0x", 0) == 0 || value.rfind("0X", 0) == 0)
-                return value.substr(2);
-            return value;
-        }
-
-        nlohmann::json read_cursor_file(const std::string &path)
-        {
-            if (!std::filesystem::exists(path))
-                return nlohmann::json::object();
-            std::ifstream input(path);
-            if (!input)
-                throw std::runtime_error("failed to open cursor file: " + path);
-            if (input.peek() == std::ifstream::traits_type::eof())
-                return nlohmann::json::object();
-            return nlohmann::json::parse(input);
-        }
-
-        uint64_t received_at_ms()
-        {
-            return std::chrono::duration_cast<std::chrono::milliseconds>(
-                       std::chrono::system_clock::now().time_since_epoch())
-                .count();
-        }
-    } // namespace
-
-    uint64_t evm_quantity_to_uint64(const std::string &quantity)
-    {
-        if (quantity.empty())
-            throw std::invalid_argument("empty EVM quantity");
-        auto clean = strip_0x(quantity);
-        return std::stoull(clean, nullptr, quantity == clean ? 10 : 16);
-    }
-
-    std::string evm_uint64_to_quantity(uint64_t value)
-    {
-        std::ostringstream out;
-        out << "0x" << std::hex << value;
-        return out.str();
-    }
-
-    std::vector<EvmBlockRange> evm_make_block_ranges(uint64_t from_block,
-                                                     uint64_t to_block,
-                                                     uint64_t batch_size)
-    {
-        if (batch_size == 0)
-            throw std::invalid_argument("batch_size must be positive");
-        std::vector<EvmBlockRange> ranges;
-        if (from_block > to_block)
-            return ranges;
-        for (uint64_t from = from_block; from <= to_block;)
-        {
-            uint64_t remaining = to_block - from;
-            uint64_t to = from + std::min(batch_size - 1, remaining);
-            ranges.push_back({from, to});
-            if (to == to_block)
-                break;
-            from = to + 1;
-        }
-        return ranges;
-    }
-
-    FileBlockCursorStore::FileBlockCursorStore(std::string path)
-        : path_(std::move(path))
-    {
-    }
-
-    std::optional<uint64_t> FileBlockCursorStore::load(const std::string &cursor_name)
-    {
-        auto data = read_cursor_file(path_);
-        if (!data.contains(cursor_name))
-            return std::nullopt;
-        if (data[cursor_name].is_number_unsigned())
-            return data[cursor_name].get<uint64_t>();
-        return evm_quantity_to_uint64(data[cursor_name].get<std::string>());
-    }
-
-    void FileBlockCursorStore::save(const std::string &cursor_name, uint64_t block_number)
-    {
-        auto data = read_cursor_file(path_);
-        if (data.contains(cursor_name))
-        {
-            uint64_t current = data[cursor_name].is_number_unsigned()
-                                   ? data[cursor_name].get<uint64_t>()
-                                   : evm_quantity_to_uint64(data[cursor_name].get<std::string>());
-            if (block_number < current)
-                block_number = current;
-        }
-        data[cursor_name] = block_number;
-
-        auto parent = std::filesystem::path(path_).parent_path();
-        if (!parent.empty())
-            std::filesystem::create_directories(parent);
-
-        auto tmp_path = path_ + ".tmp";
-        {
-            std::ofstream output(tmp_path, std::ios::trunc);
-            if (!output)
-                throw std::runtime_error("failed to write cursor file: " + tmp_path);
-            output << data.dump(2) << "\n";
-        }
-        std::filesystem::rename(tmp_path, path_);
-    }
-
-    EvmEventIndexer::EvmEventIndexer(EvmEventIndexerConfig config,
-                                     std::shared_ptr<EvmBlockCursorStore> cursor_store)
-        : config_(std::move(config)),
-          cursor_store_(std::move(cursor_store)),
-          http_(config_.rpc_http_url),
-          ws_(config_.rpc_ws_url)
-    {
-        ws_.set_ping_interval_ms(config_.ws_ping_interval_ms);
-    }
-
-    EvmEventIndexer::~EvmEventIndexer()
-    {
-        stop();
-    }
-
-    void EvmEventIndexer::on_log(EvmIndexedLogCallback callback)
-    {
-        log_cb_ = std::move(callback);
-    }
-
-    void EvmEventIndexer::on_checkpoint(EvmIndexCheckpointCallback callback)
-    {
-        checkpoint_cb_ = std::move(callback);
-    }
-
-    void EvmEventIndexer::on_error(EvmRpcErrorCallback callback)
-    {
-        error_cb_ = std::move(callback);
-    }
-
-    EvmCatchUpReport EvmEventIndexer::catch_up()
-    {
-        uint64_t latest = evm_quantity_to_uint64(http_.block_number());
+        uint64_t latest = evm_quantity_to_uint64(transport_->block_number());
         uint64_t target = latest > config_.confirmations ? latest - config_.confirmations : 0;
-        auto saved = cursor_store_ ? cursor_store_->load(config_.cursor_name) : std::nullopt;
-        uint64_t from = saved ? *saved + 1 : config_.start_block;
+        uint64_t generation = 0;
+        {
+            std::lock_guard<std::mutex> lock(live_state_->mutex);
+            generation = live_state_->generation;
+        }
+        return catch_up_to(target, target, generation);
+    }
+
+    EvmCatchUpReport detail::EvmEventIndexerImpl::catch_up_to(uint64_t target,
+                                                              uint64_t durable_through,
+                                                              uint64_t generation)
+    {
+        auto saved = cursor_store_ ? cursor_store_->load_cursor(config_.cursor_name) : std::nullopt;
+        if (saved && saved->block_complete && saved->block_number == static_cast<uint64_t>(-1))
+            return {saved->block_number, target, 0, 0};
+        uint64_t from = saved ? saved->block_number + (saved->block_complete ? 1 : 0)
+                              : config_.start_block;
 
         EvmCatchUpReport report{from, target, 0, 0};
-        for (const auto &range : evm_make_block_ranges(from, target, config_.batch_size))
-        {
-            auto filter = config_.filter;
-            filter.from_block = evm_uint64_to_quantity(range.from_block);
-            filter.to_block = evm_uint64_to_quantity(range.to_block);
-            auto logs = http_.get_logs(filter);
-            for (const auto &log : logs)
-            {
-                report.logs_seen++;
-                if (log_cb_)
-                    log_cb_({log, false, received_at_ms()});
-            }
-            report.ranges_scanned++;
-            save_checkpoint(range.to_block);
-        }
+        const auto durable_to = std::min(target, durable_through);
+        if (!scan_ranges(from, durable_to, true, saved, report, generation))
+            return report;
+        if (target > durable_through)
+            scan_ranges(std::max(from, durable_through + 1), target, false,
+                        saved, report, generation);
         return report;
     }
 
-    bool EvmEventIndexer::start_live()
+    bool detail::EvmEventIndexerImpl::scan_ranges(
+        uint64_t from, uint64_t to, bool persist,
+        const std::optional<EvmIndexCursor> &resume,
+        EvmCatchUpReport &report, uint64_t generation)
     {
+        for (const auto &range : evm_make_block_ranges(from, to, config_.batch_size))
+        {
+            if (!generation_current(generation))
+                return false;
+            auto filter = config_.filter;
+            filter.from_block = evm_uint64_to_quantity(range.from_block);
+            filter.to_block = evm_uint64_to_quantity(range.to_block);
+            auto logs = transport_->get_logs(filter);
+            if (!generation_current(generation))
+                return false;
+            std::stable_sort(logs.begin(), logs.end(), [](const EvmLog &left, const EvmLog &right)
+                             {
+                                 const auto left_block = evm_quantity_to_uint64(left.block_number);
+                                 const auto right_block = evm_quantity_to_uint64(right.block_number);
+                                 if (left_block != right_block)
+                                     return left_block < right_block;
+                                 const auto left_position = detail::evm_log_position(left);
+                                 const auto right_position = detail::evm_log_position(right);
+                                 return !detail::evm_position_at_or_before(right_position,
+                                                                           left_position);
+                             });
+            for (const auto &log : logs)
+            {
+                if (!generation_current(generation))
+                    return false;
+                const auto block = evm_quantity_to_uint64(log.block_number);
+                if (resume && !resume->block_complete && resume->last_log &&
+                    block == resume->block_number &&
+                    resume->last_log->block_hash == log.block_hash &&
+                    detail::evm_position_at_or_before(detail::evm_log_position(log),
+                                                      *resume->last_log))
+                    continue;
+                report.logs_seen++;
+                dispatch_log(log, false, generation, true);
+                if (!generation_current(generation))
+                    return false;
+                if (persist && !log.removed)
+                    save_log_checkpoint(log, false);
+            }
+            report.ranges_scanned++;
+            if (!generation_current(generation))
+                return false;
+            if (persist)
+                save_checkpoint(range.to_block);
+        }
+        return true;
+    }
+
+    bool detail::EvmEventIndexerImpl::start_live()
+    {
+        uint64_t generation = 0;
+        {
+            std::lock_guard<std::mutex> lock(live_state_->mutex);
+            if (live_state_->started)
+                return true;
+            generation = ++live_state_->generation;
+            live_state_->accepting_live = true;
+            live_state_->buffering = true;
+            live_state_->buffered_logs.clear();
+            live_state_->has_buffered_head = false;
+            live_state_->refresh_head_pending = false;
+            live_state_->overlap_recovery_pending = false;
+            live_state_->handoff_gap_pending = false;
+            live_state_->buffered_head = 0;
+        }
         auto live_filter = config_.filter;
         live_filter.from_block.clear();
         live_filter.to_block.clear();
-        ws_.on_error([this](const std::string &error) { emit_error(error); });
-        ws_.on_log([this](const EvmLog &log) { handle_live_log(log); });
-        ws_.subscribe_logs(live_filter);
-        return ws_.connect();
+        const auto weak = weak_from_this();
+        if (!transport_->start_logs(
+            live_filter,
+            [weak, generation](const EvmLog &log)
+            {
+                if (const auto self = weak.lock())
+                    self->handle_live_log(log, generation);
+            },
+            [weak, generation](uint64_t block)
+            {
+                if (const auto self = weak.lock())
+                    self->handle_live_head(block, generation);
+            },
+            [weak, generation](const std::string &error)
+            {
+                if (const auto self = weak.lock())
+                    self->handle_live_error(error, generation);
+            }))
+        {
+            transport_->stop();
+            std::lock_guard<std::mutex> lock(live_state_->mutex);
+            live_state_->accepting_live = false;
+            live_state_->buffering = false;
+            live_state_->started = false;
+            live_state_->buffered_logs.clear();
+            live_state_->has_buffered_head = false;
+            live_state_->has_pending_head = false;
+            live_state_->refresh_head_pending = false;
+            live_state_->overlap_recovery_pending = false;
+            live_state_->handoff_gap_pending = false;
+            live_state_->buffered_head = 0;
+            live_state_->pending_head = 0;
+            return false;
+        }
+
+        try
+        {
+            const auto head = evm_quantity_to_uint64(transport_->block_number());
+            const auto durable = head > config_.confirmations ? head - config_.confirmations : 0;
+            {
+                std::lock_guard<std::mutex> lock(live_state_->mutex);
+                live_state_->durable_through = durable;
+            }
+            catch_up_to(head, durable, generation);
+            if (!generation_current(generation))
+                return false;
+            drain_live_buffer(generation);
+            std::lock_guard<std::mutex> lock(live_state_->mutex);
+            if (!live_state_->accepting_live || generation != live_state_->generation)
+                return false;
+            live_state_->started = true;
+            return true;
+        }
+        catch (const std::exception &error)
+        {
+            transport_->stop();
+            {
+                std::lock_guard<std::mutex> lock(live_state_->mutex);
+                live_state_->accepting_live = false;
+                live_state_->buffering = false;
+                live_state_->started = false;
+                live_state_->buffered_logs.clear();
+                live_state_->has_buffered_head = false;
+                live_state_->has_pending_head = false;
+                live_state_->refresh_head_pending = false;
+                live_state_->overlap_recovery_pending = false;
+                live_state_->handoff_gap_pending = false;
+                live_state_->buffered_head = 0;
+                live_state_->pending_head = 0;
+            }
+            emit_error(error.what());
+            return false;
+        }
     }
 
-    void EvmEventIndexer::run_live_for(std::chrono::seconds duration)
+    void detail::EvmEventIndexerImpl::run_live_for(std::chrono::seconds duration)
     {
         std::this_thread::sleep_for(duration);
         stop();
     }
 
-    void EvmEventIndexer::stop()
+    void detail::EvmEventIndexerImpl::stop()
     {
-        ws_.stop();
+        bool called_from_worker = false;
+        {
+            std::lock_guard<std::mutex> lock(live_state_->mutex);
+            const auto current = std::this_thread::get_id();
+            called_from_worker = current == live_state_->delivery_worker_id ||
+                                 current == live_state_->reconcile_worker_id;
+            live_state_->accepting_live = false;
+            ++live_state_->generation;
+            live_state_->buffering = false;
+            live_state_->started = false;
+            live_state_->buffered_logs.clear();
+            live_state_->has_buffered_head = false;
+            live_state_->has_pending_head = false;
+            live_state_->refresh_head_pending = false;
+            live_state_->overlap_recovery_pending = false;
+            live_state_->handoff_gap_pending = false;
+            live_state_->buffered_head = 0;
+            live_state_->pending_head = 0;
+        }
+        live_state_->reconcile_cv.notify_all();
+        live_state_->delivery_cv.notify_all();
+        transport_->stop();
+        if (!called_from_worker)
+        {
+            std::lock_guard<std::mutex> reconcile_lock(live_state_->reconcile_mutex);
+        }
     }
 
-    void EvmEventIndexer::save_checkpoint(uint64_t block_number)
+    void detail::EvmEventIndexerImpl::save_checkpoint(uint64_t block_number)
     {
         if (cursor_store_)
-            cursor_store_->save(config_.cursor_name, block_number);
-        if (checkpoint_cb_)
-            checkpoint_cb_(block_number);
+            cursor_store_->save_cursor(config_.cursor_name,
+                                       {block_number, true, std::nullopt});
+        if (auto callback = checkpoint_callback())
+            callback(block_number);
+        prune_delivered(block_number);
     }
 
-    void EvmEventIndexer::emit_error(const std::string &message)
+    void detail::EvmEventIndexerImpl::save_log_checkpoint(const EvmLog &log, bool notify)
     {
-        if (error_cb_)
-            error_cb_(message);
-    }
-
-    void EvmEventIndexer::handle_live_log(const EvmLog &log)
-    {
-        try
+        const auto block = evm_quantity_to_uint64(log.block_number);
+        if (cursor_store_)
+            cursor_store_->save_cursor(config_.cursor_name,
+                                       {block, false, detail::evm_log_position(log)});
+        if (notify)
         {
-            if (log_cb_)
-                log_cb_({log, true, received_at_ms()});
-            if (!log.removed && !log.block_number.empty())
-                save_checkpoint(evm_quantity_to_uint64(log.block_number));
-        }
-        catch (const std::exception &error)
-        {
-            emit_error(error.what());
+            if (auto callback = checkpoint_callback())
+                callback(block);
         }
     }
 

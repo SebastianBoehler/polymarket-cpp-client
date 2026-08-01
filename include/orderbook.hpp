@@ -1,18 +1,69 @@
 #pragma once
 
 #include "types.hpp"
-#include "websocket_client.hpp"
-#include <unordered_map>
-#include <shared_mutex>
 #include <functional>
+#include <cstdint>
+#include <memory>
 #include <optional>
+#include <string>
+#include <vector>
 
 namespace polymarket
 {
+    namespace detail
+    {
+        struct MarketBookEvent;
+        class OrderbookRuntime;
+    }
 
     // Callback for orderbook updates
     using OrderbookUpdateCallback = std::function<void(const std::string &asset_id, const Orderbook &book)>;
     using ArbOpportunityCallback = std::function<void(const LiveMarketState &market, double combined)>;
+    using ArbOpportunitySnapshotCallback = std::function<void(const MarketState &market, double combined)>;
+
+    struct StreamGenerationPermit
+    {
+        uint64_t orderbook_generation{0};
+        uint64_t websocket_generation{0};
+    };
+
+    using ArbOpportunityPermitCallback =
+        std::function<void(const MarketState &market, double combined,
+                           StreamGenerationPermit permit)>;
+
+    struct ArbSizingInput
+    {
+        double yes_ask{0.0};
+        double no_ask{0.0};
+        double yes_available{0.0};
+        double no_available{0.0};
+        double max_usdc_per_leg{0.0};
+        double slippage{0.0};
+        double tick_size{0.0};
+        double minimum_order_size{0.0};
+        double fee_rate{0.0};
+        int fee_exponent{1};
+    };
+
+    struct ArbExecutionPlan
+    {
+        bool executable{false};
+        std::string reason;
+        double yes_limit_price{0.0};
+        double no_limit_price{0.0};
+        double yes_shares{0.0};
+        double no_shares{0.0};
+        double yes_fee{0.0};
+        double no_fee{0.0};
+        double total_cost{0.0};
+        double edge{0.0};
+    };
+
+    ArbExecutionPlan size_complementary_arb(const ArbSizingInput &input);
+    bool has_fresh_arb_depth(const MarketState &market,
+                             uint64_t now,
+                             uint64_t max_age,
+                             double required_shares);
 
     // Orderbook manager - subscribes to WebSocket and maintains orderbook state
     class OrderbookManager
@@ -20,6 +71,9 @@ namespace polymarket
     public:
         explicit OrderbookManager(const Config &config);
         ~OrderbookManager();
+
+        OrderbookManager(const OrderbookManager &) = delete;
+        OrderbookManager &operator=(const OrderbookManager &) = delete;
 
         // Subscribe to markets
         void subscribe(const std::vector<MarketState> &markets);
@@ -36,6 +90,9 @@ namespace polymarket
         // Callbacks
         void on_orderbook_update(OrderbookUpdateCallback callback);
         void on_arb_opportunity(ArbOpportunityCallback callback);
+        void on_arb_opportunity_snapshot(ArbOpportunitySnapshotCallback callback);
+        void on_arb_opportunity_with_permit(ArbOpportunityPermitCallback callback);
+        bool is_stream_current(StreamGenerationPermit permit) const;
 
         // Connection
         bool connect();
@@ -49,40 +106,11 @@ namespace polymarket
         void stop();
 
         // Statistics
-        uint64_t total_updates() const { return total_updates_.load(); }
-        uint64_t arb_opportunities() const { return arb_opportunities_.load(); }
+        uint64_t total_updates() const;
+        uint64_t arb_opportunities() const;
 
     private:
-        Config config_;
-        WebSocketClient ws_;
-
-        // Orderbooks by token_id
-        mutable std::shared_mutex orderbooks_mutex_;
-        std::unordered_map<std::string, Orderbook> orderbooks_;
-
-        // Markets by condition_id (using unique_ptr for non-copyable LiveMarketState)
-        mutable std::shared_mutex markets_mutex_;
-        std::unordered_map<std::string, std::unique_ptr<LiveMarketState>> markets_;
-
-        // Token to condition mapping
-        std::unordered_map<std::string, std::string> token_to_condition_;
-
-        // Subscribed tokens
-        std::vector<std::string> subscribed_tokens_;
-
-        // Callbacks
-        OrderbookUpdateCallback on_update_cb_;
-        ArbOpportunityCallback on_arb_cb_;
-
-        // Statistics
-        std::atomic<uint64_t> total_updates_{0};
-        std::atomic<uint64_t> arb_opportunities_{0};
-
-        // Internal methods
-        void handle_message(const std::string &message);
-        void handle_orderbook_update(const std::string &asset_id, const Orderbook &book);
-        void send_subscribe_message();
-        void check_arb_opportunity(const std::string &condition_id);
+        std::shared_ptr<detail::OrderbookRuntime> runtime_;
     };
 
 } // namespace polymarket

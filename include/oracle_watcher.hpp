@@ -2,6 +2,7 @@
 
 #include "polymarket_events.hpp"
 #include <nlohmann/json.hpp>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -53,6 +54,8 @@ namespace polymarket
         std::string last_event_name;
         std::string settled_price;
         std::vector<std::string> payouts;
+        // Newest canonical events retained by OracleResolutionDashboard. The
+        // aggregate fields above still cover all accepted events.
         std::vector<OracleResolutionEvent> timeline;
     };
 
@@ -64,6 +67,10 @@ namespace polymarket
     class OracleResolutionDashboard
     {
     public:
+        // Raw rollback history and the public timeline use this per-key bound.
+        // Removals at or before the compacted boundary cannot be replayed.
+        static constexpr std::size_t retained_history_events_per_key{1024};
+
         void ingest_event(const PolymarketDecodedEvent &event, bool live, uint64_t received_at_ms);
 
         const OracleResolutionState *get(const std::string &key) const;
@@ -76,12 +83,24 @@ namespace polymarket
         static std::string state_key(const PolymarketDecodedEvent &event);
 
     private:
-        std::unordered_map<std::string, OracleResolutionState> states_;
+        struct StoredEvent
+        {
+            PolymarketDecodedEvent event;
+            bool live{false};
+            uint64_t received_at_ms{0};
+        };
 
+        std::unordered_map<std::string, OracleResolutionState> states_;
+        std::unordered_map<std::string, std::vector<StoredEvent>> histories_;
+        std::unordered_map<std::string, OracleResolutionState> compacted_states_;
+        std::unordered_map<std::string, StoredEvent> compacted_through_;
         OracleResolutionPhase next_phase(PolymarketEventKind kind) const;
         void append_event(OracleResolutionState &state,
                           const PolymarketDecodedEvent &event, bool live, uint64_t received_at_ms);
         void touch_ids(OracleResolutionState &state, const PolymarketDecodedEvent &event);
+        void compact_history(const std::string &key);
+        void rebuild_state(const std::string &key);
+        bool same_log(const EvmLog &left, const EvmLog &right) const;
         std::string parse_block_number(const std::string &raw) const;
     };
 

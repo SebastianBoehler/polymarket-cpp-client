@@ -1,5 +1,6 @@
 #include "polymarket_events.hpp"
 #include <array>
+#include <unordered_map>
 
 namespace polymarket
 {
@@ -33,23 +34,49 @@ namespace polymarket
              "PayoutRedemption(address,address,bytes32,bytes32,uint256[],uint256)"},
         }};
 
-        const EventSpec *find_spec(const std::string &topic)
-        {
-            for (const auto &spec : uma_specs)
-                if (evm_event_topic(spec.signature) == topic)
-                    return &spec;
-            for (const auto &spec : ctf_specs)
-                if (evm_event_topic(spec.signature) == topic)
-                    return &spec;
-            return nullptr;
-        }
-
-        std::vector<std::string> topics_for(const auto &specs)
+        std::vector<std::string> build_topics(const auto &specs)
         {
             std::vector<std::string> topics;
+            topics.reserve(specs.size());
             for (const auto &spec : specs)
                 topics.push_back(evm_event_topic(spec.signature));
             return topics;
+        }
+
+        const std::vector<std::string> &uma_topics_storage()
+        {
+            static const auto topics = build_topics(uma_specs);
+            return topics;
+        }
+
+        const std::vector<std::string> &ctf_topics_storage()
+        {
+            static const auto topics = build_topics(ctf_specs);
+            return topics;
+        }
+
+        const std::unordered_map<std::string, const EventSpec *> &specs_by_topic()
+        {
+            static const auto lookup = []()
+            {
+                std::unordered_map<std::string, const EventSpec *> result;
+                result.reserve(uma_specs.size() + ctf_specs.size());
+                const auto &uma_topics = uma_topics_storage();
+                for (size_t index = 0; index < uma_specs.size(); ++index)
+                    result.emplace(uma_topics[index], &uma_specs[index]);
+                const auto &ctf_topics = ctf_topics_storage();
+                for (size_t index = 0; index < ctf_specs.size(); ++index)
+                    result.emplace(ctf_topics[index], &ctf_specs[index]);
+                return result;
+            }();
+            return lookup;
+        }
+
+        const EventSpec *find_spec(const std::string &topic)
+        {
+            const auto &lookup = specs_by_topic();
+            const auto found = lookup.find(topic);
+            return found == lookup.end() ? nullptr : found->second;
         }
 
         void decode_question_id_event(PolymarketDecodedEvent &event)
@@ -61,29 +88,29 @@ namespace polymarket
 
     std::string uma_event_topic(UmaEventKind kind)
     {
-        return topics_for(uma_specs).at(static_cast<size_t>(kind));
+        return uma_topics_storage().at(static_cast<size_t>(kind));
     }
 
     std::string conditional_tokens_event_topic(ConditionalTokensEventKind kind)
     {
-        return topics_for(ctf_specs).at(static_cast<size_t>(kind));
+        return ctf_topics_storage().at(static_cast<size_t>(kind));
     }
 
     std::vector<std::string> uma_event_topics()
     {
-        return topics_for(uma_specs);
+        return uma_topics_storage();
     }
 
     std::vector<std::string> conditional_tokens_event_topics()
     {
-        return topics_for(ctf_specs);
+        return ctf_topics_storage();
     }
 
     EvmLogFilter uma_adapter_log_filter(const std::string &adapter_address)
     {
         EvmLogFilter filter;
         filter.addresses = {evm_normalize_hex(adapter_address)};
-        filter.topics = {uma_event_topics()};
+        filter.topics = {uma_topics_storage()};
         return filter;
     }
 
@@ -91,7 +118,7 @@ namespace polymarket
     {
         EvmLogFilter filter;
         filter.addresses = {evm_normalize_hex(ctf_address)};
-        filter.topics = {conditional_tokens_event_topics()};
+        filter.topics = {ctf_topics_storage()};
         return filter;
     }
 
@@ -131,11 +158,11 @@ namespace polymarket
             decode_question_id_event(event);
             if (log.topics.size() > 2)
                 event.settled_price = evm_int_word_to_decimal(log.topics[2]);
-            event.payouts = evm_decode_uint_array(log.data, 0);
+            event.payouts = evm_decode_uint_array(log.data, 0, 1);
             break;
         case PolymarketEventKind::QuestionManuallyResolved:
             decode_question_id_event(event);
-            event.payouts = evm_decode_uint_array(log.data, 0);
+            event.payouts = evm_decode_uint_array(log.data, 0, 1);
             break;
         case PolymarketEventKind::ConditionResolution:
         {
@@ -148,7 +175,7 @@ namespace polymarket
             auto words = evm_data_words(log.data);
             if (!words.empty())
                 event.outcome_slot_count = evm_uint_word_to_decimal(words[0]);
-            event.payouts = evm_decode_uint_array(log.data, 1);
+            event.payouts = evm_decode_uint_array(log.data, 1, 2);
             break;
         }
         case PolymarketEventKind::PayoutRedemption:
@@ -165,7 +192,7 @@ namespace polymarket
                 event.condition_id = words[0];
                 event.payout = evm_uint_word_to_decimal(words[2]);
             }
-            event.index_sets = evm_decode_uint_array(log.data, 1);
+            event.index_sets = evm_decode_uint_array(log.data, 1, 3);
             break;
         }
         default:
