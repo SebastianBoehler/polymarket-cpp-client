@@ -305,12 +305,61 @@ namespace
         }
         return passed;
     }
+
+    bool authentication_failure_tests()
+    {
+        websocket_test::LocalWebSocketServer server;
+        Config config;
+        config.clob_user_ws_url = server.url();
+        config.ws_connect_timeout_ms = 1'000;
+        const auto credentials = test_credentials();
+
+        std::mutex errors_mutex;
+        std::vector<std::string> errors;
+        bool passed = false;
+        {
+            UserStream stream(config, credentials);
+            stream.on_error([&](const std::string &error)
+                            {
+                                std::lock_guard lock(errors_mutex);
+                                errors.push_back(error);
+                            });
+            stream.subscribe_all_markets();
+            passed =
+                check(stream.connect(), "user stream connects before auth reply") &&
+                check(server.wait_for_message_count(
+                          detail::user_subscription_message({true, {}}, credentials),
+                          1, 2s),
+                      "subscription is sent before rejection");
+            if (passed)
+            {
+                server.close_clients(1008, "authentication failed");
+                passed =
+                    check(wait_until([&]
+                                     {
+                                         std::lock_guard lock(errors_mutex);
+                                         return errors.size() == 1;
+                                     }),
+                          "rejection is reported through on_error") &&
+                    check(errors[0].find("authentication failed") != std::string::npos,
+                          "rejection error carries the server reason") &&
+                    check(stream.authentication_failed(),
+                          "authentication failure is observable") &&
+                    check(!server.wait_for_connections(2, 1s),
+                          "rejected stream does not reconnect") &&
+                    check(!stream.is_connected(), "rejected stream is disconnected");
+            }
+            stream.stop();
+        }
+        return passed;
+    }
 }
 
 int main()
 {
     if (!protocol_tests()) return 1;
     if (!stream_tests()) return 1;
+    if (!authentication_failure_tests()) return 1;
     std::cout << "user stream tests passed\n";
     return 0;
 }

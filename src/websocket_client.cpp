@@ -74,6 +74,12 @@ namespace polymarket
         state->on_disconnect(std::move(callback));
     }
 
+    void WebSocketClient::on_close(OnCloseCallback callback)
+    {
+        auto state = state_;
+        state->on_close(std::move(callback));
+    }
+
     void WebSocketClient::on_error(OnErrorCallback callback)
     {
         auto state = state_;

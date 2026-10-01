@@ -23,6 +23,7 @@ namespace polymarket::detail
         OnTypedMessageCallback typed_message;
         OnConnectCallback connect;
         OnDisconnectCallback disconnect;
+        OnCloseCallback close;
         OnErrorCallback error;
         OnStreamGapCallback stream_gap;
     };
@@ -45,6 +46,7 @@ namespace polymarket::detail
         void on_typed_message(OnTypedMessageCallback callback);
         void on_connect(OnConnectCallback callback);
         void on_disconnect(OnDisconnectCallback callback);
+        void on_close(OnCloseCallback callback);
         void on_error(OnErrorCallback callback);
         void on_stream_gap(OnStreamGapCallback callback);
 
@@ -78,7 +80,7 @@ namespace polymarket::detail
         void install_transport_callback();
         void handle_transport_message(const ix::WebSocketMessagePtr &message);
         void handle_open();
-        void handle_close();
+        void handle_close(const ix::WebSocketMessagePtr &message);
         void handle_error(const ix::WebSocketMessagePtr &message);
 
         void start_message_worker();

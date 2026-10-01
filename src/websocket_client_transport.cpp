@@ -74,6 +74,7 @@ namespace polymarket::detail
             {
                 start_transport_worker();
                 install_transport_callback();
+                if (options_.reconnect_enabled) ws_.enableAutomaticReconnection();
                 state_.store(WsState::CONNECTING);
                 resnapshot_pending_.store(false);
                 should_stop_.store(false);
@@ -117,7 +118,7 @@ namespace polymarket::detail
             handle_open();
             break;
         case ix::WebSocketMessageType::Close:
-            handle_close();
+            handle_close(message);
             break;
         case ix::WebSocketMessageType::Error:
             handle_error(message);
@@ -153,7 +154,7 @@ namespace polymarket::detail
         invoke_user_callback("connect", callbacks->connect);
     }
 
-    void WebSocketClientState::handle_close()
+    void WebSocketClientState::handle_close(const ix::WebSocketMessagePtr &message)
     {
         if (!transport_stop_pending_.load()) mark_stream_gap();
         {
@@ -170,6 +171,9 @@ namespace polymarket::detail
 
         if (transport_stop_pending_.load()) return;
         auto callbacks = callbacks_snapshot();
+        invoke_user_callback("close", callbacks->close,
+                             message->closeInfo.code, message->closeInfo.reason);
+        if (transport_stop_pending_.load()) return;
         invoke_user_callback("disconnect", callbacks->disconnect);
     }
 
@@ -211,7 +215,9 @@ namespace polymarket::detail
             std::lock_guard<std::mutex> lock(lifecycle_mutex_);
             state_.store(WsState::CLOSING);
             resnapshot_pending_.store(false);
-            if (!options_.reconnect_enabled) ws_.disableAutomaticReconnection();
+            // The transport stop may be deferred to the worker thread; block
+            // ix from reconnecting in the meantime. connect() re-enables it.
+            ws_.disableAutomaticReconnection();
             request_message_worker_stop();
             deferred = request_transport_stop();
         }

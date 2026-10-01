@@ -72,6 +72,9 @@ namespace polymarket
     // queue overflow, or invalid payload). Reconcile order and trade state via
     // REST (`ClobClient::get_open_orders`, `get_trades`) when it fires.
     using UserStreamGapCallback = std::function<void()>;
+    // Fired when the server rejects the session (close code 1008, e.g. invalid
+    // API credentials). The stream stops reconnecting; call connect() to retry.
+    using UserStreamErrorCallback = std::function<void(const std::string &error)>;
 
     // Authenticated user-channel stream. Subscriptions are replayed with the
     // API credentials after every reconnect.
@@ -101,11 +104,13 @@ namespace polymarket
         void on_order(UserOrderCallback callback);
         void on_trade(UserTradeCallback callback);
         void on_stream_gap(UserStreamGapCallback callback);
+        void on_error(UserStreamErrorCallback callback);
 
         // Connection
         bool connect();
         void disconnect();
         bool is_connected() const;
+        bool authentication_failed() const;
 
         // Run event loop (blocking)
         void run();

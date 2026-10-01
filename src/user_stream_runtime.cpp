@@ -4,12 +4,16 @@
 #include <chrono>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 
 namespace polymarket::detail
 {
     namespace
     {
+        // CLOB closes the user channel with policy violation on bad credentials.
+        constexpr uint16_t policy_violation_close_code = 1008;
+
         Config validated_config(Config config)
         {
             if (config.clob_user_ws_url.empty())
@@ -92,6 +96,12 @@ namespace polymarket::detail
             {
                 if (auto runtime = weak.lock())
                     runtime->handle_stream_gap();
+            });
+        websocket_.on_close(
+            [weak](uint16_t code, const std::string &reason)
+            {
+                if (auto runtime = weak.lock())
+                    runtime->handle_close(code, reason);
             });
         websocket_.on_connect([]
                               { std::cout << "[WS] Connected to CLOB user stream\n"; });
@@ -183,6 +193,12 @@ namespace polymarket::detail
                          { callbacks.gap = std::move(callback); });
     }
 
+    void UserStreamRuntime::on_error(UserStreamErrorCallback callback)
+    {
+        update_callbacks([callback = std::move(callback)](auto &callbacks) mutable
+                         { callbacks.error = std::move(callback); });
+    }
+
     void UserStreamRuntime::clear_callbacks()
     {
         std::lock_guard lock(callback_update_mutex_);
@@ -204,6 +220,7 @@ namespace polymarket::detail
     bool UserStreamRuntime::connect()
     {
         if (!owner_active_.load(std::memory_order_acquire)) return false;
+        authentication_failed_.store(false, std::memory_order_release);
         stream_active_.store(true, std::memory_order_release);
         const bool connected = websocket_.connect() &&
                                websocket_.wait_until_connected(
@@ -223,6 +240,11 @@ namespace polymarket::detail
     {
         return owner_active_.load(std::memory_order_acquire) &&
                websocket_.is_connected();
+    }
+
+    bool UserStreamRuntime::authentication_failed() const
+    {
+        return authentication_failed_.load(std::memory_order_acquire);
     }
 
     void UserStreamRuntime::run()
@@ -250,6 +272,23 @@ namespace polymarket::detail
         stream_generation_.fetch_add(1);
         const auto callbacks = callbacks_snapshot();
         if (callbacks->gap) callbacks->gap();
+    }
+
+    void UserStreamRuntime::handle_close(uint16_t code, const std::string &reason)
+    {
+        if (code != policy_violation_close_code ||
+            !owner_active_.load(std::memory_order_acquire) ||
+            !stream_active_.load(std::memory_order_acquire))
+            return;
+        // Reconnecting with rejected credentials would loop forever.
+        authentication_failed_.store(true, std::memory_order_release);
+        deactivate_stream();
+        websocket_.disconnect();
+        const auto error = "user stream rejected by server (" + std::to_string(code) +
+                           "): " + reason;
+        std::cerr << "[WS] " << error << '\n';
+        const auto callbacks = callbacks_snapshot();
+        if (callbacks->error) callbacks->error(error);
     }
 
     void UserStreamRuntime::handle_message(const std::string &message,

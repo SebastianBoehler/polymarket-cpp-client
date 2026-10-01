@@ -81,6 +81,14 @@ namespace websocket_test
             }
         }
 
+        void close_clients(uint16_t code, const std::string &reason)
+        {
+            for (const auto &client : server_.getClients())
+            {
+                client->close(code, reason);
+            }
+        }
+
         bool wait_for_connections(std::size_t count,
                                   std::chrono::milliseconds timeout)
         {

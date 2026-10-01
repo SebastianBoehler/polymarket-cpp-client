@@ -78,6 +78,12 @@ namespace polymarket
         if (runtime) runtime->on_stream_gap(std::move(callback));
     }
 
+    void UserStream::on_error(UserStreamErrorCallback callback)
+    {
+        auto runtime = runtime_;
+        if (runtime) runtime->on_error(std::move(callback));
+    }
+
     bool UserStream::connect()
     {
         auto runtime = runtime_;
@@ -94,6 +100,12 @@ namespace polymarket
     {
         auto runtime = runtime_;
         return runtime && runtime->is_connected();
+    }
+
+    bool UserStream::authentication_failed() const
+    {
+        auto runtime = runtime_;
+        return runtime && runtime->authentication_failed();
     }
 
     void UserStream::run()
