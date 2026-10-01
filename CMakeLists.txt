@@ -123,6 +123,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/websocket_client_transport.cpp
     src/websocket_resilience.cpp
     src/websocket_market_data.cpp
+    src/websocket_user_data.cpp
     src/market_fetcher.cpp
     src/market_discovery.cpp
     src/market_time.cpp
@@ -132,6 +133,8 @@ set(POLYMARKET_CLIENT_SOURCES
     src/orderbook_runtime_stream.cpp
     src/orderbook_subscription.cpp
     src/orderbook_stream.cpp
+    src/user_stream.cpp
+    src/user_stream_runtime.cpp
     src/order_amounts.cpp
     src/clob_order_execution.cpp
     src/clob_order_submission.cpp

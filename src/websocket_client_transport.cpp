@@ -10,7 +10,10 @@ namespace polymarket::detail
     }
 
     WebSocketClientState::WebSocketClientState()
-        : message_queue_(std::make_unique<BoundedMessageQueue>(options_.message_queue_limit))
+        // options_ is declared after message_queue_, so read the default limit
+        // from a fresh options value rather than the not-yet-constructed member.
+        : message_queue_(std::make_unique<BoundedMessageQueue>(
+              WebSocketOptions{}.message_queue_limit))
     {
         apply_options_locked();
     }
