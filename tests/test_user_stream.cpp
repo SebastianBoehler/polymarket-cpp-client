@@ -375,6 +375,48 @@ namespace
                      "gap notification precedes each recovery");
     }
 
+    bool delayed_handshake_tests()
+    {
+        // The first handshake completes well after connect() gives up.
+        websocket_test::LocalWebSocketServer server(1'500ms);
+        Config config;
+        config.clob_user_ws_url = server.url();
+        config.ws_connect_timeout_ms = 300;
+        const auto credentials = test_credentials();
+
+        std::atomic<unsigned int> orders{0};
+        bool passed = false;
+        {
+            UserStream stream(config, credentials);
+            stream.on_order([&orders](const UserOrderEvent &)
+                            { ++orders; });
+            stream.subscribe("cond-1");
+
+            passed =
+                check(!stream.connect(), "connect times out on a delayed handshake") &&
+                check(!wait_until([&stream]
+                                  { return stream.is_connected(); }, 2'500ms),
+                      "timed-out connect stops the transport");
+            if (passed)
+            {
+                passed =
+                    check(stream.connect(), "retry connects after a timed-out attempt") &&
+                    check(server.wait_for_message_count(
+                              detail::user_subscription_message({false, {"cond-1"}},
+                                                                credentials),
+                              1, 2s),
+                          "retry sends the authenticated subscription") &&
+                    check(server.send_to_clients(order_message),
+                          "server sends an order after retry") &&
+                    check(wait_until([&orders]
+                                     { return orders.load() == 1; }),
+                          "retried stream delivers events");
+            }
+            stream.stop();
+        }
+        return passed;
+    }
+
     bool authentication_failure_tests()
     {
         websocket_test::LocalWebSocketServer server;
@@ -429,6 +471,7 @@ int main()
     if (!protocol_tests()) return 1;
     if (!stream_tests()) return 1;
     if (!recovery_ordering_tests()) return 1;
+    if (!delayed_handshake_tests()) return 1;
     if (!authentication_failure_tests()) return 1;
     std::cout << "user stream tests passed\n";
     return 0;

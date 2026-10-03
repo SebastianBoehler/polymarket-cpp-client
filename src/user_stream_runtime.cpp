@@ -239,7 +239,9 @@ namespace polymarket::detail
                                websocket_.wait_until_connected(
                                    std::chrono::milliseconds(
                                        config_.ws_connect_timeout_ms));
-        if (!connected) deactivate_stream();
+        // A timed-out handshake may still complete later; stop the transport
+        // so it cannot come up with event delivery already deactivated.
+        if (!connected) disconnect();
         return connected;
     }
 
