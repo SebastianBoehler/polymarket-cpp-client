@@ -260,13 +260,26 @@ namespace
         return to_hex(evm_abi_encode({EvmAbiValue::array({EvmAbiValue::uint256(yes), EvmAbiValue::uint256(no)})}));
     }
 
+    PositionClientConfig eoa_config(const std::string &rpc_url, const std::string &gamma_url = "",
+                                    const PolymarketContracts &contracts = kContracts)
+    {
+        PositionClientConfig config;
+        config.private_key = kKey;
+        config.rpc_url = rpc_url;
+        if (!gamma_url.empty())
+            config.gamma_api_url = gamma_url;
+        config.contracts = contracts;
+        config.rpc_timeout_ms = 5000;
+        return config;
+    }
+
     struct Harness
     {
         clob_test::LocalServer node;
         clob_test::LocalServer gamma;
         PositionClient client;
 
-        Harness() : client(PositionClientConfig{kKey, node.url(), gamma.url(), kContracts, 5000}) {}
+        Harness() : client(eoa_config(node.url(), gamma.url())) {}
 
         void market(const std::string &condition, const std::string &version = "v1", bool neg_risk = false)
         {
@@ -430,11 +443,11 @@ namespace
     void config_validation()
     {
         expect_throws<std::invalid_argument>("missing rpc url", []
-                                             { PositionClient client(PositionClientConfig{kKey, ""}); });
+                                             { PositionClient client(eoa_config("")); });
         auto contracts = kContracts;
         contracts.collateral_adapter = "0x1234";
         expect_throws<std::invalid_argument>("bad contracts", [&]
-                                             { PositionClient client(PositionClientConfig{kKey, "http://127.0.0.1:1", "", contracts}); });
+                                             { PositionClient client(eoa_config("http://127.0.0.1:1", "", contracts)); });
     }
 } // namespace
 

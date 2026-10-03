@@ -33,6 +33,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_position_client PRIVATE polymarket::client)
     add_test(NAME test_position_client COMMAND test_position_client)
 
+    add_executable(test_safe_relayer tests/test_safe_relayer.cpp)
+    target_include_directories(test_safe_relayer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_safe_relayer PRIVATE polymarket::client)
+    add_test(NAME test_safe_relayer COMMAND test_safe_relayer)
+
     add_executable(test_evm_events tests/test_evm_events.cpp)
     target_link_libraries(test_evm_events PRIVATE polymarket::client)
     add_test(NAME test_evm_events COMMAND test_evm_events)

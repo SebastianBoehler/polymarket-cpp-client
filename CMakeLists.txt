@@ -149,6 +149,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/polymarket_contracts.cpp
     src/position_calls.cpp
     src/position_client.cpp
+    src/safe_relayer.cpp
     src/order_signer.cpp
     src/order_signer_auth.cpp
     src/order_signer_domain.cpp
