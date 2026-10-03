@@ -299,6 +299,10 @@ namespace polymarket
         {
             throw std::runtime_error("Gamma market lookup returned invalid JSON for condition " + normalized);
         }
+        if (body.is_array() && body.empty())
+            throw std::invalid_argument("no " + std::string(closed_only ? "closed" : "open") +
+                                        " market found for condition " + normalized +
+                                        (closed_only ? "" : " (closed markets can only be redeemed)"));
         return detail::market_context_from_gamma(body, normalized, impl_->contracts);
     }
 

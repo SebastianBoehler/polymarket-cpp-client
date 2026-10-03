@@ -14,11 +14,12 @@ Reusable C++20 client for Polymarket: REST, WebSocket streaming, and order signi
 - **Signing**: CLOB V2 EIP-712 order signing (secp256k1, keccak).
 - **Decimal math**: shared scaled-integer conversion for trading amounts.
 - **Structured errors**: opt-in `Result<T>` APIs with typed SDK error classification.
-- **EVM JSON-RPC**: Polygon HTTP catch-up and WebSocket subscriptions for logs, heads, and pending transaction hashes.
+- **EVM JSON-RPC**: Polygon HTTP catch-up and WebSocket subscriptions for logs, heads, and pending transaction hashes, plus transaction calls (nonce, gas, `eth_call`, raw send, receipts).
+- **On-chain positions**: `PositionClient` splits, merges and redeems CTF and Protocol V2 positions from an EOA or, gaslessly through the Polymarket relayer, from a Gnosis Safe. Built on an ABI encoder, EIP-155 transaction signing, and a `PolymarketContracts` address registry.
 - **Resolution Events**: Decoders for UMA adapter and Conditional Tokens resolution/redemption logs.
 - **Proxy Support**: HTTP/HTTPS proxy with authentication for geo-restricted access.
 - **Neg-Risk Markets**: Automatic exchange selection for neg_risk markets.
-- **Examples**: REST (`rest_example`), signing (`sign_example`), WebSocket (`ws_example`), onchain watchers.
+- **Examples**: REST (`rest_example`), signing (`sign_example`), WebSocket (`ws_example`), on-chain positions (`position_example`), onchain watchers.
 - **Benchmarks and tests**: local benchmark targets plus `ctest` coverage.
 
 ## Requirements
@@ -137,6 +138,7 @@ int main() {
 - `sign_example`: sign a dummy order (requires `PRIVATE_KEY`)
 - `ws_example`: connect to Polymarket WS and subscribe to orderbook agg
 - `user_stream_example`: stream your own order and trade events (requires `PRIVATE_KEY`; optional condition IDs as arguments)
+- `position_example`: split, merge or redeem a position from an EOA or Safe; dry run unless `--execute` (requires `PRIVATE_KEY`, `POLYGON_RPC_ENDPOINT`)
 - `uma_oracle_watch`: stream UMA adapter lifecycle events over Polygon JSON-RPC
 - `condition_resolution_watch`: stream Conditional Tokens resolution/redemption events
 - `evm_event_indexer_example`: persistent HTTP catch-up + live WS indexer with a cursor file
@@ -166,6 +168,27 @@ authenticated order path signs V2 EIP-712 orders, posts V2 order payloads, uses
 the V2 exchange contracts, and supports the V2 `POLY_1271` deposit-wallet
 signature wrapper. See [docs/clob-v2-migration.md](docs/clob-v2-migration.md)
 for implementation notes.
+
+## On-Chain Position Operations
+
+`PositionClient` turns pUSD into YES+NO shares (split), YES+NO pairs back into
+pUSD (merge), and resolved positions into pUSD (redeem):
+
+```cpp
+#include "position_client.hpp"
+
+polymarket::PositionClientConfig config;
+config.private_key = std::getenv("PRIVATE_KEY");
+config.rpc_url = std::getenv("POLYGON_RPC_ENDPOINT");
+config.wallet_type = polymarket::SignatureType::POLY_GNOSIS_SAFE; // or EOA
+config.relayer_api_key = std::getenv("RELAYER_API_KEY");
+
+polymarket::PositionClient client(config);
+client.merge_positions(condition_id, "max").wait();
+```
+
+See [docs/position-operations.md](docs/position-operations.md) for wallet
+types, batching and atomicity, errors, and required approvals.
 
 ## Structured Errors
 
@@ -246,7 +269,7 @@ required.
 
 ## Tests
 
-`test_utils` exercises basic utility helpers. `test_evm_events` covers EVM topic hashing, log filter serialization, and UMA/CTF event decoding. `test_evm_event_indexer` covers block range planning and file-backed cursors. Transport, order execution, typed error, signing, and WebSocket resilience tests are included when `POLYMARKET_CLIENT_BUILD_TESTS=ON`. Run via `ctest --test-dir build`.
+`test_utils` exercises basic utility helpers. `test_evm_events` covers EVM topic hashing, log filter serialization, and UMA/CTF event decoding. `test_evm_event_indexer` covers block range planning and file-backed cursors. Transport, order execution, typed error, signing, and WebSocket resilience tests are included when `POLYMARKET_CLIENT_BUILD_TESTS=ON`. `test_evm_abi`, `test_evm_transaction`, `test_json_rpc_transactions`, `test_polymarket_contracts`, `test_position_client` and `test_safe_relayer` check ABI encoding, transaction signing, Safe signing and relayer payloads against vectors from the official Python SDK, and run position flows against local fake RPC, Gamma and relayer servers. Run via `ctest --test-dir build`.
 
 `test_oracle_watcher` validates in-memory normalization against synthetic UMA/CTF fixtures.
 `test_oracle_watcher_historical` is labeled `live` and only performs its
@@ -267,6 +290,10 @@ Set these env vars explicitly if you need another RPC or contract set.
 - `src/websocket_client.cpp`: IXWebSocket wrapper
 - `src/websocket_client_resilience.cpp`: reconnect, queue, and subscription helpers
 - `src/json_rpc_client.cpp`: EVM HTTP/WS JSON-RPC helpers
+- `src/evm_abi.cpp`, `src/evm_transaction.cpp`: ABI encoding and EIP-155 transaction signing
+- `src/polymarket_contracts.cpp`: Polygon mainnet contract registry
+- `src/position_client.cpp`, `src/position_calls.cpp`: split/merge/redeem and market resolution
+- `src/safe_relayer.cpp`: Gnosis Safe signing and relayer submission
 - `src/evm_event_indexer.cpp`: persistent log catch-up and live indexing
 - `src/evm_utils.cpp`: ABI/log utilities
 - `src/polymarket_events.cpp`: UMA/CTF event decoders
@@ -373,6 +400,7 @@ The client automatically detects neg_risk markets and uses the appropriate excha
 - **Neg-risk markets**: `0xe2222d279d744050d28e00520010520000310F59`
 
 This is handled automatically in `create_order()` - no manual intervention needed.
+`PositionClient` likewise picks the neg-risk collateral adapter for these markets.
 
 ## GitHub Actions
 
