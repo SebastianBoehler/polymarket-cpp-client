@@ -1,4 +1,5 @@
 #include "evm_abi.hpp"
+#include "evm_uint.hpp"
 #include "order_signer.hpp"
 #include <algorithm>
 #include <stdexcept>
@@ -8,13 +9,6 @@ namespace polymarket
     namespace
     {
         constexpr size_t kWordSize = 32;
-
-        std::string strip_0x(const std::string &value)
-        {
-            if (value.rfind("0x", 0) == 0 || value.rfind("0X", 0) == 0)
-                return value.substr(2);
-            return value;
-        }
 
         std::vector<uint8_t> parse_hex_bytes(const std::string &hex, const char *label)
         {
@@ -34,47 +28,6 @@ namespace polymarket
             const auto start = left_pad ? word.begin() + (kWordSize - bytes.size()) : word.begin();
             std::copy(bytes.begin(), bytes.end(), start);
             return word;
-        }
-
-        std::vector<uint8_t> size_word(size_t value)
-        {
-            std::vector<uint8_t> word(kWordSize, 0);
-            for (size_t i = 0; i < sizeof(size_t) && value != 0; ++i, value >>= 8)
-                word[kWordSize - 1 - i] = static_cast<uint8_t>(value & 0xff);
-            return word;
-        }
-
-        // Big-endian 32-byte word from a base-10 string.
-        std::vector<uint8_t> decimal_to_word(const std::string &decimal)
-        {
-            std::vector<uint8_t> word(kWordSize, 0);
-            for (const char character : decimal)
-            {
-                if (character < '0' || character > '9')
-                    throw std::invalid_argument("unsigned integer must be base-10 digits or 0x-hex");
-                unsigned carry = static_cast<unsigned>(character - '0');
-                for (auto it = word.rbegin(); it != word.rend(); ++it)
-                {
-                    const unsigned next = static_cast<unsigned>(*it) * 10 + carry;
-                    *it = static_cast<uint8_t>(next & 0xff);
-                    carry = next >> 8;
-                }
-                if (carry != 0)
-                    throw std::invalid_argument("unsigned integer exceeds uint256");
-            }
-            return word;
-        }
-
-        std::vector<uint8_t> hex_to_word(const std::string &hex)
-        {
-            auto digits = strip_0x(hex);
-            const auto first = digits.find_first_not_of('0');
-            digits = first == std::string::npos ? "" : digits.substr(first);
-            if (digits.size() > 2 * kWordSize)
-                throw std::invalid_argument("unsigned integer exceeds uint256");
-            if (digits.size() % 2 != 0)
-                digits.insert(digits.begin(), '0');
-            return word_from_bytes(parse_hex_bytes(digits, "unsigned integer"), true);
         }
 
         void check_bits(unsigned bits)
@@ -115,11 +68,8 @@ namespace polymarket
     EvmAbiValue EvmAbiValue::unsigned_integer(const std::string &text, unsigned bits)
     {
         check_bits(bits);
-        if (text.empty() || text == "0x" || text == "0X")
-            throw std::invalid_argument("unsigned integer is empty");
-        const bool is_hex = text.rfind("0x", 0) == 0 || text.rfind("0X", 0) == 0;
         EvmAbiValue value(Kind::Word);
-        value.data_ = is_hex ? hex_to_word(text) : decimal_to_word(text);
+        value.data_ = detail::parse_uint256_word(text);
         check_fits(value.data_, bits);
         return value;
     }
@@ -128,9 +78,7 @@ namespace polymarket
     {
         check_bits(bits);
         EvmAbiValue value(Kind::Word);
-        value.data_.assign(kWordSize, 0);
-        for (size_t i = 0; i < sizeof(number); ++i)
-            value.data_[kWordSize - 1 - i] = static_cast<uint8_t>((number >> (8 * i)) & 0xff);
+        value.data_ = detail::uint256_word(number);
         check_fits(value.data_, bits);
         return value;
     }
@@ -208,14 +156,14 @@ namespace polymarket
             return;
         case Kind::Bytes:
         {
-            const auto length = size_word(data_.size());
+            const auto length = detail::uint256_word(data_.size());
             out.insert(out.end(), length.begin(), length.end());
             append_padded(out, data_);
             return;
         }
         case Kind::Array:
         {
-            const auto length = size_word(children_.size());
+            const auto length = detail::uint256_word(children_.size());
             out.insert(out.end(), length.begin(), length.end());
             append_sequence(out, children_);
             return;
@@ -247,7 +195,7 @@ namespace polymarket
         {
             if (values[i].is_dynamic())
             {
-                const auto offset = size_word(tail_offset);
+                const auto offset = detail::uint256_word(tail_offset);
                 out.insert(out.end(), offset.begin(), offset.end());
                 tail_offset += encoded[i].size();
             }

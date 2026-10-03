@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,29 @@ namespace polymarket
     {
         class EvmJsonRpcWsRuntime;
     }
+
+    // Message-call parameters for eth_call and eth_estimateGas. Empty optional
+    // fields are omitted from the request.
+    struct EvmCallRequest
+    {
+        std::string to;
+        std::string data = "0x";
+        std::string from;
+        std::string value; // 0x-hex quantity
+
+        nlohmann::json to_json() const;
+    };
+
+    struct EvmTransactionReceipt
+    {
+        std::string transaction_hash;
+        std::string block_hash;
+        std::string block_number;        // 0x-hex quantity
+        std::string gas_used;            // 0x-hex quantity
+        std::string effective_gas_price; // 0x-hex quantity; empty if the node omits it
+        bool success{false};             // status == 0x1
+        std::vector<EvmLog> logs;
+    };
 
     class EvmJsonRpcHttpClient
     {
@@ -28,6 +52,20 @@ namespace polymarket
         std::string block_number();
         std::vector<EvmLog> get_logs(const EvmLogFilter &filter);
         nlohmann::json get_transaction_by_hash(const std::string &tx_hash);
+
+        // Quantities are returned as validated 0x-hex strings, which
+        // EvmLegacyTransaction accepts directly.
+        uint64_t chain_id();
+        std::string get_transaction_count(const std::string &address,
+                                          const std::string &block_tag = "pending");
+        std::string gas_price();
+        std::string estimate_gas(const EvmCallRequest &request);
+        std::string eth_call(const EvmCallRequest &request,
+                             const std::string &block_tag = "latest");
+        // Returns the transaction hash reported by the node.
+        std::string send_raw_transaction(const std::string &raw_transaction);
+        // Empty while the transaction is pending or unknown.
+        std::optional<EvmTransactionReceipt> get_transaction_receipt(const std::string &tx_hash);
 
     private:
         HttpClient http_;

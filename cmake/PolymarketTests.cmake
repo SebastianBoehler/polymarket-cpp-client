@@ -19,6 +19,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_evm_abi PRIVATE polymarket::client)
     add_test(NAME test_evm_abi COMMAND test_evm_abi)
 
+    add_executable(test_evm_transaction tests/test_evm_transaction.cpp)
+    target_include_directories(test_evm_transaction PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_evm_transaction PRIVATE polymarket::client)
+    add_test(NAME test_evm_transaction COMMAND test_evm_transaction)
+
     add_executable(test_evm_events tests/test_evm_events.cpp)
     target_link_libraries(test_evm_events PRIVATE polymarket::client)
     add_test(NAME test_evm_events COMMAND test_evm_events)
@@ -34,6 +39,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     add_executable(test_json_rpc_http_integrity tests/test_json_rpc_http_integrity.cpp)
     target_link_libraries(test_json_rpc_http_integrity PRIVATE polymarket::client)
     add_test(NAME test_json_rpc_http_integrity COMMAND test_json_rpc_http_integrity)
+
+    add_executable(test_json_rpc_transactions tests/test_json_rpc_transactions.cpp)
+    target_link_libraries(test_json_rpc_transactions PRIVATE polymarket::client)
+    add_test(NAME test_json_rpc_transactions COMMAND test_json_rpc_transactions)
 
     add_executable(test_json_rpc_ws_owner_reset tests/test_json_rpc_ws_owner_reset.cpp)
     target_include_directories(test_json_rpc_ws_owner_reset PRIVATE
