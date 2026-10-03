@@ -10,6 +10,7 @@ Reusable C++20 client for Polymarket: REST, WebSocket streaming, and order signi
 - **REST**: market discovery, orderbook/price queries, auth key management, and trading endpoints.
 - **Transport controls**: configurable libcurl timeouts, keepalive, connection reuse, proxy/user-agent, request metrics, and cumulative stats.
 - **WebSocket**: orderbook streaming via IXWebSocket with reconnect, subscription replay, typed callbacks, and backpressure counters.
+- **User stream**: authenticated CLOB user channel (`UserStream`) with typed order/trade events, per-market or all-market subscriptions, plus gap callbacks (invalidate state) and recovery callbacks (reconcile via REST once the subscription is restored).
 - **Signing**: CLOB V2 EIP-712 order signing (secp256k1, keccak).
 - **Decimal math**: shared scaled-integer conversion for trading amounts.
 - **Structured errors**: opt-in `Result<T>` APIs with typed SDK error classification.
@@ -135,6 +136,7 @@ int main() {
 - `rest_example`: fetch markets from CLOB REST
 - `sign_example`: sign a dummy order (requires `PRIVATE_KEY`)
 - `ws_example`: connect to Polymarket WS and subscribe to orderbook agg
+- `user_stream_example`: stream your own order and trade events (requires `PRIVATE_KEY`; optional condition IDs as arguments)
 - `uma_oracle_watch`: stream UMA adapter lifecycle events over Polygon JSON-RPC
 - `condition_resolution_watch`: stream Conditional Tokens resolution/redemption events
 - `evm_event_indexer_example`: persistent HTTP catch-up + live WS indexer with a cursor file

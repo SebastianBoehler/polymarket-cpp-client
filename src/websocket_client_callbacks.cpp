@@ -35,6 +35,12 @@ namespace polymarket::detail
                          { callbacks.disconnect = std::move(callback); });
     }
 
+    void WebSocketClientState::on_close(OnCloseCallback callback)
+    {
+        update_callbacks([callback = std::move(callback)](auto &callbacks) mutable
+                         { callbacks.close = std::move(callback); });
+    }
+
     void WebSocketClientState::on_error(OnErrorCallback callback)
     {
         update_callbacks([callback = std::move(callback)](auto &callbacks) mutable

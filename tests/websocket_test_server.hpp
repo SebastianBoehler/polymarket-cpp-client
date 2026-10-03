@@ -19,9 +19,26 @@ namespace websocket_test
     class LocalWebSocketServer
     {
     public:
-        LocalWebSocketServer()
+        // first_handshake_delay stalls the first accepted connection before
+        // the WebSocket handshake, simulating a slow upgrade response.
+        explicit LocalWebSocketServer(
+            std::chrono::milliseconds first_handshake_delay = std::chrono::milliseconds(0))
             : port_(ix::getFreePort()), server_(port_, "127.0.0.1")
         {
+            if (first_handshake_delay.count() > 0)
+            {
+                server_.setConnectionStateFactory(
+                    [this, first_handshake_delay]
+                    {
+                        if (!handshake_delayed_)
+                        {
+                            handshake_delayed_ = true;
+                            std::this_thread::sleep_for(first_handshake_delay);
+                        }
+                        return ix::ConnectionState::createConnectionState();
+                    });
+            }
+
             server_.setOnClientMessageCallback(
                 [this](std::shared_ptr<ix::ConnectionState>,
                        ix::WebSocket &,
@@ -81,6 +98,14 @@ namespace websocket_test
             }
         }
 
+        void close_clients(uint16_t code, const std::string &reason)
+        {
+            for (const auto &client : server_.getClients())
+            {
+                client->close(code, reason);
+            }
+        }
+
         bool wait_for_connections(std::size_t count,
                                   std::chrono::milliseconds timeout)
         {
@@ -122,6 +147,7 @@ namespace websocket_test
         std::mutex mutex_;
         std::condition_variable cv_;
         std::size_t connections_{0};
+        bool handshake_delayed_{false}; // accept thread only
         std::vector<std::string> received_;
     };
 }

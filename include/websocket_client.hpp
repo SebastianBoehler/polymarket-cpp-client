@@ -26,6 +26,7 @@ namespace polymarket
     using OnMessageCallback = std::function<void(const std::string &)>;
     using OnConnectCallback = std::function<void()>;
     using OnDisconnectCallback = std::function<void()>;
+    using OnCloseCallback = std::function<void(uint16_t code, const std::string &reason)>;
     using OnErrorCallback = std::function<void(const std::string &)>;
     using OnSequencedMessageCallback = std::function<void(const std::string &, uint64_t)>;
     using OnStreamGapCallback = std::function<void(uint64_t)>;
@@ -92,6 +93,7 @@ namespace polymarket
         void on_typed_message(OnTypedMessageCallback callback);
         void on_connect(OnConnectCallback callback);
         void on_disconnect(OnDisconnectCallback callback);
+        void on_close(OnCloseCallback callback);
         void on_error(OnErrorCallback callback);
         void on_stream_gap(OnStreamGapCallback callback);
 
