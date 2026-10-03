@@ -135,6 +135,8 @@ set(POLYMARKET_CLIENT_SOURCES
     src/orderbook_stream.cpp
     src/user_stream.cpp
     src/user_stream_runtime.cpp
+    src/user_stream_runtime_events.cpp
+    src/user_stream_subscription.cpp
     src/order_amounts.cpp
     src/clob_order_execution.cpp
     src/clob_order_submission.cpp

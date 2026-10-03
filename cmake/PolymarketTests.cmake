@@ -113,7 +113,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_orderbook_stream PRIVATE polymarket::client)
     add_test(NAME test_orderbook_stream COMMAND test_orderbook_stream)
 
-    add_executable(test_user_stream tests/test_user_stream.cpp)
+    add_executable(test_user_stream
+        tests/test_user_stream.cpp
+        tests/test_user_stream_connection.cpp
+        tests/test_user_stream_failures.cpp)
     target_include_directories(test_user_stream PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/tests)
