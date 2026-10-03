@@ -118,6 +118,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/http_global.cpp
     src/http_client_request.cpp
     src/json_rpc_client.cpp
+    src/json_rpc_transactions.cpp
     src/json_rpc_ws_dispatch.cpp
     src/json_rpc_ws_runtime.cpp
     src/websocket_client_callbacks.cpp
@@ -149,6 +150,8 @@ set(POLYMARKET_CLIENT_SOURCES
     src/polymarket_contracts.cpp
     src/position_calls.cpp
     src/position_client.cpp
+    src/position_senders.cpp
+    src/transaction_handle.cpp
     src/safe_relayer.cpp
     src/order_signer.cpp
     src/order_signer_auth.cpp

@@ -19,6 +19,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_evm_abi PRIVATE polymarket::client)
     add_test(NAME test_evm_abi COMMAND test_evm_abi)
 
+    add_executable(test_evm_abi_shapes tests/test_evm_abi_shapes.cpp)
+    target_link_libraries(test_evm_abi_shapes PRIVATE polymarket::client)
+    add_test(NAME test_evm_abi_shapes COMMAND test_evm_abi_shapes)
+
     add_executable(test_evm_transaction tests/test_evm_transaction.cpp)
     target_include_directories(test_evm_transaction PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_evm_transaction PRIVATE polymarket::client)
@@ -33,10 +37,20 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_position_client PRIVATE polymarket::client)
     add_test(NAME test_position_client COMMAND test_position_client)
 
+    add_executable(test_position_calls tests/test_position_calls.cpp)
+    target_include_directories(test_position_calls PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_position_calls PRIVATE polymarket::client)
+    add_test(NAME test_position_calls COMMAND test_position_calls)
+
     add_executable(test_safe_relayer tests/test_safe_relayer.cpp)
     target_include_directories(test_safe_relayer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_safe_relayer PRIVATE polymarket::client)
     add_test(NAME test_safe_relayer COMMAND test_safe_relayer)
+
+    add_executable(test_safe_relayer_flows tests/test_safe_relayer_flows.cpp)
+    target_include_directories(test_safe_relayer_flows PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_safe_relayer_flows PRIVATE polymarket::client)
+    add_test(NAME test_safe_relayer_flows COMMAND test_safe_relayer_flows)
 
     add_executable(test_evm_events tests/test_evm_events.cpp)
     target_link_libraries(test_evm_events PRIVATE polymarket::client)

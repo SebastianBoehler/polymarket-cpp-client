@@ -145,9 +145,10 @@ from the EOA.
 
 - Calldata, signed transactions, Safe address derivation, SafeTx digests,
   signatures, MultiSend packing and relayer payloads match vectors produced
-  by the official Python SDK (`test_evm_abi`, `test_evm_transaction`,
-  `test_position_client`, `test_safe_relayer`).
-- Full flows run against local fake RPC, Gamma and relayer servers.
+  by the official Python SDK (`test_evm_abi`, `test_evm_abi_shapes`,
+  `test_evm_transaction`, `test_position_calls`, `test_safe_relayer`).
+- `test_position_client` and `test_safe_relayer_flows` run EOA and Safe flows.
+- These flows run against local fake RPC, Gamma and relayer servers.
 - Against Polygon mainnet (read-only): the SafeTx digest equals the Safe's own
   `getTransactionHash`, the signature passes the Safe's `checkSignatures`, and
   a simulated `execTransaction` redeem succeeds.

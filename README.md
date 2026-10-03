@@ -269,7 +269,7 @@ required.
 
 ## Tests
 
-`test_utils` exercises basic utility helpers. `test_evm_events` covers EVM topic hashing, log filter serialization, and UMA/CTF event decoding. `test_evm_event_indexer` covers block range planning and file-backed cursors. Transport, order execution, typed error, signing, and WebSocket resilience tests are included when `POLYMARKET_CLIENT_BUILD_TESTS=ON`. `test_evm_abi`, `test_evm_transaction`, `test_json_rpc_transactions`, `test_polymarket_contracts`, `test_position_client` and `test_safe_relayer` check ABI encoding, transaction signing, Safe signing and relayer payloads against vectors from the official Python SDK, and run position flows against local fake RPC, Gamma and relayer servers. Run via `ctest --test-dir build`.
+`test_utils` exercises basic utility helpers. `test_evm_events` covers EVM topic hashing, log filter serialization, and UMA/CTF event decoding. `test_evm_event_indexer` covers block range planning and file-backed cursors. Transport, order execution, typed error, signing, and WebSocket resilience tests are included when `POLYMARKET_CLIENT_BUILD_TESTS=ON`. `test_evm_abi`, `test_evm_abi_shapes`, `test_evm_transaction`, `test_json_rpc_transactions`, `test_polymarket_contracts`, `test_position_calls`, `test_position_client`, `test_safe_relayer` and `test_safe_relayer_flows` check ABI encoding, transaction signing, Safe signing and relayer payloads against vectors from the official Python SDK, and run position flows against local fake RPC, Gamma and relayer servers. Run via `ctest --test-dir build`.
 
 `test_oracle_watcher` validates in-memory normalization against synthetic UMA/CTF fixtures.
 `test_oracle_watcher_historical` is labeled `live` and only performs its
@@ -289,10 +289,11 @@ Set these env vars explicitly if you need another RPC or contract set.
 - `src/sdk_error.cpp`: typed SDK error helpers
 - `src/websocket_client.cpp`: IXWebSocket wrapper
 - `src/websocket_client_resilience.cpp`: reconnect, queue, and subscription helpers
-- `src/json_rpc_client.cpp`: EVM HTTP/WS JSON-RPC helpers
+- `src/json_rpc_client.cpp`, `src/json_rpc_transactions.cpp`: EVM HTTP/WS JSON-RPC helpers and transaction calls
 - `src/evm_abi.cpp`, `src/evm_transaction.cpp`: ABI encoding and EIP-155 transaction signing
 - `src/polymarket_contracts.cpp`: Polygon mainnet contract registry
 - `src/position_client.cpp`, `src/position_calls.cpp`: split/merge/redeem and market resolution
+- `src/position_senders.cpp`, `src/transaction_handle.cpp`: EOA/Safe sending and waiting for outcomes
 - `src/safe_relayer.cpp`: Gnosis Safe signing and relayer submission
 - `src/evm_event_indexer.cpp`: persistent log catch-up and live indexing
 - `src/evm_utils.cpp`: ABI/log utilities
