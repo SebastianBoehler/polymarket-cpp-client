@@ -146,6 +146,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/clob_order_submission.cpp
     src/order_execution.cpp
     src/polymarket_events.cpp
+    src/polymarket_contracts.cpp
     src/order_signer.cpp
     src/order_signer_auth.cpp
     src/order_signer_domain.cpp

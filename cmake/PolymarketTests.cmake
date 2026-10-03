@@ -24,6 +24,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_evm_transaction PRIVATE polymarket::client)
     add_test(NAME test_evm_transaction COMMAND test_evm_transaction)
 
+    add_executable(test_polymarket_contracts tests/test_polymarket_contracts.cpp)
+    target_link_libraries(test_polymarket_contracts PRIVATE polymarket::client)
+    add_test(NAME test_polymarket_contracts COMMAND test_polymarket_contracts)
+
     add_executable(test_evm_events tests/test_evm_events.cpp)
     target_link_libraries(test_evm_events PRIVATE polymarket::client)
     add_test(NAME test_evm_events COMMAND test_evm_events)
