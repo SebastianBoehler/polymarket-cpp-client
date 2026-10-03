@@ -417,7 +417,9 @@ namespace
         return passed;
     }
 
-    bool authentication_failure_tests()
+    // Rejection is terminal: run() must return whether it was already
+    // blocking when the server closed with 1008 or is entered afterwards.
+    bool authentication_failure_tests(bool reject_during_run)
     {
         websocket_test::LocalWebSocketServer server;
         Config config;
@@ -427,6 +429,8 @@ namespace
 
         std::mutex errors_mutex;
         std::vector<std::string> errors;
+        std::atomic<bool> run_returned{false};
+        std::thread runner;
         bool passed = false;
         {
             UserStream stream(config, credentials);
@@ -436,12 +440,28 @@ namespace
                                 errors.push_back(error);
                             });
             stream.subscribe_all_markets();
+            const auto start_run = [&]
+            {
+                runner = std::thread([&]
+                                     {
+                                         stream.run();
+                                         run_returned = true;
+                                     });
+            };
             passed =
                 check(stream.connect(), "user stream connects before auth reply") &&
                 check(server.wait_for_message_count(
                           detail::user_subscription_message({true, {}}, credentials),
                           1, 2s),
                       "subscription is sent before rejection");
+            if (passed && reject_during_run)
+            {
+                start_run();
+                // Let run() enter its blocking loop before the rejection.
+                passed = check(!wait_until([&]
+                                           { return run_returned.load(); }, 300ms),
+                               "run() blocks while the stream is live");
+            }
             if (passed)
             {
                 server.close_clients(1008, "authentication failed");
@@ -455,12 +475,23 @@ namespace
                     check(errors[0].find("authentication failed") != std::string::npos,
                           "rejection error carries the server reason") &&
                     check(stream.authentication_failed(),
-                          "authentication failure is observable") &&
+                          "authentication failure is observable");
+            }
+            if (passed && !reject_during_run) start_run();
+            if (passed)
+            {
+                passed =
+                    check(wait_until([&]
+                                     { return run_returned.load(); }),
+                          reject_during_run ? "rejection ends a blocked run()"
+                                            : "run() returns after an earlier rejection") &&
                     check(!server.wait_for_connections(2, 1s),
                           "rejected stream does not reconnect") &&
                     check(!stream.is_connected(), "rejected stream is disconnected");
             }
+            // Unblocks run() if the rejection failed to end it.
             stream.stop();
+            if (runner.joinable()) runner.join();
         }
         return passed;
     }
@@ -472,7 +503,8 @@ int main()
     if (!stream_tests()) return 1;
     if (!recovery_ordering_tests()) return 1;
     if (!delayed_handshake_tests()) return 1;
-    if (!authentication_failure_tests()) return 1;
+    if (!authentication_failure_tests(true)) return 1;
+    if (!authentication_failure_tests(false)) return 1;
     std::cout << "user stream tests passed\n";
     return 0;
 }

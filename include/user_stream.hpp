@@ -79,7 +79,8 @@ namespace polymarket
     // `get_trades`) here and merge it with events delivered from this point.
     using UserStreamRecoveredCallback = std::function<void()>;
     // Fired when the server rejects the session (close code 1008, e.g. invalid
-    // API credentials). The stream stops reconnecting; call connect() to retry.
+    // API credentials). The stream stops reconnecting and run() returns; call
+    // connect() to retry.
     using UserStreamErrorCallback = std::function<void(const std::string &error)>;
 
     // Authenticated user-channel stream. Subscriptions are replayed with the

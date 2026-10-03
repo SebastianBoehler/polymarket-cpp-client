@@ -313,10 +313,12 @@ namespace polymarket::detail
             !owner_active_.load(std::memory_order_acquire) ||
             !stream_active_.load(std::memory_order_acquire))
             return;
-        // Reconnecting with rejected credentials would loop forever.
+        // Reconnecting with rejected credentials would loop forever. stop()
+        // rather than disconnect() so a blocked or later run() returns too;
+        // connect() clears the stop for a retry.
         authentication_failed_.store(true, std::memory_order_release);
         deactivate_stream();
-        websocket_.disconnect();
+        websocket_.stop();
         const auto error = "user stream rejected by server (" + std::to_string(code) +
                            "): " + reason;
         std::cerr << "[WS] " << error << '\n';
