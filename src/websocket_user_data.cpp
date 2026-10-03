@@ -222,20 +222,11 @@ namespace polymarket::detail
             if (!item.is_object())
                 throw std::invalid_argument("user event must be an object");
 
-            // Accept both the wire shape ({"event_type":"order",...}) and the
-            // normalized envelope ({"topic":"user","type":"order","payload":{}}).
-            const json *body = &item;
-            std::string kind = item.value("event_type", "");
-            if (kind.empty() && item.contains("payload") && item["payload"].is_object())
-            {
-                kind = item.value("type", "");
-                body = &item["payload"];
-            }
-
+            const std::string kind = item.value("event_type", "");
             if (kind == "order")
-                events.emplace_back(parse_order(*body));
+                events.emplace_back(parse_order(item));
             else if (kind == "trade")
-                events.emplace_back(parse_trade(*body));
+                events.emplace_back(parse_trade(item));
         }
         return events;
     }

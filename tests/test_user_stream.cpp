@@ -112,11 +112,11 @@ namespace user_stream_test
                    "trade fields and maker orders are normalized"))
             return false;
 
-        const auto envelope = detail::parse_user_events(
-            R"({"topic":"user","type":"order","payload":{"id":"o","owner":"k","market":"m","token_id":"t","side":"SELL","original_size":"1","size_matched":"1","price":"0.5","type":"CANCELLATION"}})");
-        if (!check(envelope.size() == 1 &&
-                       std::get<UserOrderEvent>(envelope[0]).type == "CANCELLATION",
-                   "normalized envelope parses"))
+        // Only the CLOB wire shape is supported; nothing produces envelopes.
+        if (!check(detail::parse_user_events(
+                       R"({"topic":"user","type":"order","payload":{"id":"o","owner":"k","market":"m","asset_id":"t","side":"SELL","original_size":"1","size_matched":"1","price":"0.5","type":"CANCELLATION"}})")
+                       .empty(),
+                   "topic/payload envelopes are not parsed"))
             return false;
 
         if (!check(detail::parse_user_events(
