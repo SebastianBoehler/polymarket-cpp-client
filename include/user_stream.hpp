@@ -68,10 +68,16 @@ namespace polymarket
 
     using UserOrderCallback = std::function<void(const UserOrderEvent &order)>;
     using UserTradeCallback = std::function<void(const UserTradeEvent &trade)>;
-    // Fired whenever events may have been missed (every connect, disconnect,
-    // queue overflow, or invalid payload). Reconcile order and trade state via
-    // REST (`ClobClient::get_open_orders`, `get_trades`) when it fires.
+    // Fired immediately whenever events may have been missed (every connect,
+    // disconnect, queue overflow, or invalid payload). Treat local order and
+    // trade state as stale; do not reconcile here, because on reconnect it
+    // runs before the subscription is restored and the server does not replay
+    // events missed in between.
     using UserStreamGapCallback = std::function<void()>;
+    // Fired once the authenticated subscription has been resent after a gap.
+    // Reconcile order and trade state via REST (`ClobClient::get_open_orders`,
+    // `get_trades`) here and merge it with events delivered from this point.
+    using UserStreamRecoveredCallback = std::function<void()>;
     // Fired when the server rejects the session (close code 1008, e.g. invalid
     // API credentials). The stream stops reconnecting; call connect() to retry.
     using UserStreamErrorCallback = std::function<void(const std::string &error)>;
@@ -104,6 +110,7 @@ namespace polymarket
         void on_order(UserOrderCallback callback);
         void on_trade(UserTradeCallback callback);
         void on_stream_gap(UserStreamGapCallback callback);
+        void on_stream_recovered(UserStreamRecoveredCallback callback);
         void on_error(UserStreamErrorCallback callback);
 
         // Connection

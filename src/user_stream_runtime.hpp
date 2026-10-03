@@ -17,6 +17,7 @@ namespace polymarket::detail
         UserOrderCallback order;
         UserTradeCallback trade;
         UserStreamGapCallback gap;
+        UserStreamRecoveredCallback recovered;
         UserStreamErrorCallback error;
     };
 
@@ -39,6 +40,7 @@ namespace polymarket::detail
         void on_order(UserOrderCallback callback);
         void on_trade(UserTradeCallback callback);
         void on_stream_gap(UserStreamGapCallback callback);
+        void on_stream_recovered(UserStreamRecoveredCallback callback);
         void on_error(UserStreamErrorCallback callback);
 
         bool connect();
@@ -56,7 +58,8 @@ namespace polymarket::detail
 
         void handle_message(const std::string &message,
                             uint64_t websocket_generation);
-        void handle_stream_gap();
+        void handle_stream_gap(uint64_t websocket_generation);
+        void handle_connect();
         void handle_close(uint16_t code, const std::string &reason);
         void deactivate_stream();
         bool stream_is_current(uint64_t user_generation,
@@ -137,5 +140,7 @@ namespace polymarket::detail
         std::atomic<uint64_t> order_events_{0};
         std::atomic<uint64_t> trade_events_{0};
         std::atomic<uint64_t> stream_generation_{0};
+        // WebSocket generation of the gap awaiting recovery; 0 when none.
+        std::atomic<uint64_t> recovery_generation_{0};
     };
 }

@@ -47,7 +47,9 @@ int main(int argc, char **argv)
         stream.on_error([](const std::string &error)
                         { std::cerr << "[error] " << error << '\n'; });
         stream.on_stream_gap([]
-                             { std::cout << "[gap] events may have been missed; reconcile via REST\n"; });
+                             { std::cout << "[gap] events may have been missed; local state is stale\n"; });
+        stream.on_stream_recovered([]
+                                   { std::cout << "[recovered] subscription restored; reconcile via REST\n"; });
 
         // Optional condition IDs narrow the stream; none means all markets.
         if (argc > 1)

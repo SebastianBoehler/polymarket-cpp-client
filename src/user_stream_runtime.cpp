@@ -92,10 +92,10 @@ namespace polymarket::detail
                     runtime->handle_message(message, generation);
             });
         websocket_.on_stream_gap(
-            [weak](uint64_t)
+            [weak](uint64_t generation)
             {
                 if (auto runtime = weak.lock())
-                    runtime->handle_stream_gap();
+                    runtime->handle_stream_gap(generation);
             });
         websocket_.on_close(
             [weak](uint16_t code, const std::string &reason)
@@ -103,8 +103,15 @@ namespace polymarket::detail
                 if (auto runtime = weak.lock())
                     runtime->handle_close(code, reason);
             });
-        websocket_.on_connect([]
-                              { std::cout << "[WS] Connected to CLOB user stream\n"; });
+        // WebSocketClient fires connect only after replaying the tracked
+        // subscriptions, so recovery here cannot precede subscription restore.
+        websocket_.on_connect(
+            [weak]
+            {
+                std::cout << "[WS] Connected to CLOB user stream\n";
+                if (auto runtime = weak.lock())
+                    runtime->handle_connect();
+            });
         websocket_.on_disconnect([]
                                  { std::cout << "[WS] Disconnected from CLOB user stream\n"; });
         websocket_.on_error([](const std::string &error)
@@ -193,6 +200,12 @@ namespace polymarket::detail
                          { callbacks.gap = std::move(callback); });
     }
 
+    void UserStreamRuntime::on_stream_recovered(UserStreamRecoveredCallback callback)
+    {
+        update_callbacks([callback = std::move(callback)](auto &callbacks) mutable
+                         { callbacks.recovered = std::move(callback); });
+    }
+
     void UserStreamRuntime::on_error(UserStreamErrorCallback callback)
     {
         update_callbacks([callback = std::move(callback)](auto &callbacks) mutable
@@ -264,14 +277,32 @@ namespace polymarket::detail
             stream_generation_.fetch_add(1);
     }
 
-    void UserStreamRuntime::handle_stream_gap()
+    void UserStreamRuntime::handle_stream_gap(uint64_t websocket_generation)
     {
         if (!owner_active_.load(std::memory_order_acquire) ||
             !stream_active_.load(std::memory_order_acquire))
             return;
         stream_generation_.fetch_add(1);
+        // Every gap closes or reopens the transport, so the matching connect
+        // arrives on this websocket generation once subscriptions are replayed.
+        recovery_generation_.store(websocket_generation, std::memory_order_release);
         const auto callbacks = callbacks_snapshot();
         if (callbacks->gap) callbacks->gap();
+    }
+
+    void UserStreamRuntime::handle_connect()
+    {
+        if (!owner_active_.load(std::memory_order_acquire) ||
+            !stream_active_.load(std::memory_order_acquire))
+            return;
+        auto pending = recovery_generation_.load(std::memory_order_acquire);
+        // A newer gap means this connection is already stale; its own
+        // reconnect will report recovery instead.
+        if (pending == 0 || pending != websocket_.stream_generation() ||
+            !recovery_generation_.compare_exchange_strong(pending, 0))
+            return;
+        const auto callbacks = callbacks_snapshot();
+        if (callbacks->recovered) callbacks->recovered();
     }
 
     void UserStreamRuntime::handle_close(uint16_t code, const std::string &reason)

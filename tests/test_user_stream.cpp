@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -306,6 +307,74 @@ namespace
         return passed;
     }
 
+    bool recovery_ordering_tests()
+    {
+        websocket_test::LocalWebSocketServer server;
+        Config config;
+        config.clob_user_ws_url = server.url();
+        config.ws_connect_timeout_ms = 3'000;
+        const auto credentials = test_credentials();
+        const auto subscription = detail::user_subscription_message(
+            {false, {"cond-1"}}, credentials);
+
+        std::mutex log_mutex;
+        std::vector<std::string> log;
+        std::atomic<unsigned int> recoveries{0};
+        bool passed = false;
+        {
+            UserStream stream(config, credentials);
+            stream.on_stream_gap([&]
+                                 {
+                                     std::lock_guard lock(log_mutex);
+                                     log.push_back("gap");
+                                 });
+            stream.on_stream_recovered(
+                [&]
+                {
+                    // The transport thread blocks here, so this only succeeds
+                    // if the subscription for this connection was sent first.
+                    const bool subscribed = server.wait_for_message_count(
+                        subscription, recoveries.load() + 1, 1s);
+                    {
+                        std::lock_guard lock(log_mutex);
+                        log.push_back(subscribed ? "recovered" : "recovered-early");
+                    }
+                    ++recoveries;
+                });
+            stream.subscribe("cond-1");
+
+            passed = check(stream.connect(), "user stream connects") &&
+                     check(wait_until([&]
+                                      { return recoveries.load() == 1; }),
+                           "connect reports recovery");
+            if (passed)
+            {
+                server.close_clients();
+                passed = check(wait_until([&]
+                                          { return recoveries.load() == 2; }, 5s),
+                               "reconnect reports recovery");
+            }
+            stream.stop();
+        }
+
+        std::lock_guard lock(log_mutex);
+        if (!passed) return false;
+        const auto recovered_entries = std::count(log.begin(), log.end(),
+                                                  std::string("recovered"));
+        bool gap_before_each_recovery = !log.empty() && log.front() == "gap";
+        for (std::size_t i = 1; i < log.size(); ++i)
+        {
+            if (log[i] == "recovered" && log[i - 1] != "gap")
+                gap_before_each_recovery = false;
+        }
+        return check(recovered_entries == 2 &&
+                         std::find(log.begin(), log.end(), "recovered-early") ==
+                             log.end(),
+                     "recovery fires only after the subscription is restored") &&
+               check(gap_before_each_recovery,
+                     "gap notification precedes each recovery");
+    }
+
     bool authentication_failure_tests()
     {
         websocket_test::LocalWebSocketServer server;
@@ -359,6 +428,7 @@ int main()
 {
     if (!protocol_tests()) return 1;
     if (!stream_tests()) return 1;
+    if (!recovery_ordering_tests()) return 1;
     if (!authentication_failure_tests()) return 1;
     std::cout << "user stream tests passed\n";
     return 0;

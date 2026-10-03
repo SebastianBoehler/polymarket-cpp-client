@@ -78,6 +78,12 @@ namespace polymarket
         if (runtime) runtime->on_stream_gap(std::move(callback));
     }
 
+    void UserStream::on_stream_recovered(UserStreamRecoveredCallback callback)
+    {
+        auto runtime = runtime_;
+        if (runtime) runtime->on_stream_recovered(std::move(callback));
+    }
+
     void UserStream::on_error(UserStreamErrorCallback callback)
     {
         auto runtime = runtime_;
