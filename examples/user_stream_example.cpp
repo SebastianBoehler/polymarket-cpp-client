@@ -73,12 +73,9 @@ int main(int argc, char **argv)
                               std::chrono::seconds(seconds_env ? std::atoi(seconds_env) : 60);
         while (std::chrono::steady_clock::now() < deadline && !stream.authentication_failed())
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        if (stream.authentication_failed())
-        {
-            stream.stop();
-            return 1;
-        }
         stream.stop();
+        if (stream.authentication_failed())
+            return 1;
         std::cout << "orders=" << stream.order_events()
                   << " trades=" << stream.trade_events() << '\n';
     }
