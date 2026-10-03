@@ -98,6 +98,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/arb_sizing.cpp
     src/bounded_workers.cpp
     src/decimal_math.cpp
+    src/evm_abi.cpp
     src/evm_cursor_io.cpp
     src/evm_cursor_store.cpp
     src/evm_event_dispatch.cpp
