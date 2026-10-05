@@ -104,7 +104,8 @@ the matching headers and libraries when upgrading; public type layouts changed.
 Public headers now live under `polymarket/`. Update includes such as
 `#include <http_client.hpp>` to `#include <polymarket/http_client.hpp>`.
 The CMake target remains `polymarket::client`. Rebuild consumers with the v3
-headers and libraries. Flat compatibility headers are not installed.
+headers and libraries. Flat compatibility headers are not installed. Use a clean install prefix;
+installing over v2 does not remove its old flat headers.
 
 ### v2 migration
 
