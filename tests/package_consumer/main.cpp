@@ -1,11 +1,18 @@
 #include <clob_client.hpp>
 #include <evm_event_indexer.hpp>
+#include <evm_abi.hpp>
+#include <evm_transaction.hpp>
 #include <http_client.hpp>
 #include <market_fetcher.hpp>
 #include <oracle_watcher.hpp>
 #include <orderbook.hpp>
 #include <polymarket/version.hpp>
+#include <polymarket_contracts.hpp>
+#include <position_client.hpp>
+#include <user_stream.hpp>
 #include <websocket_client.hpp>
+
+#include <stdexcept>
 
 int main()
 {
@@ -13,6 +20,19 @@ int main()
     {
         polymarket::HttpClient client;
         const polymarket::Config config;
+        const polymarket::PositionClientConfig position_config;
+        if (position_config.contracts.chain_id != 137 ||
+            polymarket::evm_function_selector("transfer(address,uint256)") != "0xa9059cbb")
+            return 1;
+        // The installed stream must link and reject absent credentials without connecting.
+        try
+        {
+            polymarket::UserStream stream(config, {});
+            return 1;
+        }
+        catch (const std::invalid_argument &)
+        {
+        }
         const polymarket::EvmEventIndexerConfig evm_config;
         const polymarket::OracleResolutionState oracle_state;
         const polymarket::WebSocketOptions websocket_options;

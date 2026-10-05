@@ -47,7 +47,7 @@ include(FetchContent)
 FetchContent_Declare(
     polymarket_client
     GIT_REPOSITORY https://github.com/SebastianBoehler/polymarket-cpp-client.git
-    GIT_TAG v2.0.0  # or any release tag
+    GIT_TAG v2.1.0  # or any release tag
 )
 FetchContent_MakeAvailable(polymarket_client)
 
@@ -61,14 +61,14 @@ Download pre-built binaries from [Releases](https://github.com/SebastianBoehler/
 
 ```bash
 # macOS
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v2.0.0/polymarket-cpp-client-macos-arm64.tar.gz
-mkdir -p polymarket-cpp-client-2.0.0
-tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C polymarket-cpp-client-2.0.0
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v2.1.0/polymarket-cpp-client-macos-arm64.tar.gz
+mkdir -p polymarket-cpp-client-2.1.0
+tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C polymarket-cpp-client-2.1.0
 
 # Linux
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v2.0.0/polymarket-cpp-client-linux-x64.tar.gz
-mkdir -p polymarket-cpp-client-2.0.0
-tar -xzf polymarket-cpp-client-linux-x64.tar.gz -C polymarket-cpp-client-2.0.0
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v2.1.0/polymarket-cpp-client-linux-x64.tar.gz
+mkdir -p polymarket-cpp-client-2.1.0
+tar -xzf polymarket-cpp-client-linux-x64.tar.gz -C polymarket-cpp-client-2.1.0
 ```
 
 Keep this as a dedicated prefix because the archive contains its pinned static
@@ -76,7 +76,7 @@ dependencies and headers. Then point CMake at it:
 
 ```cmake
 # Configure with:
-# cmake -S . -B build -DCMAKE_PREFIX_PATH=/absolute/path/to/polymarket-cpp-client-2.0.0
+# cmake -S . -B build -DCMAKE_PREFIX_PATH=/absolute/path/to/polymarket-cpp-client-2.1.0
 find_package(polymarket_client REQUIRED)
 target_link_libraries(your_target PRIVATE polymarket::client)
 ```
@@ -86,8 +86,8 @@ target_link_libraries(your_target PRIVATE polymarket::client)
 ```bash
 cmake -S . -B build -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON -DPOLYMARKET_CLIENT_BUILD_TESTS=ON
 cmake --build build --parallel
-# optional tests
-ctest --test-dir build
+# offline tests
+ctest --test-dir build --output-on-failure -LE live
 # optional benchmarks
 cmake -S . -B build -DPOLYMARKET_CLIENT_BUILD_BENCHMARKS=ON
 # install (into system or a prefix you configure)
@@ -95,6 +95,9 @@ cmake --install build --prefix <install_prefix>
 ```
 
 ## Version Info
+
+See the [v2.1.0 release notes](docs/releases/v2.1.0.md). Rebuild consumers with
+the matching headers and libraries when upgrading; public type layouts changed.
 
 ### v2 migration
 
