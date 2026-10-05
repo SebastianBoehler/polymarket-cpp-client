@@ -15,6 +15,48 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_utils PRIVATE polymarket::client)
     add_test(NAME test_utils COMMAND test_utils)
 
+    add_executable(test_evm_abi tests/test_evm_abi.cpp)
+    target_link_libraries(test_evm_abi PRIVATE polymarket::client)
+    add_test(NAME test_evm_abi COMMAND test_evm_abi)
+
+    add_executable(test_evm_abi_shapes tests/test_evm_abi_shapes.cpp)
+    target_link_libraries(test_evm_abi_shapes PRIVATE polymarket::client)
+    add_test(NAME test_evm_abi_shapes COMMAND test_evm_abi_shapes)
+
+    add_executable(test_evm_transaction tests/test_evm_transaction.cpp)
+    target_include_directories(test_evm_transaction PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_evm_transaction PRIVATE polymarket::client)
+    add_test(NAME test_evm_transaction COMMAND test_evm_transaction)
+
+    add_executable(test_polymarket_contracts tests/test_polymarket_contracts.cpp)
+    target_link_libraries(test_polymarket_contracts PRIVATE polymarket::client)
+    add_test(NAME test_polymarket_contracts COMMAND test_polymarket_contracts)
+
+    add_executable(test_position_client tests/test_position_client.cpp)
+    target_include_directories(test_position_client PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_position_client PRIVATE polymarket::client)
+    add_test(NAME test_position_client COMMAND test_position_client)
+
+    add_executable(test_position_calls tests/test_position_calls.cpp)
+    target_include_directories(test_position_calls PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_position_calls PRIVATE polymarket::client)
+    add_test(NAME test_position_calls COMMAND test_position_calls)
+
+    add_executable(test_transaction_waiters tests/test_transaction_waiters.cpp)
+    target_include_directories(test_transaction_waiters PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_transaction_waiters PRIVATE polymarket::client)
+    add_test(NAME test_transaction_waiters COMMAND test_transaction_waiters)
+
+    add_executable(test_safe_relayer tests/test_safe_relayer.cpp)
+    target_include_directories(test_safe_relayer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_safe_relayer PRIVATE polymarket::client)
+    add_test(NAME test_safe_relayer COMMAND test_safe_relayer)
+
+    add_executable(test_safe_relayer_flows tests/test_safe_relayer_flows.cpp)
+    target_include_directories(test_safe_relayer_flows PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_safe_relayer_flows PRIVATE polymarket::client)
+    add_test(NAME test_safe_relayer_flows COMMAND test_safe_relayer_flows)
+
     add_executable(test_evm_events tests/test_evm_events.cpp)
     target_link_libraries(test_evm_events PRIVATE polymarket::client)
     add_test(NAME test_evm_events COMMAND test_evm_events)
@@ -30,6 +72,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     add_executable(test_json_rpc_http_integrity tests/test_json_rpc_http_integrity.cpp)
     target_link_libraries(test_json_rpc_http_integrity PRIVATE polymarket::client)
     add_test(NAME test_json_rpc_http_integrity COMMAND test_json_rpc_http_integrity)
+
+    add_executable(test_json_rpc_transactions tests/test_json_rpc_transactions.cpp)
+    target_link_libraries(test_json_rpc_transactions PRIVATE polymarket::client)
+    add_test(NAME test_json_rpc_transactions COMMAND test_json_rpc_transactions)
 
     add_executable(test_json_rpc_ws_owner_reset tests/test_json_rpc_ws_owner_reset.cpp)
     target_include_directories(test_json_rpc_ws_owner_reset PRIVATE

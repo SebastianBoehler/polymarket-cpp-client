@@ -3,6 +3,7 @@
 #include "market_fetcher.hpp"
 #include "order_signer.hpp"
 #include "order_signer_auth_internal.hpp"
+#include "polymarket_contracts.hpp"
 
 #include <nlohmann/json.hpp>
 #include <charconv>
@@ -16,9 +17,12 @@ namespace polymarket
 {
     using detail::percent_encode_query_value;
 
-    // Exchange addresses for Polygon mainnet
-    static const std::string EXCHANGE_ADDRESS = "0xE111180000d2663C0091e4f400237545B87B996B";
-    static const std::string NEG_RISK_EXCHANGE_ADDRESS = "0xe2222d279d744050d28e00520010520000310F59";
+    static const PolymarketContracts &mainnet_contracts()
+    {
+        static const PolymarketContracts contracts = PolymarketContracts::polygon_mainnet();
+        return contracts;
+    }
+
     static constexpr const char *DATA_API_URL = "https://data-api.polymarket.com";
 
     static int validated_chain_id(int chain_id)
@@ -155,12 +159,12 @@ namespace polymarket
 
     std::string ClobClient::get_exchange_address() const
     {
-        return EXCHANGE_ADDRESS;
+        return mainnet_contracts().standard_exchange;
     }
 
     std::string ClobClient::get_neg_risk_exchange_address() const
     {
-        return NEG_RISK_EXCHANGE_ADDRESS;
+        return mainnet_contracts().neg_risk_exchange;
     }
 
     bool ClobClient::warm_connection()
