@@ -81,9 +81,13 @@ several calls:
 
 - **Safe:** one atomic transaction (a `DELEGATECALL` into Safe MultiSend).
 - **EOA:** one transaction per call, each mined before the next is sent. This
-  is **not atomic**: if one reverts, `TransactionRevertedError` is thrown,
-  earlier merges stay done and later ones are not sent.
-  `handle.transaction_hashes()` lists every transaction sent.
+  is **not atomic**: earlier merges stay done and later ones are not sent.
+  `handle.transaction_hashes()` lists every transaction sent. If a call fails
+  after an earlier one reached the node (a revert, a failed gas estimate, an
+  RPC error), `PartialBatchError` is thrown: `submitted_hashes()` lists the
+  transactions already sent, `failed_call_index()` the call that failed, and
+  `cause()` holds the original exception (for example
+  `TransactionRevertedError`).
 
 ## Waiting for results
 

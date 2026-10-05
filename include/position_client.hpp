@@ -5,6 +5,7 @@
 #include "polymarket_contracts.hpp"
 #include <array>
 #include <chrono>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <stdexcept>
@@ -59,6 +60,27 @@ namespace polymarket
 
     private:
         std::string transaction_reference_;
+    };
+
+    // Thrown when an EOA batch fails after at least one of its transactions
+    // reached the node. Those transactions are not rolled back.
+    class PartialBatchError : public std::runtime_error
+    {
+    public:
+        PartialBatchError(std::vector<std::string> submitted_hashes, size_t failed_call_index, size_t call_count,
+                          std::exception_ptr cause, const std::string &cause_message);
+        // One hash per call that reached the node, in call order. When it has
+        // more than failed_call_index() entries, the failing call was sent and
+        // then reverted or timed out while waiting to be mined.
+        const std::vector<std::string> &submitted_hashes() const { return submitted_hashes_; }
+        size_t failed_call_index() const { return failed_call_index_; }
+        // The original error; std::rethrow_exception(cause()) to inspect its type.
+        std::exception_ptr cause() const { return cause_; }
+
+    private:
+        std::vector<std::string> submitted_hashes_;
+        size_t failed_call_index_;
+        std::exception_ptr cause_;
     };
 
     struct TransactionOutcome
@@ -174,8 +196,8 @@ namespace polymarket
         // Merges several conditions. A Safe batches them into one atomic
         // MultiSend transaction. An EOA is not atomic: one transaction per
         // condition, each mined before the next is sent, and the handle tracks
-        // the last one; if an earlier one reverts, TransactionRevertedError is
-        // thrown and the remaining merges are not sent.
+        // the last one; if a merge fails after an earlier one was sent,
+        // PartialBatchError is thrown and the remaining merges are not sent.
         TransactionHandle merge_multiple_positions(const std::vector<MergePositionRequest> &requests);
 
         // Redeem every resolved position the wallet holds in a closed market.

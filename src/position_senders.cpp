@@ -95,10 +95,21 @@ namespace polymarket
         std::vector<std::string> hashes;
         for (size_t i = 0; i < calls.size(); ++i)
         {
-            hashes.push_back(send_from_eoa(calls[i]));
-            // Later calls may depend on earlier ones, so each must land first.
-            if (i + 1 < calls.size())
-                (void)detail::wait_for_receipt(*rpc, hashes.back(), std::chrono::minutes(3), std::chrono::seconds(2));
+            try
+            {
+                hashes.push_back(send_from_eoa(calls[i]));
+                // Later calls may depend on earlier ones, so each must land first.
+                if (i + 1 < calls.size())
+                    (void)detail::wait_for_receipt(*rpc, hashes.back(), std::chrono::minutes(3),
+                                                   std::chrono::seconds(2));
+            }
+            catch (const std::exception &error)
+            {
+                // Nothing on chain yet: the original error is the whole story.
+                if (hashes.empty())
+                    throw;
+                throw PartialBatchError(hashes, i, calls.size(), std::current_exception(), error.what());
+            }
         }
         auto rpc_client = rpc;
         auto last = hashes.back();

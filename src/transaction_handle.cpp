@@ -81,6 +81,28 @@ namespace polymarket
     {
     }
 
+    namespace
+    {
+        std::string partial_batch_message(const std::vector<std::string> &hashes, size_t failed_call_index,
+                                          size_t call_count, const std::string &cause_message)
+        {
+            std::string message = "EOA batch failed at call " + std::to_string(failed_call_index) + " of " +
+                                  std::to_string(call_count) + " after submitting";
+            for (size_t i = 0; i < hashes.size(); ++i)
+                message += (i == 0 ? " " : ", ") + hashes[i];
+            return message + ": " + cause_message;
+        }
+    } // namespace
+
+    PartialBatchError::PartialBatchError(std::vector<std::string> submitted_hashes, size_t failed_call_index,
+                                         size_t call_count, std::exception_ptr cause,
+                                         const std::string &cause_message)
+        : std::runtime_error(partial_batch_message(submitted_hashes, failed_call_index, call_count, cause_message)),
+          submitted_hashes_(std::move(submitted_hashes)), failed_call_index_(failed_call_index),
+          cause_(std::move(cause))
+    {
+    }
+
     TransactionHandle::TransactionHandle(std::vector<std::string> transaction_hashes, std::string transaction_id,
                                          Waiter waiter)
         : transaction_hashes_(std::move(transaction_hashes)), transaction_id_(std::move(transaction_id)),

@@ -132,6 +132,51 @@ namespace
         check(h.rpc_count("eth_sendRawTransaction") == 0, "nothing sent after failed estimate");
     }
 
+    void batch_failure_reports_submitted_hashes()
+    {
+        Harness h;
+        h.market(kCondition);
+        expect_rpc(h.node, "eth_call", balances_result("10", "20"));
+        h.market(kCondition2, "v2");
+        expect_rpc(h.node, "eth_call", balances_result("4", "4"));
+        expect_transaction(h.node, kContracts.collateral_adapter,
+                           detail::ctf_merge_positions_call(kContracts.collateral_adapter, kContracts.collateral_token,
+                                                            kCondition, "10")
+                               .data,
+                           true);
+        std::string first_hash;
+        expect_rpc(h.node, "eth_getTransactionReceipt", [&first_hash](const nlohmann::json &params)
+                   {
+            first_hash = params.at(0).get<std::string>();
+            return receipt(first_hash, true); });
+        // The second call's gas estimate reverts.
+        expect_rpc(h.node, "eth_getTransactionCount", "0x8");
+        expect_rpc(h.node, "eth_gasPrice", "0x1");
+        h.node.enqueue([](const clob_test::Request &request)
+                       {
+            const auto id = nlohmann::json::parse(request.body).at("id");
+            return nlohmann::json{{"jsonrpc", "2.0"}, {"id", id},
+                                  {"error", {{"code", 3}, {"message", "execution reverted: insufficient balance"}}}}.dump(); });
+        try
+        {
+            (void)h.client.merge_multiple_positions({{kCondition, "max"}, {kCondition2, "2"}});
+            check(false, "batch failure must throw");
+        }
+        catch (const PartialBatchError &error)
+        {
+            const std::string what = error.what();
+            check(error.failed_call_index() == 1, "failed call index " + std::to_string(error.failed_call_index()));
+            check(error.submitted_hashes() == std::vector<std::string>{first_hash},
+                  "submitted hashes must list the mined first transaction");
+            check(what.find(first_hash) != std::string::npos && what.find("call 1 of 2") != std::string::npos &&
+                      what.find("insufficient balance") != std::string::npos,
+                  "batch error message: " + what);
+            expect_throws<std::runtime_error>("cause is the RPC error", [&]
+                                              { std::rethrow_exception(error.cause()); });
+        }
+        check(h.rpc_count("eth_sendRawTransaction") == 1, "second transaction not sent");
+    }
+
     void merge_flows()
     {
         Harness h;
@@ -223,6 +268,7 @@ int main()
     split_flow();
     wrong_chain_sends_nothing();
     estimate_failure_sends_nothing();
+    batch_failure_reports_submitted_hashes();
     merge_flows();
     redeem_flows();
     config_validation();
