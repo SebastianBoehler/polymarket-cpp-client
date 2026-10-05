@@ -43,7 +43,7 @@ jobs:
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPOLYMARKET_CLIENT_BUILD_TESTS=ON
       - name: Build and configure installed consumer
         run: |
-          cmake --build build --target polymarket_client --parallel 2
+          cmake --build build --target polymarket_client ethash --parallel 2
           ctest --test-dir build --output-on-failure -R '^test_package_consumer$'
       - name: Check changed files
         env:
