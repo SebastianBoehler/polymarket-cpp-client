@@ -9,7 +9,19 @@ namespace polymarket
         std::chrono::milliseconds remaining(std::chrono::steady_clock::time_point deadline)
         {
             return std::max(std::chrono::milliseconds::zero(),
-                            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()));
+                            std::chrono::ceil<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()));
+        }
+
+        // Sleeps until the next poll, never past the deadline, so a timeout
+        // shorter than the poll interval still gets a final poll at the
+        // deadline. Returns false once the deadline has passed.
+        bool sleep_before_next_poll(std::chrono::steady_clock::time_point deadline,
+                                    std::chrono::milliseconds poll_interval)
+        {
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            std::this_thread::sleep_for(std::min(poll_interval, remaining(deadline)));
+            return true;
         }
     } // namespace
 
@@ -28,9 +40,8 @@ namespace polymarket
                         throw TransactionRevertedError(transaction_hash, std::move(*receipt));
                     return {transaction_hash, "", std::move(*receipt)};
                 }
-                if (std::chrono::steady_clock::now() + poll_interval > deadline)
+                if (!sleep_before_next_poll(deadline, poll_interval))
                     throw TransactionTimeoutError(transaction_hash);
-                std::this_thread::sleep_for(poll_interval);
             }
         }
 
@@ -54,9 +65,8 @@ namespace polymarket
                 }
                 if (tx.state == "STATE_FAILED" || tx.state == "STATE_INVALID")
                     throw TransactionFailedError(transaction_id, tx.state, tx.error_message);
-                if (std::chrono::steady_clock::now() + poll_interval > deadline)
+                if (!sleep_before_next_poll(deadline, poll_interval))
                     throw TransactionTimeoutError(tx.transaction_hash.empty() ? transaction_id : tx.transaction_hash);
-                std::this_thread::sleep_for(poll_interval);
             }
         }
     } // namespace detail

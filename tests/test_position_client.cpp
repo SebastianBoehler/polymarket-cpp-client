@@ -88,7 +88,7 @@ namespace
         expect_rpc(h.node, "eth_getTransactionReceipt", receipt(handle.transaction_hash(), false));
         expect_throws<TransactionRevertedError>("reverted wait", [&]
                                                 { (void)handle.wait(std::chrono::seconds(5), kFast); });
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < 4; ++i) // polls at 0, 10, 20 and the 25 ms deadline
             expect_rpc(h.node, "eth_getTransactionReceipt", nlohmann::json());
         expect_throws<TransactionTimeoutError>("wait timeout", [&]
                                                { (void)handle.wait(std::chrono::milliseconds(25), kFast); });
