@@ -87,6 +87,25 @@ namespace
                   v2.operator_contract == kContracts.protocol_v2_router,
               "v2 market context");
 
+        // A bytes31 V2 id (py-sdk form) matches Gamma's id in either form and keeps Gamma's.
+        const auto bytes31 = kCondition2.substr(0, 64);
+        const auto v2_short = detail::market_context_from_gamma(gamma_market(bytes31, "v2", false), bytes31, kContracts);
+        check(v2_short.protocol == MarketProtocol::V2 && v2_short.condition_id == bytes31,
+              "bytes31 request and bytes31 Gamma id");
+        const auto v2_padded = detail::market_context_from_gamma(gamma_market(kCondition2, "v2", false), bytes31, kContracts);
+        check(v2_padded.condition_id == kCondition2, "bytes31 request and bytes32 Gamma id");
+        const auto v2_from_long = detail::market_context_from_gamma(gamma_market(bytes31, "v2", false), kCondition2, kContracts);
+        check(v2_from_long.condition_id == bytes31, "bytes32 request and bytes31 Gamma id");
+        expect_throws<std::invalid_argument>("bytes31 request for a v1 market", [&]
+                                             { (void)detail::market_context_from_gamma(
+                                                   gamma_market(kCondition.substr(0, 64), "v1", false),
+                                                   kCondition.substr(0, 64), kContracts); });
+        expect_throws<std::runtime_error>("bytes31 request for another market", [&]
+                                          { (void)detail::market_context_from_gamma(
+                                                gamma_market(kCondition2, "v2", false), "0x" + std::string(62, 'd'), kContracts); });
+        expect_throws<std::invalid_argument>("30-byte condition id", []
+                                             { (void)detail::normalize_requested_condition_id("0x" + std::string(60, 'c')); });
+
         expect_throws<std::invalid_argument>("no market", [&]
                                              { (void)detail::market_context_from_gamma(nlohmann::json::array(), kCondition, kContracts); });
         const auto rejects = [&](const std::string &name, const std::function<void(nlohmann::json &)> &mutate)

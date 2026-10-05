@@ -18,6 +18,10 @@ namespace polymarket::detail
     // outcome index (00 or 01) is truncated, as in the official SDKs.
     std::string v2_condition_id_bytes31(const std::string &condition_id);
 
+    // Condition id as given to the public methods: bytes32, or a bytes31
+    // Protocol V2 id. Returns it lowercased.
+    std::string normalize_requested_condition_id(const std::string &condition_id);
+
     ContractCall ctf_split_position_call(const std::string &adapter, const std::string &collateral,
                                          const std::string &condition_id, const std::string &amount);
     ContractCall ctf_merge_positions_call(const std::string &adapter, const std::string &collateral,

@@ -15,6 +15,9 @@ official Python SDK.
 Amounts are integer base units as base-10 strings. pUSD and outcome shares
 both use 6 decimals, so `"1000000"` is 1 pUSD or 1 share.
 
+`condition_id` is `0x` plus 32 bytes of hex. A Protocol V2 market may also be
+given by its 31-byte (bytes31) id; it is passed to Gamma as given.
+
 ## Wallets
 
 ```cpp

@@ -22,7 +22,7 @@ namespace polymarket
 
     MarketPositionContext PositionClient::resolve_market(const std::string &condition_id, bool closed_only)
     {
-        const auto normalized = detail::normalize_condition_id(condition_id);
+        const auto normalized = detail::normalize_requested_condition_id(condition_id);
         std::string path = "/markets?condition_ids=" + normalized;
         if (closed_only)
             path += "&closed=true";
@@ -87,13 +87,17 @@ namespace polymarket
         std::set<std::string> seen;
         for (const auto &request : requests)
         {
-            if (!seen.insert(detail::normalize_condition_id(request.condition_id)).second)
+            if (!seen.insert(detail::normalize_requested_condition_id(request.condition_id)).second)
                 throw std::invalid_argument("merge requests must reference distinct conditions");
         }
+        // bytes31 and bytes32 forms of one V2 condition only meet after Gamma resolves them.
+        std::set<std::string> resolved_conditions;
         std::vector<ContractCall> calls;
         for (const auto &request : requests)
         {
             const auto market = resolve_market(request.condition_id);
+            if (!resolved_conditions.insert(market.condition_id).second)
+                throw std::invalid_argument("merge requests must reference distinct conditions");
             const auto resolved =
                 detail::resolve_merge_amount(market.condition_id, position_balances(market), request.amount);
             calls.push_back(detail::merge_call(market, impl_->contracts, resolved));

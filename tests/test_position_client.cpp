@@ -97,6 +97,29 @@ namespace
                                              { (void)h.client.split_position(kCondition, "0"); });
     }
 
+    // bytes31 V2 ids, as in py-sdk test_relayer_position_workflows; Gamma gets the id as given.
+    void v2_bytes31_condition_id()
+    {
+        Harness h;
+        const std::string bytes31 = "0x01" + std::string(60, '4');
+        h.market(bytes31, "v2");
+        expect_transaction(h.node, kContracts.protocol_v2_router,
+                           detail::router_split_call(kContracts.protocol_v2_router, bytes31, "5").data, true);
+        (void)h.client.split_position(bytes31, "5");
+        h.market(bytes31, "v2");
+        expect_rpc(h.node, "eth_call", balances_result("100", "60"));
+        expect_transaction(h.node, kContracts.protocol_v2_router,
+                           detail::router_merge_call(kContracts.protocol_v2_router, bytes31, "60").data, false);
+        (void)h.client.merge_positions(bytes31, "max");
+        for (const auto &request : h.gamma.requests())
+            check(request.target == "/markets?condition_ids=" + bytes31, "Gamma lookup target " + request.target);
+        h.market(bytes31, "v2");
+        expect_rpc(h.node, "eth_call", balances_result("1", "1"));
+        h.market(bytes31, "v2");
+        expect_throws<std::invalid_argument>("bytes31 and bytes32 forms of one condition", [&]
+                                             { (void)h.client.merge_multiple_positions({{bytes31, "1"}, {bytes31 + "00", "1"}}); });
+    }
+
     void wrong_chain_sends_nothing()
     {
         Harness h;
@@ -266,6 +289,7 @@ namespace
 int main()
 {
     split_flow();
+    v2_bytes31_condition_id();
     wrong_chain_sends_nothing();
     estimate_failure_sends_nothing();
     batch_failure_reports_submitted_hashes();

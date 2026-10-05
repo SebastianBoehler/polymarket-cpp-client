@@ -171,6 +171,7 @@ namespace polymarket
     // Split, merge and redeem binary market positions (CTF and Protocol V2
     // markets) held by an EOA or a Polymarket Gnosis Safe. Amounts are integer
     // base units (pUSD and outcome tokens use 6 decimals) as base-10 strings.
+    // condition_id is 0x + 32 bytes of hex, or 31 bytes for a Protocol V2 market.
     //
     // Approvals are not checked: split needs a pUSD allowance for the operator
     // contract, and merge/redeem need ERC-1155 approval for it.
