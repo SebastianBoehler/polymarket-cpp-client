@@ -1,8 +1,8 @@
 #pragma once
 
-#include "http_client.hpp"
-#include "order_signer.hpp"
-#include "position_client.hpp"
+#include "polymarket/http_client.hpp"
+#include "polymarket/order_signer.hpp"
+#include "polymarket/position_client.hpp"
 #include "safe_relayer.hpp"
 #include <chrono>
 #include <memory>

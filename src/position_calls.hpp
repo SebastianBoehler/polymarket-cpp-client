@@ -1,7 +1,7 @@
 #pragma once
 
-#include "polymarket_contracts.hpp"
-#include "position_client.hpp"
+#include "polymarket/polymarket_contracts.hpp"
+#include "polymarket/position_client.hpp"
 #include <array>
 #include <nlohmann/json.hpp>
 #include <string>

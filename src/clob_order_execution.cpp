@@ -1,6 +1,6 @@
-#include "clob_client.hpp"
+#include "polymarket/clob_client.hpp"
 #include "order_execution.hpp"
-#include "order_signer.hpp"
+#include "polymarket/order_signer.hpp"
 #include <stdexcept>
 
 namespace polymarket

@@ -1,5 +1,5 @@
-#include "polymarket_contracts.hpp"
-#include "order_signer.hpp"
+#include "polymarket/polymarket_contracts.hpp"
+#include "polymarket/order_signer.hpp"
 #include <stdexcept>
 #include <utility>
 #include <vector>

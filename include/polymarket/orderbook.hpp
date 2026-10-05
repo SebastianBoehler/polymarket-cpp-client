@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.hpp"
+#include "polymarket/types.hpp"
 #include <functional>
 #include <cstdint>
 #include <memory>

@@ -1,5 +1,5 @@
-#include "oracle_watcher.hpp"
-#include "polymarket_events.hpp"
+#include "polymarket/oracle_watcher.hpp"
+#include "polymarket/polymarket_events.hpp"
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>

@@ -1,10 +1,10 @@
 #pragma once
 
 #include "check_support.hpp"
-#include "evm_abi.hpp"
-#include "order_signer.hpp"
+#include "polymarket/evm_abi.hpp"
+#include "polymarket/order_signer.hpp"
 #include "position_calls.hpp"
-#include "position_client.hpp"
+#include "polymarket/position_client.hpp"
 #include "../src/clob_client_test_fixture.hpp"
 
 #include <functional>

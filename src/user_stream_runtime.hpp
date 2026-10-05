@@ -1,8 +1,8 @@
 #pragma once
 
-#include "user_stream.hpp"
+#include "polymarket/user_stream.hpp"
 #include "user_stream_protocol.hpp"
-#include "websocket_client.hpp"
+#include "polymarket/websocket_client.hpp"
 
 #include <atomic>
 #include <memory>

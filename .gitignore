@@ -20,3 +20,7 @@ node_modules/
 
 # Project-local agent learnings
 .learnings/
+
+# Local quality tools
+.venv-quality/
+__pycache__/

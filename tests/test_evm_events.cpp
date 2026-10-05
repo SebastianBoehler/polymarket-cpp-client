@@ -1,5 +1,5 @@
-#include "evm_utils.hpp"
-#include "polymarket_events.hpp"
+#include "polymarket/evm_utils.hpp"
+#include "polymarket/polymarket_events.hpp"
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>

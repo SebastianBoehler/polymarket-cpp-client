@@ -1,8 +1,8 @@
-#include "http_client.hpp"
-#include "clob_types.hpp"
-#include "order_signer.hpp"
-#include "sdk_error.hpp"
-#include "types.hpp"
+#include "polymarket/http_client.hpp"
+#include "polymarket/clob_types.hpp"
+#include "polymarket/order_signer.hpp"
+#include "polymarket/sdk_error.hpp"
+#include "polymarket/types.hpp"
 
 #include <iostream>
 #include <map>
@@ -12,7 +12,7 @@
 #include <vector>
 
 #define private public
-#include "clob_client.hpp"
+#include "polymarket/clob_client.hpp"
 #undef private
 
 using namespace polymarket;

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "clob_client.hpp"
-#include "market_fetcher.hpp"
-#include "orderbook.hpp"
+#include "polymarket/clob_client.hpp"
+#include "polymarket/market_fetcher.hpp"
+#include "polymarket/orderbook.hpp"
 
 #include <cstdint>
 #include <optional>

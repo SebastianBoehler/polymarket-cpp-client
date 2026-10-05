@@ -1,7 +1,7 @@
 #pragma once
 
-#include "json_rpc_client.hpp"
-#include "polymarket_events.hpp"
+#include "polymarket/json_rpc_client.hpp"
+#include "polymarket/polymarket_events.hpp"
 #include <atomic>
 #include <chrono>
 #include <csignal>

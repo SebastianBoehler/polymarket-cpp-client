@@ -1,4 +1,4 @@
-#include "json_rpc_client.hpp"
+#include "polymarket/json_rpc_client.hpp"
 #include "websocket_test_server.hpp"
 
 #include <atomic>

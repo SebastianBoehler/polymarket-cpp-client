@@ -1,8 +1,8 @@
 #pragma once
 
-#include "http_client.hpp"
-#include "polymarket_contracts.hpp"
-#include "position_client.hpp"
+#include "polymarket/http_client.hpp"
+#include "polymarket/polymarket_contracts.hpp"
+#include "polymarket/position_client.hpp"
 #include <array>
 #include <cstdint>
 #include <map>

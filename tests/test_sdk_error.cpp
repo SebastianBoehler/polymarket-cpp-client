@@ -1,5 +1,5 @@
-#include "clob_client.hpp"
-#include "sdk_error.hpp"
+#include "polymarket/clob_client.hpp"
+#include "polymarket/sdk_error.hpp"
 
 #include <iostream>
 #include <string>

@@ -1,6 +1,6 @@
 # On-Chain Position Operations
 
-`PositionClient` (`include/position_client.hpp`) splits, merges and redeems
+`PositionClient` (`include/polymarket/position_client.hpp`) splits, merges and redeems
 binary market positions on Polygon, matching `split_position`,
 `merge_positions`, `merge_multiple_positions` and `redeem_positions` in the
 official Python SDK.
@@ -21,7 +21,7 @@ given by its 31-byte (bytes31) id; it is passed to Gamma as given.
 ## Wallets
 
 ```cpp
-#include "position_client.hpp"
+#include "polymarket/position_client.hpp"
 
 polymarket::PositionClientConfig config;
 config.private_key = std::getenv("PRIVATE_KEY");

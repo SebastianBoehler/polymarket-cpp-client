@@ -1,6 +1,6 @@
 #pragma once
 
-#include "evm_event_indexer.hpp"
+#include "polymarket/evm_event_indexer.hpp"
 #include <string_view>
 
 namespace polymarket::detail

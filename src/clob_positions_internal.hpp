@@ -1,7 +1,7 @@
 #pragma once
 
-#include "clob_types.hpp"
-#include "http_client.hpp"
+#include "polymarket/clob_types.hpp"
+#include "polymarket/http_client.hpp"
 
 #include <functional>
 #include <string>

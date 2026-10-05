@@ -1,4 +1,4 @@
-#include "evm_event_indexer.hpp"
+#include "polymarket/evm_event_indexer.hpp"
 #include "evm_indexer_adversarial_tests.hpp"
 #include "evm_indexer_delivery_tests.hpp"
 #include "evm_indexer_handoff_overflow_tests.hpp"

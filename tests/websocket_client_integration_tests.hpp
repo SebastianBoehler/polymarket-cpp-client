@@ -1,6 +1,6 @@
 #pragma once
 
-#include "websocket_client.hpp"
+#include "polymarket/websocket_client.hpp"
 #include "websocket_callback_exception_tests.hpp"
 #include "websocket_owner_reset_tests.hpp"
 #include "websocket_test_server.hpp"

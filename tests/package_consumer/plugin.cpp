@@ -1,4 +1,4 @@
-#include <http_client.hpp>
+#include <polymarket/http_client.hpp>
 
 extern "C" int polymarket_package_plugin_probe()
 {

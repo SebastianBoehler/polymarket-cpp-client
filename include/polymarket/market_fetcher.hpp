@@ -1,7 +1,7 @@
 #pragma once
 
-#include "types.hpp"
-#include "http_client.hpp"
+#include "polymarket/types.hpp"
+#include "polymarket/http_client.hpp"
 #include <vector>
 #include <optional>
 #include <utility>

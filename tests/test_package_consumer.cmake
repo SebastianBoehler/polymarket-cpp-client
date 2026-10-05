@@ -12,6 +12,18 @@ if(NOT install_result EQUAL 0)
     message(FATAL_ERROR "installing the package failed")
 endif()
 
+file(GLOB flat_public_headers "${install_dir}/include/*.hpp")
+if(flat_public_headers)
+    message(FATAL_ERROR "SDK public headers must install under include/polymarket")
+endif()
+file(GLOB public_headers "${SOURCE_DIR}/include/polymarket/*.hpp")
+foreach(public_header IN LISTS public_headers)
+    get_filename_component(header_name "${public_header}" NAME)
+    if(NOT EXISTS "${install_dir}/include/polymarket/${header_name}")
+        message(FATAL_ERROR "installed package is missing public header: ${header_name}")
+    endif()
+endforeach()
+
 file(GLOB_RECURSE installed_cmake_files
     "${install_dir}/lib/cmake/*.cmake")
 foreach(installed_cmake_file IN LISTS installed_cmake_files)
@@ -39,6 +51,7 @@ execute_process(
         -S "${SOURCE_DIR}/tests/package_consumer"
         -B "${consumer_build_dir}"
         -DCMAKE_PREFIX_PATH=${install_dir}
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     RESULT_VARIABLE configure_result
 )
 if(NOT configure_result EQUAL 0)

@@ -1,0 +1,40 @@
+# Working in this repository
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing code or preparing commits.
+It defines coding rules, commit names, validation, and the completion criteria.
+
+## Start here
+
+1. Check the current branch, diff, and untracked files. Preserve other work.
+2. State the working assumption and success check for larger or ambiguous tasks.
+3. Read the affected public headers under `include/polymarket/`, implementation, and existing tests before editing.
+4. Keep the diff within the requested scope and match the surrounding C++ style.
+5. Run the narrowest meaningful check, then report the command and actual result.
+
+Concurrent work is common. Continue around unrelated changes without resetting,
+removing, or reformatting them. When asked to commit all work, review every tracked
+and untracked change and create logical commit groups.
+
+## Load these references when relevant
+
+- Protocol, signing, transactions, numeric parsing, or stream lifecycle changes:
+  read [docs/protocol-development.md](docs/protocol-development.md).
+- Position operations or wallet support: also read
+  [docs/position-operations.md](docs/position-operations.md).
+- Versions, tags, release packages, or publication: read
+  [docs/releasing.md](docs/releasing.md) and `.github/workflows/release.yml`.
+- Test registration and example targets: inspect `cmake/PolymarketTests.cmake`
+  and `cmake/PolymarketExamples.cmake`.
+
+## Authorization and reporting
+
+A request to investigate or draft permits local preparation. Publishing comments,
+pushing commits, merging PRs, and publishing releases require authorization from
+the user. Carry forward authorization already given in the conversation.
+
+Live orders, approvals, and funded transactions require explicit authorization.
+Use deterministic tests and read-only inspection for routine validation.
+
+Distinguish prepared changes, passing local checks, passing CI, and published
+artifacts. Report skipped checks and the precise reason. Keep contributor
+messages natural and concise. Do not use em dashes.

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "clob_types.hpp"
-#include "order_signer.hpp"
-#include "types.hpp"
+#include "polymarket/clob_types.hpp"
+#include "polymarket/order_signer.hpp"
+#include "polymarket/types.hpp"
 
 #include <cstdint>
 #include <functional>

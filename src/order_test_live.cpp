@@ -1,7 +1,7 @@
 #include "order_test_live.hpp"
 
-#include "clob_client.hpp"
-#include "http_client.hpp"
+#include "polymarket/clob_client.hpp"
+#include "polymarket/http_client.hpp"
 
 #include <nlohmann/json.hpp>
 

@@ -6,7 +6,7 @@ if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 
-project(polymarket_cpp_client VERSION 2.0.0 LANGUAGES CXX C)
+project(polymarket_cpp_client VERSION 3.0.0 LANGUAGES CXX C)
 
 if(PROJECT_IS_TOP_LEVEL)
     set(CMAKE_CXX_STANDARD 20)

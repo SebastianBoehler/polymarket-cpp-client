@@ -1,5 +1,5 @@
-#include "evm_event_indexer.hpp"
-#include "json_rpc_client.hpp"
+#include "polymarket/evm_event_indexer.hpp"
+#include "polymarket/json_rpc_client.hpp"
 #include "../src/clob_client_test_fixture.hpp"
 
 #include <functional>

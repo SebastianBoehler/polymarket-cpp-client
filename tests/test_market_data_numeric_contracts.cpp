@@ -1,6 +1,6 @@
-#include "clob_client.hpp"
+#include "polymarket/clob_client.hpp"
 #include "clob_client_test_fixture.hpp"
-#include "market_fetcher.hpp"
+#include "polymarket/market_fetcher.hpp"
 
 #include <cmath>
 #include <iostream>

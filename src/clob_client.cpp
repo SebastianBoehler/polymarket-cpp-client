@@ -1,9 +1,9 @@
-#include "clob_client.hpp"
+#include "polymarket/clob_client.hpp"
 #include "clob_client_internal.hpp"
-#include "market_fetcher.hpp"
-#include "order_signer.hpp"
+#include "polymarket/market_fetcher.hpp"
+#include "polymarket/order_signer.hpp"
 #include "order_signer_auth_internal.hpp"
-#include "polymarket_contracts.hpp"
+#include "polymarket/polymarket_contracts.hpp"
 
 #include <nlohmann/json.hpp>
 #include <charconv>

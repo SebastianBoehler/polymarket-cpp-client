@@ -1,5 +1,5 @@
-#include "order_signer.hpp"
-#include "http_client.hpp"
+#include "polymarket/order_signer.hpp"
+#include "polymarket/http_client.hpp"
 #include "order_signer_auth_internal.hpp"
 
 #include <chrono>

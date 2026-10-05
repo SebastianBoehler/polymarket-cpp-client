@@ -46,6 +46,7 @@ jobs:
           package_version="${version%%-*}"
           grep -Eq "project\(polymarket_cpp_client VERSION ${package_version//./\\.} LANGUAGES" CMakeLists.txt
           grep -Fq "#define POLYMARKET_CLIENT_VERSION \"$package_version\"" include/polymarket/version.hpp
+          test -s "docs/releases/$tag.md"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
 
@@ -69,7 +70,7 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
 
       - name: Build
-        run: cmake --build build --parallel --config Release
+        run: cmake --build build --parallel 2 --config Release
 
       - name: Test
         run: ctest --test-dir build --output-on-failure --build-config Release -LE live
@@ -125,7 +126,7 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
 
       - name: Build
-        run: cmake --build build --parallel --config Release
+        run: cmake --build build --parallel 2 --config Release
 
       - name: Test
         run: ctest --test-dir build --output-on-failure --build-config Release -LE live
@@ -171,7 +172,7 @@ jobs:
           name: Release ${{ needs.validate.outputs.tag }}
           draft: false
           prerelease: ${{ contains(needs.validate.outputs.tag, '-') }}
-          generate_release_notes: true
+          body_path: docs/releases/${{ needs.validate.outputs.tag }}.md
           files: |
             artifacts/macos-arm64/polymarket-cpp-client-macos-arm64.tar.gz
             artifacts/linux-x64/polymarket-cpp-client-linux-x64.tar.gz

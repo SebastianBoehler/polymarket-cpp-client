@@ -1,5 +1,5 @@
-#include "clob_client.hpp"
-#include "user_stream.hpp"
+#include "polymarket/clob_client.hpp"
+#include "polymarket/user_stream.hpp"
 
 #include <chrono>
 #include <cstdlib>

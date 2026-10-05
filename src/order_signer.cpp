@@ -1,5 +1,5 @@
-#include "order_signer.hpp"
-#include "decimal_math.hpp"
+#include "polymarket/order_signer.hpp"
+#include "polymarket/decimal_math.hpp"
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <ethash/keccak.hpp>

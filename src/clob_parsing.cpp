@@ -1,6 +1,6 @@
-#include "clob_client.hpp"
+#include "polymarket/clob_client.hpp"
 #include "clob_client_internal.hpp"
-#include "market_fetcher.hpp"
+#include "polymarket/market_fetcher.hpp"
 #include "rest_orderbook_parsing.hpp"
 
 #include <nlohmann/json.hpp>

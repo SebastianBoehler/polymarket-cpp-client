@@ -1,7 +1,7 @@
-#include "json_rpc_client.hpp"
-#include "polymarket_events.hpp"
-#include "types.hpp"
-#include "websocket_client.hpp"
+#include "polymarket/json_rpc_client.hpp"
+#include "polymarket/polymarket_events.hpp"
+#include "polymarket/types.hpp"
+#include "polymarket/websocket_client.hpp"
 #include <algorithm>
 #include <atomic>
 #include <chrono>

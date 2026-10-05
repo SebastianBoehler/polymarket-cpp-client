@@ -1,7 +1,7 @@
 #pragma once
 
-#include "evm_utils.hpp"
-#include "json_rpc_client.hpp"
+#include "polymarket/evm_utils.hpp"
+#include "polymarket/json_rpc_client.hpp"
 #include <chrono>
 #include <cstdint>
 #include <functional>

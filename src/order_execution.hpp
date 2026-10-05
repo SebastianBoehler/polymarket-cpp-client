@@ -1,6 +1,6 @@
 #pragma once
 
-#include "clob_client.hpp"
+#include "polymarket/clob_client.hpp"
 #include <nlohmann/json.hpp>
 #include <cstdint>
 #include <functional>

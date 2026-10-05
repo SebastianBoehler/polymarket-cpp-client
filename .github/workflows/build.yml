@@ -2,8 +2,13 @@ name: build
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
@@ -19,7 +24,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Check PR title
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-22.04' && matrix.build_type == 'Release'
+        shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_./-]+\))?!?: .+'
+          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
+            echo 'Use type(scope): description or type: description for the PR title.' >&2
+            exit 1
+          fi
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -41,10 +59,19 @@ jobs:
             "${deployment_args[@]}"
 
       - name: Build
-        run: cmake --build build --parallel --config ${{ matrix.build_type }}
+        run: cmake --build build --parallel 2 --config ${{ matrix.build_type }}
 
       - name: Test
         run: ctest --test-dir build --output-on-failure --build-config ${{ matrix.build_type }} -LE live
+
+      - name: Check formatting and C++ lint
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-22.04' && matrix.build_type == 'Release'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 -m pip install clang-format==21.1.6 clang-tidy==21.1.6
+          python3 scripts/test_quality.py
+          python3 scripts/quality.py "$BASE_SHA" --build-dir build
 
       - name: Optional live smoke
         if: vars.POLYMARKET_RUN_LIVE_SMOKE == '1'
