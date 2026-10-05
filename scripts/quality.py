@@ -75,7 +75,7 @@ def main():
     args = parser.parse_args()
     root = Path(run("git", "rev-parse", "--show-toplevel").strip())
     os.chdir(root)
-    paths = run("git", "diff", "--name-only", "--diff-filter=AM", args.base).splitlines()
+    paths = run("git", "diff", "--name-only", "--diff-filter=ACMR", args.base).splitlines()
     untracked = set(run("git", "ls-files", "--others", "--exclude-standard").splitlines())
     paths += sorted(untracked)
     supported = {".cpp", ".hpp", ".h", ".md", ".yml", ".yaml", ".json"}
