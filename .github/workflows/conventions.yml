@@ -40,7 +40,11 @@ jobs:
       - name: Check quality script
         run: python3 scripts/test_quality.py
       - name: Configure compile database
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPOLYMARKET_CLIENT_BUILD_TESTS=ON
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON \
+            -DPOLYMARKET_CLIENT_BUILD_TESTS=ON \
+            -DPOLYMARKET_CLIENT_BUILD_BENCHMARKS=ON
       - name: Build and configure installed consumer
         run: |
           cmake --build build --target polymarket_client global-context --parallel 2
