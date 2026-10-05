@@ -97,6 +97,12 @@ python3 scripts/quality.py origin/main --build-dir build
 python3 scripts/quality.py origin/main --fix
 ```
 
+On macOS, make the SDK explicit in the compile database before running clang-tidy:
+
+```bash
+cmake -S . -B build -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)"
+```
+
 clang-format follows `.clang-format`; clang-tidy checks correctness, performance,
 and variable naming through `.clang-tidy`. Prettier formats Markdown, YAML, and
 JSON. `--fix` changes formatting only; inspect the diff before keeping it.
