@@ -22,3 +22,30 @@ jobs:
             echo 'Use type(scope): description or type: description for the PR title.' >&2
             exit 1
           fi
+
+  quality:
+    name: Formatting and C++ lint
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install tools and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev
+          python3 -m pip install clang-format==21.1.6 clang-tidy==21.1.6
+      - name: Check quality script
+        run: python3 scripts/test_quality.py
+      - name: Configure compile database
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPOLYMARKET_CLIENT_BUILD_TESTS=ON
+      - name: Build and configure installed consumer
+        run: |
+          cmake --build build --target polymarket_client --parallel 2
+          ctest --test-dir build --output-on-failure -R '^test_package_consumer$'
+      - name: Check changed files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/quality.py "$BASE_SHA" --build-dir build

@@ -2,6 +2,12 @@
 
 ## Coding rules
 
+- Prefer clear domain names such as `submitted_hashes` and `poll_interval`.
+  Use the existing snake_case convention for variables and parameters.
+- Keep hot paths efficient. Avoid needless copies, repeated parsing, unbounded
+  queues, and allocations inside loops. Measure performance changes with the
+  relevant existing benchmark and report workload, build type, and comparison.
+  Prefer a small direct implementation over extra abstractions.
 - Use C++20 and match the existing naming, indentation, and brace style.
 - Keep new or substantially changed files near 300 lines or fewer. This is a
   soft limit: split by responsibility, not arbitrary line counts. Explain an
@@ -73,6 +79,32 @@ the authoritative build options and live-test policy.
 
 A successful fake-server test proves the local request and response contract.
 It does not prove a transaction succeeded on mainnet. Report the distinction.
+
+## Formatting and linting
+
+Install the pinned development tools separately from the library:
+
+```bash
+python3 -m venv .venv-quality
+. .venv-quality/bin/activate
+python3 -m pip install clang-format==21.1.6 clang-tidy==21.1.6
+# Requires Node.js and npm for pinned Prettier 3.6.2.
+# Run test_package_consumer first when its source changes.
+python3 scripts/quality.py origin/main --build-dir build
+python3 scripts/quality.py origin/main --fix
+```
+
+clang-format follows `.clang-format`; clang-tidy checks correctness, performance,
+and variable naming through `.clang-tidy`. Prettier formats Markdown, YAML, and
+JSON. `--fix` changes formatting only; inspect the diff before keeping it.
+
+CI checks changed C++ lines and rejects new Prettier formatting debt in touched
+files. Existing formatting is the baseline, so unrelated code stays untouched.
+Header-only changes lint first-party translation units against the changed
+header lines. New files are checked in full. Use the configured compile database
+for linting, and keep static analysis warnings actionable. Duplicate logic and
+unnecessary abstractions remain explicit code review checks; the linter does
+not prove architectural quality or runtime efficiency.
 
 ## Done means
 

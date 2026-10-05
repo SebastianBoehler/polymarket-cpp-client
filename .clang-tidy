@@ -1,0 +1,14 @@
+Checks: >-
+  -*,
+  bugprone-dangling-handle,
+  bugprone-sizeof-expression,
+  bugprone-suspicious-memset-usage,
+  bugprone-unused-raii,
+  bugprone-use-after-move,
+  performance-*,
+  readability-identifier-naming
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*'
+CheckOptions:
+  readability-identifier-naming.VariableCase: lower_case
+  readability-identifier-naming.ParameterCase: lower_case

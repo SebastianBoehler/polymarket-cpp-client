@@ -39,6 +39,7 @@ execute_process(
         -S "${SOURCE_DIR}/tests/package_consumer"
         -B "${consumer_build_dir}"
         -DCMAKE_PREFIX_PATH=${install_dir}
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     RESULT_VARIABLE configure_result
 )
 if(NOT configure_result EQUAL 0)
