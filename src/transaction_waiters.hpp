@@ -1,7 +1,7 @@
 #pragma once
 
-#include "json_rpc_client.hpp"
-#include "position_client.hpp"
+#include "polymarket/json_rpc_client.hpp"
+#include "polymarket/position_client.hpp"
 #include "safe_relayer.hpp"
 #include <chrono>
 #include <string>

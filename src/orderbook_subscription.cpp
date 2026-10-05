@@ -1,5 +1,5 @@
 #include "orderbook_subscription.hpp"
-#include "websocket_client.hpp"
+#include "polymarket/websocket_client.hpp"
 
 namespace polymarket::detail
 {

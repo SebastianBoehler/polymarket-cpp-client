@@ -1,4 +1,4 @@
-#include "json_rpc_client.hpp"
+#include "polymarket/json_rpc_client.hpp"
 #include "json_rpc_ws_runtime.hpp"
 
 #include <stdexcept>

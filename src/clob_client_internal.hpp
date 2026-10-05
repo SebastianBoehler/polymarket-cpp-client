@@ -1,6 +1,6 @@
 #pragma once
 
-#include "clob_client.hpp"
+#include "polymarket/clob_client.hpp"
 #include "query_encoding.hpp"
 #include "rest_numeric.hpp"
 

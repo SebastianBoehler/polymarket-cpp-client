@@ -9,7 +9,7 @@ is already authorized, complete these steps without asking again.
    separately and tell consumers when they must rebuild.
 2. Update `CMakeLists.txt`, all version macros in
    `include/polymarket/version.hpp`, and README installation examples together.
-   Add curated notes at `docs/releases/<tag>.md`, for example `v2.1.0.md`.
+   Add curated notes at `docs/releases/<tag>.md`, for example `v3.0.0.md`.
 3. Include all changes since the last release. Name new APIs, fixes, compatibility
    concerns, wallet and approval requirements, and verification limits.
 4. Build examples and tests, and run the offline suite including

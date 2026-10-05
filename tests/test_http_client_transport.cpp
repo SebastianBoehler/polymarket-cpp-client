@@ -1,7 +1,7 @@
-#include "clob_client.hpp"
-#include "http_client.hpp"
+#include "polymarket/clob_client.hpp"
+#include "polymarket/http_client.hpp"
 #include "http_client_transport_fixture.hpp"
-#include "sdk_error.hpp"
+#include "polymarket/sdk_error.hpp"
 
 #include <chrono>
 #include <future>

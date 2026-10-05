@@ -12,7 +12,7 @@
 - Keep new or substantially changed files near 300 lines or fewer. This is a
   soft limit: split by responsibility, not arbitrary line counts. Explain an
   exception in the PR instead of creating meaningless wrappers.
-- Keep public interfaces in `include/` and implementation details in `src/`.
+- Keep public interfaces in `include/polymarket/` and implementation details in `src/`.
   Reuse existing numeric, transport, signing, and error helpers.
 - Keep changes surgical. Avoid unrelated cleanup, dependency upgrades, and
   formatting changes. Add configuration or features only when requested.
@@ -28,6 +28,9 @@
 Protocol and lifecycle changes also follow
 [docs/protocol-development.md](docs/protocol-development.md).
 
+Use prefixed public includes such as `<polymarket/http_client.hpp>`. Keep generic
+header names out of the install prefix root.
+
 ## Commits and pull requests
 
 Use `type(scope): description` or `type: description`. Write a short imperative
@@ -40,7 +43,7 @@ Examples:
 - `fix(position): preserve hashes after partial batch failure`
 - `test(user-stream): cover authentication rejection`
 - `docs: explain agent workflow and coding rules`
-- `chore(release): prepare v2.1.0`
+- `chore(release): prepare v3.0.0`
 
 PR titles use the same format and are checked in CI. Describe the concrete
 problem and resulting behavior, then give the relevant validation. For protocol
@@ -60,7 +63,7 @@ Configure an isolated build directory for the task:
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
   -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON \
   -DPOLYMARKET_CLIENT_BUILD_TESTS=ON
-cmake --build build --parallel
+cmake --build build --parallel 2
 ctest --test-dir build --output-on-failure -LE live
 ```
 

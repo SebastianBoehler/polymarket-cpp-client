@@ -47,7 +47,7 @@ include(FetchContent)
 FetchContent_Declare(
     polymarket_client
     GIT_REPOSITORY https://github.com/SebastianBoehler/polymarket-cpp-client.git
-    GIT_TAG v2.1.0  # or any release tag
+    GIT_TAG v3.0.0  # or any release tag
 )
 FetchContent_MakeAvailable(polymarket_client)
 
@@ -61,14 +61,14 @@ Download pre-built binaries from [Releases](https://github.com/SebastianBoehler/
 
 ```bash
 # macOS
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v2.1.0/polymarket-cpp-client-macos-arm64.tar.gz
-mkdir -p polymarket-cpp-client-2.1.0
-tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C polymarket-cpp-client-2.1.0
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v3.0.0/polymarket-cpp-client-macos-arm64.tar.gz
+mkdir -p polymarket-cpp-client-3.0.0
+tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C polymarket-cpp-client-3.0.0
 
 # Linux
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v2.1.0/polymarket-cpp-client-linux-x64.tar.gz
-mkdir -p polymarket-cpp-client-2.1.0
-tar -xzf polymarket-cpp-client-linux-x64.tar.gz -C polymarket-cpp-client-2.1.0
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v3.0.0/polymarket-cpp-client-linux-x64.tar.gz
+mkdir -p polymarket-cpp-client-3.0.0
+tar -xzf polymarket-cpp-client-linux-x64.tar.gz -C polymarket-cpp-client-3.0.0
 ```
 
 Keep this as a dedicated prefix because the archive contains its pinned static
@@ -76,7 +76,7 @@ dependencies and headers. Then point CMake at it:
 
 ```cmake
 # Configure with:
-# cmake -S . -B build -DCMAKE_PREFIX_PATH=/absolute/path/to/polymarket-cpp-client-2.1.0
+# cmake -S . -B build -DCMAKE_PREFIX_PATH=/absolute/path/to/polymarket-cpp-client-3.0.0
 find_package(polymarket_client REQUIRED)
 target_link_libraries(your_target PRIVATE polymarket::client)
 ```
@@ -85,7 +85,7 @@ target_link_libraries(your_target PRIVATE polymarket::client)
 
 ```bash
 cmake -S . -B build -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON -DPOLYMARKET_CLIENT_BUILD_TESTS=ON
-cmake --build build --parallel
+cmake --build build --parallel 2
 # offline tests
 ctest --test-dir build --output-on-failure -LE live
 # optional benchmarks
@@ -96,8 +96,15 @@ cmake --install build --prefix <install_prefix>
 
 ## Version Info
 
-See the [v2.1.0 release notes](docs/releases/v2.1.0.md). Rebuild consumers with
+See the [v3.0.0 release notes](docs/releases/v3.0.0.md). Rebuild consumers with
 the matching headers and libraries when upgrading; public type layouts changed.
+
+### v3 migration
+
+Public headers now live under `polymarket/`. Update includes such as
+`#include <http_client.hpp>` to `#include <polymarket/http_client.hpp>`.
+The CMake target remains `polymarket::client`. Rebuild consumers with the v3
+headers and libraries. Flat compatibility headers are not installed.
 
 ### v2 migration
 
@@ -183,7 +190,7 @@ for implementation notes.
 pUSD (merge), and resolved positions into pUSD (redeem):
 
 ```cpp
-#include "position_client.hpp"
+#include "polymarket/position_client.hpp"
 
 polymarket::PositionClientConfig config;
 config.private_key = std::getenv("PRIVATE_KEY");
@@ -316,7 +323,7 @@ Set these env vars explicitly if you need another RPC or contract set.
 Configure HTTP proxy for geo-restricted access:
 
 ```cpp
-#include "clob_client.hpp"
+#include "polymarket/clob_client.hpp"
 
 polymarket::ClobClient client("https://clob.polymarket.com", 137);
 
@@ -333,7 +340,7 @@ Keep TCP/TLS connections warm by configuring transport options once, pre-warming
 the connection, and optionally running a heartbeat:
 
 ```cpp
-#include "clob_client.hpp"
+#include "polymarket/clob_client.hpp"
 
 polymarket::HttpClientOptions http_options;
 http_options.timeout_ms = 2500;

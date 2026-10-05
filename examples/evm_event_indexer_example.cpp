@@ -1,5 +1,5 @@
-#include "evm_event_indexer.hpp"
-#include "polymarket_events.hpp"
+#include "polymarket/evm_event_indexer.hpp"
+#include "polymarket/polymarket_events.hpp"
 #include <cstdlib>
 #include <exception>
 #include <iostream>

@@ -15,8 +15,21 @@ def run(*args):
     return subprocess.check_output(args, text=True)
 
 
-def changed_lines(base, path):
-    diff = run("git", "diff", "--unified=0", base, "--", path)
+def changed_files(base):
+    output = run("git", "diff", "--name-status", "-z", "--find-renames",
+                 "--diff-filter=ACMR", base).rstrip("\0")
+    fields = iter(output.split("\0") if output else [])
+    paths = {}
+    for status in fields:
+        original = next(fields)
+        path = next(fields) if status.startswith(("R", "C")) else original
+        paths[path] = original
+    return paths
+
+
+def changed_lines(base, path, original=None):
+    paths = [path] if original is None or original == path else [original, path]
+    diff = run("git", "diff", "--unified=0", base, "--", *paths)
     return [
         [int(start), int(start) + int(count or 1) - 1]
         for start, count in re.findall(r"^@@ .*?\+(\d+)(?:,(\d+))? @@", diff, re.M)
@@ -24,7 +37,7 @@ def changed_lines(base, path):
     ]
 
 
-def check_format(base, path, lines, fix):
+def check_format(base, path, lines, fix, original_path=None):
     original = path.read_text()
     if path.suffix in {".cpp", ".hpp", ".h"}:
         args = ["clang-format", str(path)]
@@ -37,7 +50,7 @@ def check_format(base, path, lines, fix):
         # Require touched files to add no formatting debt. Existing debt is
         # measured against the base instead of rewriting unrelated text.
         result = subprocess.run(
-            ["git", "show", f"{base}:{path}"], capture_output=True, text=True
+            ["git", "show", f"{base}:{original_path or path}"], capture_output=True, text=True
         )
         if result.returncode == 0:
             previous = result.stdout
@@ -75,20 +88,22 @@ def main():
     args = parser.parse_args()
     root = Path(run("git", "rev-parse", "--show-toplevel").strip())
     os.chdir(root)
-    paths = run("git", "diff", "--name-only", "--diff-filter=ACMR", args.base).splitlines()
+    originals = changed_files(args.base)
+    paths = list(originals)
     untracked = set(run("git", "ls-files", "--others", "--exclude-standard").splitlines())
     paths += sorted(untracked)
     supported = {".cpp", ".hpp", ".h", ".md", ".yml", ".yaml", ".json"}
     paths = [Path(path) for path in paths if Path(path).suffix in supported]
     ranges = {
         path: ([[1, max(1, len(path.read_text().splitlines()))]] if str(path) in untracked
-               else changed_lines(args.base, str(path)))
+               else changed_lines(args.base, str(path), originals[str(path)]))
         for path in paths
     }
     passed = True
     for path in paths:
         if ranges[path]:
-            passed = check_format(args.base, path, ranges[path], args.fix) and passed
+            passed = check_format(args.base, path, ranges[path], args.fix,
+                                  originals.get(str(path))) and passed
     if args.fix:
         return 0
     databases = {}

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "websocket_client.hpp"
-#include "types.hpp"
+#include "polymarket/websocket_client.hpp"
+#include "polymarket/types.hpp"
 #include <condition_variable>
 #include <deque>
 #include <mutex>

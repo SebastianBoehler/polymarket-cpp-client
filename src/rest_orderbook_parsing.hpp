@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rest_numeric.hpp"
-#include "types.hpp"
+#include "polymarket/types.hpp"
 
 #include <nlohmann/json.hpp>
 

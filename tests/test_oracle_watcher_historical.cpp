@@ -1,7 +1,7 @@
-#include "evm_event_indexer.hpp"
-#include "json_rpc_client.hpp"
-#include "oracle_watcher.hpp"
-#include "polymarket_events.hpp"
+#include "polymarket/evm_event_indexer.hpp"
+#include "polymarket/json_rpc_client.hpp"
+#include "polymarket/oracle_watcher.hpp"
+#include "polymarket/polymarket_events.hpp"
 #include <cstdlib>
 #include <algorithm>
 #include <iostream>

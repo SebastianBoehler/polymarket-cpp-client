@@ -1,6 +1,6 @@
 #pragma once
 
-#include "websocket_client.hpp"
+#include "polymarket/websocket_client.hpp"
 #include "websocket_test_server.hpp"
 
 #include <atomic>

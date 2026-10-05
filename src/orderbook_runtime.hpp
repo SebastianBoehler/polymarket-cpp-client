@@ -1,7 +1,7 @@
 #pragma once
 
-#include "orderbook.hpp"
-#include "websocket_client.hpp"
+#include "polymarket/orderbook.hpp"
+#include "polymarket/websocket_client.hpp"
 
 #include <atomic>
 #include <memory>

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "clob_types.hpp"
-#include "types.hpp"
-#include "http_client.hpp"
-#include "order_signer.hpp"
-#include "sdk_error.hpp"
+#include "polymarket/clob_types.hpp"
+#include "polymarket/types.hpp"
+#include "polymarket/http_client.hpp"
+#include "polymarket/order_signer.hpp"
+#include "polymarket/sdk_error.hpp"
 #include <string>
 #include <vector>
 #include <chrono>

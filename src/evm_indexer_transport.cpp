@@ -1,7 +1,7 @@
 #include "evm_indexer_transport.hpp"
 #include "evm_transport_epoch.hpp"
-#include "json_rpc_client.hpp"
-#include "websocket_client.hpp"
+#include "polymarket/json_rpc_client.hpp"
+#include "polymarket/websocket_client.hpp"
 #include <chrono>
 #include <condition_variable>
 #include <mutex>

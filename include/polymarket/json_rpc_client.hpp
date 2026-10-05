@@ -1,7 +1,7 @@
 #pragma once
 
-#include "evm_utils.hpp"
-#include "http_client.hpp"
+#include "polymarket/evm_utils.hpp"
+#include "polymarket/http_client.hpp"
 #include <atomic>
 #include <functional>
 #include <memory>

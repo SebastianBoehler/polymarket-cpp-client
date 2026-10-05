@@ -1,6 +1,6 @@
-#include "clob_client.hpp"
-#include "order_signer.hpp"
-#include "polymarket_contracts.hpp"
+#include "polymarket/clob_client.hpp"
+#include "polymarket/order_signer.hpp"
+#include "polymarket/polymarket_contracts.hpp"
 #include <cctype>
 #include <functional>
 #include <iostream>

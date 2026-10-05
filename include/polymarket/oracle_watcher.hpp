@@ -1,6 +1,6 @@
 #pragma once
 
-#include "polymarket_events.hpp"
+#include "polymarket/polymarket_events.hpp"
 #include <nlohmann/json.hpp>
 #include <cstddef>
 #include <cstdint>

@@ -7,7 +7,7 @@ It defines coding rules, commit names, validation, and the completion criteria.
 
 1. Check the current branch, diff, and untracked files. Preserve other work.
 2. State the working assumption and success check for larger or ambiguous tasks.
-3. Read the affected public headers, implementation, and existing tests before editing.
+3. Read the affected public headers under `include/polymarket/`, implementation, and existing tests before editing.
 4. Keep the diff within the requested scope and match the surrounding C++ style.
 5. Run the narrowest meaningful check, then report the command and actual result.
 
