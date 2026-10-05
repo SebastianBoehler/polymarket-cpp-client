@@ -14,7 +14,8 @@ is already authorized, complete these steps without asking again.
    concerns, wallet and approval requirements, and verification limits.
 4. Build examples and tests, and run the offline suite including
    `test_package_consumer`. Open a PR and wait for every Linux/macOS Debug/Release
-   build and the PR title check to pass on the final commit.
+   build to pass on the final commit. Linux Release also checks the PR title,
+   formatting, and C++ lint using the same build and compile database.
 5. Merge the verified PR. Confirm its commits are on `main` and that the exact
    commit to tag passed the complete build matrix. Preserve useful commit groups
    with a merge or rebase when available.

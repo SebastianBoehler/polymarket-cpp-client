@@ -109,6 +109,8 @@ JSON. `--fix` changes formatting only; inspect the diff before keeping it.
 
 CI checks changed C++ lines and rejects new Prettier formatting debt in touched
 files. Existing formatting is the baseline, so unrelated code stays untouched.
+Linux Release runs these checks against its existing build and installed
+consumer, avoiding a separate library build for linting.
 Header-only changes lint first-party translation units against the changed
 header lines. New files are checked in full. Use the configured compile database
 for linting, and keep static analysis warnings actionable. Duplicate logic and
