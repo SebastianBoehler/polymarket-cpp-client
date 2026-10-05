@@ -106,8 +106,13 @@ accepts the transaction.
     `STATE_INVALID`.
   - `TransactionTimeoutError`: no outcome in time; it may still be mined.
 
+  Polling never sleeps past the deadline, and the last poll happens at the
+  deadline. So a timeout shorter than `poll` still waits the full timeout:
+  `wait(1s, 2s)` polls at 0 s and at 1 s before giving up.
+
 Invalid input throws `std::invalid_argument`; RPC, Gamma and relayer failures
-throw `std::runtime_error`.
+throw `std::runtime_error`. An EOA batch that fails after sending part of its
+calls throws `PartialBatchError` (see [Batches and atomicity](#batches-and-atomicity)).
 
 ## Approvals
 
@@ -135,6 +140,9 @@ transaction.
 ./build/position_example redeem 0x6b04...6fbc --execute
 ./build/position_example split 0x... 1000000 --execute
 ./build/position_example merge 0x... max --execute
+
+# Protocol V2 markets also accept the 31-byte condition id
+./build/position_example split 0x01...44 1000000 --execute
 ```
 
 The example reads `PRIVATE_KEY` and `POLYGON_RPC_ENDPOINT`. With
@@ -154,8 +162,17 @@ from the EOA.
   signatures, MultiSend packing and relayer payloads match vectors produced
   by the official Python SDK (`test_evm_abi`, `test_evm_abi_shapes`,
   `test_evm_transaction`, `test_position_calls`, `test_safe_relayer`).
-- `test_position_client` and `test_safe_relayer_flows` run EOA and Safe flows.
+- `test_position_client` and `test_safe_relayer_flows` run EOA and Safe flows;
+  `test_transaction_waiters` covers receipt and relayer waits whose timeout is
+  shorter than the poll interval.
 - These flows run against local fake RPC, Gamma and relayer servers.
 - Against Polygon mainnet (read-only): the SafeTx digest equals the Safe's own
   `getTransactionHash`, the signature passes the Safe's `checkSignatures`, and
   a simulated `execTransaction` redeem succeeds.
+- Against Polygon mainnet with real funds:
+  - A Safe split and merge of 1 base unit went through the relayer.
+    `wait(1s, 2s)` on the pending split timed out after about 1.3 s.
+  - An EOA batch whose second call fails gas estimation threw
+    `PartialBatchError` with the mined hash of the first call.
+  - No Protocol V2 market was listed on Gamma yet, so 31-byte ids were only
+    checked against fixtures from the official Python SDK.

@@ -9,7 +9,8 @@
 //
 //   position_example <split|merge|redeem> <condition_id> [amount] [--execute]
 //
-// amount is in base units (6 decimals): 1000000 = 1 pUSD / 1 share. merge
+// condition_id is 0x + 32 bytes of hex; a Protocol V2 market also accepts its
+// 31-byte id. amount is in base units (6 decimals): 1000000 = 1 pUSD / 1 share. merge
 // defaults to "max". Without --execute the example only resolves the market
 // and prints the wallet's balances; nothing is sent.
 //
@@ -105,6 +106,14 @@ int main(int argc, char **argv)
     catch (const TransactionRevertedError &error)
     {
         std::cerr << "reverted: " << error.transaction_hash() << '\n';
+        return 1;
+    }
+    catch (const PartialBatchError &error)
+    {
+        // EOA only: a V2 redeem of both outcomes sends one transaction per outcome.
+        std::cerr << "error: " << error.what() << '\n';
+        for (const auto &hash : error.submitted_hashes())
+            std::cerr << "already sent: " << hash << '\n';
         return 1;
     }
     catch (const std::exception &error)
