@@ -46,7 +46,7 @@ jobs:
             "${deployment_args[@]}"
 
       - name: Build
-        run: cmake --build build --parallel --config ${{ matrix.build_type }}
+        run: cmake --build build --parallel 2 --config ${{ matrix.build_type }}
 
       - name: Test
         run: ctest --test-dir build --output-on-failure --build-config ${{ matrix.build_type }} -LE live

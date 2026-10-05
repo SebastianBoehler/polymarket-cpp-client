@@ -70,7 +70,7 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
 
       - name: Build
-        run: cmake --build build --parallel --config Release
+        run: cmake --build build --parallel 2 --config Release
 
       - name: Test
         run: ctest --test-dir build --output-on-failure --build-config Release -LE live
@@ -126,7 +126,7 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
 
       - name: Build
-        run: cmake --build build --parallel --config Release
+        run: cmake --build build --parallel 2 --config Release
 
       - name: Test
         run: ctest --test-dir build --output-on-failure --build-config Release -LE live
