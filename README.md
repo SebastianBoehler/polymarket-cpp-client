@@ -29,6 +29,11 @@ Reusable C++20 client for Polymarket: REST, WebSocket streaming, and order signi
 - libcurl, OpenSSL, zlib
 - Prebuilt release targets: macOS 12+ arm64 and Linux x86-64
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for coding rules, commit names, and checks.
+Coding agents start with [AGENTS.md](AGENTS.md).
+
 ## Installation
 
 ### Option 1: CMake FetchContent (Recommended)
