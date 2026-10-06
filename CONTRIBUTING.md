@@ -57,7 +57,10 @@ of commits.
 
 ## Validation
 
-Configure an isolated build directory for the task:
+`./build.sh` configures a Release build with examples and tests, builds it, and
+runs the offline suite. Set `BUILD_DIR`, `BUILD_TYPE`, `BENCHMARKS=ON`, or
+`CMAKE_ARGS` to adjust it. To run the steps yourself, configure an isolated
+build directory for the task:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \

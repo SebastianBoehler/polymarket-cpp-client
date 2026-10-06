@@ -39,6 +39,11 @@ namespace polymarket
         uint32_t max_backoff_ms{10000};
         int ping_interval_ms{10000};
         std::size_t message_queue_limit{1024};
+        // Route for this connection; empty fields fall back to the default
+        // route in <polymarket/network.hpp>. A set route sends the connection
+        // through libcurl, so it supports the same proxy schemes as HTTP.
+        std::string proxy_url;
+        std::string interface_name;
     };
 
     struct WebSocketStats

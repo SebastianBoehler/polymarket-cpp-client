@@ -37,8 +37,12 @@ namespace polymarket
         long tcp_keepintvl_seconds = 20;
         bool tcp_nodelay = true;
         bool allow_connection_reuse = true;
+        // Empty fields fall back to the default route in <polymarket/network.hpp>.
+        // An empty proxy without a default route uses libcurl's proxy
+        // environment variables (HTTPS_PROXY, ALL_PROXY, NO_PROXY).
         std::string proxy_url;
         std::string user_agent;
+        std::string interface_name; // e.g. "wg0"; see NetworkRoute
     };
 
     struct RequestMetrics
@@ -74,7 +78,9 @@ namespace polymarket
         void set_timeout_ms(long timeout_ms);
         void set_base_url(const std::string &base_url);
         void add_header(const std::string &header);
-        void set_proxy(const std::string &proxy_url); // e.g., "http://user:pass@proxy.example.com:8080"
+        // e.g. "http://user:pass@proxy.example.com:8080" or "socks5h://127.0.0.1:1080".
+        // An empty URL falls back to the default network route.
+        void set_proxy(const std::string &proxy_url);
         void set_user_agent(const std::string &user_agent);
         void set_dns_cache_timeout(long seconds);  // DNS cache TTL (default: 60s)
         void set_keepalive_interval(long seconds); // TCP keepalive probe interval
@@ -141,6 +147,7 @@ namespace polymarket
         void init();
         void cleanup();
         void apply_options();
+        void apply_route();
         void heartbeat_once();
         HttpResponse perform(const std::string &method, const std::string &path, const std::string &url);
 

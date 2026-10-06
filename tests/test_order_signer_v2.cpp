@@ -180,6 +180,35 @@ int main()
         return 1;
     }
 
+    // Real token IDs are 77-digit decimals; they must hash like their hex form.
+    auto decimal_token = base_order(SignatureType::EOA);
+    decimal_token.token_id =
+        "83782113303236477866335970881283179052006378592241188539196785830237452024272";
+    auto hex_token = base_order(SignatureType::EOA);
+    hex_token.token_id = "0xb93afee3d1ce24bd0791e32827a3c09a5737b5923490dbcf702000488486b9d0";
+    auto max_token = base_order(SignatureType::EOA);
+    max_token.token_id =
+        "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+    auto max_hex_token = base_order(SignatureType::EOA);
+    max_hex_token.token_id = "0x" + std::string(64, 'f');
+    auto overflow_token = base_order(SignatureType::EOA);
+    overflow_token.token_id =
+        "115792089237316195423570985008687907853269984665640564039457584007913129639936";
+    if (!expect_equal(
+            "77-digit decimal token id",
+            signer.sign_order_with_salt(decimal_token, kExchangeV2, "123456789").signature,
+            signer.sign_order_with_salt(hex_token, kExchangeV2, "123456789").signature) ||
+        !expect_equal(
+            "uint256 max token id",
+            signer.sign_order_with_salt(max_token, kExchangeV2, "123456789").signature,
+            signer.sign_order_with_salt(max_hex_token, kExchangeV2, "123456789").signature) ||
+        !expect_invalid_argument(
+            "uint256 max plus one token id",
+            [&] { signer.sign_order_with_salt(overflow_token, kExchangeV2, "123456789"); }))
+    {
+        return 1;
+    }
+
     auto short_metadata = base_order(SignatureType::EOA);
     short_metadata.metadata = "0x01";
     auto oversized_builder = base_order(SignatureType::EOA);

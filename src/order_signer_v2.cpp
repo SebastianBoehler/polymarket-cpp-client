@@ -34,31 +34,23 @@ namespace polymarket
                 return result;
             }
 
-            std::string num = value;
-            if (!std::all_of(num.begin(), num.end(), [](char digit)
-                             { return digit >= '0' && digit <= '9'; }))
+            if (!std::all_of(value.begin(), value.end(),
+                             [](char digit) { return digit >= '0' && digit <= '9'; }))
             {
                 throw std::invalid_argument("uint256 value must be an unsigned decimal integer");
             }
-            std::vector<uint8_t> bytes;
-            while (!num.empty() && num != "0")
+            // Multiply-accumulate into the big-endian word: no allocation per digit.
+            for (const char digit : value)
             {
-                int remainder = 0;
-                std::string quotient;
-                for (char c : num)
+                unsigned carry = static_cast<unsigned>(digit - '0');
+                for (auto byte = result.rbegin(); byte != result.rend(); ++byte)
                 {
-                    int digit = remainder * 10 + (c - '0');
-                    if (!quotient.empty() || digit / 256 > 0)
-                        quotient += static_cast<char>('0' + digit / 256);
-                    remainder = digit % 256;
+                    const unsigned next = static_cast<unsigned>(*byte) * 10 + carry;
+                    *byte = static_cast<uint8_t>(next & 0xff);
+                    carry = next >> 8;
                 }
-                bytes.push_back(static_cast<uint8_t>(remainder));
-                num = quotient.empty() ? "0" : quotient;
+                if (carry != 0) throw std::invalid_argument("uint256 value exceeds 32 bytes");
             }
-            if (bytes.size() > result.size())
-                throw std::invalid_argument("uint256 value exceeds 32 bytes");
-            for (size_t i = 0; i < bytes.size(); i++)
-                result[31 - i] = bytes[i];
             return result;
         }
 
@@ -117,6 +109,7 @@ namespace polymarket
     std::array<uint8_t, 32> OrderSigner::hash_order_v2(const OrderData &order, const std::string &salt)
     {
         std::vector<uint8_t> encoded;
+        encoded.reserve(32 * 12);
         static const auto type_hash = keccak256(V2_ORDER_TYPE);
         encoded.insert(encoded.end(), type_hash.begin(), type_hash.end());
 
@@ -211,14 +204,22 @@ namespace polymarket
                                             const std::array<uint8_t, 32> &order_hash,
                                             const std::string &verifying_contract)
     {
-        auto solady_type_hash = keccak256(
-            "TypedDataSign(Order contents,string name,string version,uint256 chainId,"
-            "address verifyingContract,bytes32 salt)" +
-            V2_ORDER_TYPE);
-        auto name_hash = keccak256("DepositWallet");
-        auto version_hash = keccak256("1");
+        static const auto solady_type_hash =
+            keccak256("TypedDataSign(Order contents,string name,string version,uint256 chainId,"
+                      "address verifyingContract,bytes32 salt)" +
+                      V2_ORDER_TYPE);
+        static const auto name_hash = keccak256("DepositWallet");
+        static const auto version_hash = keccak256("1");
+        // ERC-7739 suffix: the hex-encoded type string and its uint16 length.
+        static const auto type_suffix = []
+        {
+            std::ostringstream len_hex;
+            len_hex << std::hex << std::setfill('0') << std::setw(4) << V2_ORDER_TYPE.size();
+            return string_to_hex_no_prefix(V2_ORDER_TYPE) + len_hex.str();
+        }();
 
         std::vector<uint8_t> encoded;
+        encoded.reserve(32 * 7);
         encoded.insert(encoded.end(), solady_type_hash.begin(), solady_type_hash.end());
         encoded.insert(encoded.end(), order_hash.begin(), order_hash.end());
         encoded.insert(encoded.end(), name_hash.begin(), name_hash.end());
@@ -234,13 +235,7 @@ namespace polymarket
         auto solady_struct_hash = keccak256(encoded);
         auto inner_signature = sign_hash(encode_eip712(domain_hash, solady_struct_hash));
 
-        std::ostringstream len_hex;
-        len_hex << std::hex << std::setfill('0') << std::setw(4) << V2_ORDER_TYPE.size();
-
-        return "0x" + strip_0x(inner_signature) +
-               strip_0x(to_hex(domain_hash)) +
-               strip_0x(to_hex(order_hash)) +
-               string_to_hex_no_prefix(V2_ORDER_TYPE) +
-               len_hex.str();
+        return "0x" + strip_0x(inner_signature) + strip_0x(to_hex(domain_hash)) +
+               strip_0x(to_hex(order_hash)) + type_suffix;
     }
 }

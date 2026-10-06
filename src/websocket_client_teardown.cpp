@@ -1,5 +1,6 @@
 #include "websocket_client_state.hpp"
 #include "websocket_resilience.hpp"
+#include "websocket_tunnel.hpp"
 
 namespace polymarket::detail
 {
@@ -64,6 +65,12 @@ namespace polymarket::detail
         ws_.stop();
         stop_message_worker();
         ws_.setOnMessageCallback(nullptr);
+        // ws_.stop() joined the IX thread, so no callback still reads the tunnel.
+        std::shared_ptr<WebSocketTunnel> tunnel;
+        {
+            std::lock_guard<std::mutex> lock(tunnel_mutex_);
+            tunnel = std::move(tunnel_);
+        }
     }
 
     void WebSocketClientState::publish_disconnected()

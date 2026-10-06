@@ -7,18 +7,29 @@ namespace polymarket::detail
     MarketState snapshot_market(const LiveMarketState &live)
     {
         MarketState state;
+        snapshot_market_prices(live, state);
+        snapshot_market_identity(live, state);
+        return state;
+    }
+
+    void snapshot_market_identity(const LiveMarketState &live, MarketState &state)
+    {
         state.slug = live.slug;
         state.title = live.title;
         state.symbol = live.symbol;
         state.condition_id = live.condition_id;
         state.token_yes = live.token_yes;
         state.token_no = live.token_no;
+        state.minimum_tick_size = live.minimum_tick_size;
+    }
+
+    void snapshot_market_prices(const LiveMarketState &live, MarketState &state)
+    {
         state.best_ask_yes = live.best_ask_yes.load();
         state.best_ask_no = live.best_ask_no.load();
         state.best_ask_yes_size = live.best_ask_yes_size.load();
         state.best_ask_no_size = live.best_ask_no_size.load();
         state.minimum_order_size = live.minimum_order_size;
-        state.minimum_tick_size = live.minimum_tick_size;
         state.end_time_ms = live.end_time_ms;
         state.neg_risk = live.neg_risk;
         state.fees_enabled = live.fees_enabled;
@@ -28,7 +39,6 @@ namespace polymarket::detail
         state.last_update_yes_ns = live.last_update_yes_ns.load();
         state.last_update_no_ns = live.last_update_no_ns.load();
         state.update_count = live.update_count.load();
-        return state;
     }
 
     void reset_market_leg(LiveMarketState &market, const std::string &token_id)

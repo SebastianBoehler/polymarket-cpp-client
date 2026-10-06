@@ -4,9 +4,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cmath>
+#include <cstdlib>
 #include <stdexcept>
-#include <unordered_set>
 
 using json = nlohmann::json;
 
@@ -19,10 +20,20 @@ namespace polymarket::detail
             double number = 0.0;
             if (value.is_string())
             {
-                const auto text = value.get<std::string>();
-                std::size_t parsed = 0;
-                number = std::stod(text, &parsed);
-                if (parsed != text.size())
+                // Same grammar as std::stod without copying the string.
+                const auto &text = value.get_ref<const std::string &>();
+                char *end = nullptr;
+                errno = 0;
+                number = std::strtod(text.c_str(), &end);
+                if (end == text.c_str())
+                {
+                    throw std::invalid_argument("orderbook number is not numeric");
+                }
+                if (errno == ERANGE)
+                {
+                    throw std::out_of_range("orderbook number is out of range");
+                }
+                if (end != text.c_str() + text.size())
                 {
                     throw std::invalid_argument("orderbook number has trailing data");
                 }
@@ -67,10 +78,11 @@ namespace polymarket::detail
                     "book snapshot requires bids and asks arrays");
             }
 
-            const auto parse_side = [](const json &levels,
-                                       std::vector<PriceLevel> &output)
+            // Emits each side in book order (bids descending, asks
+            // ascending) so applying the snapshot needs no second sort.
+            const auto parse_side =
+                [](const json &levels, std::vector<PriceLevel> &output, bool bids)
             {
-                std::unordered_set<double> prices;
                 output.reserve(levels.size());
                 for (const auto &level : levels)
                 {
@@ -79,17 +91,21 @@ namespace polymarket::detail
                         throw std::invalid_argument(
                             "orderbook level must be an object");
                     }
-                    const auto parsed = parse_level(level);
-                    if (!prices.insert(parsed.price).second)
-                    {
-                        throw std::invalid_argument(
-                            "book snapshot contains a duplicate price");
-                    }
-                    output.push_back(parsed);
+                    output.push_back(parse_level(level));
+                }
+                const auto ordered = [bids](const PriceLevel &left, const PriceLevel &right)
+                { return bids ? left.price > right.price : left.price < right.price; };
+                if (!std::is_sorted(output.begin(), output.end(), ordered))
+                    std::sort(output.begin(), output.end(), ordered);
+                if (std::adjacent_find(output.begin(), output.end(),
+                                       [](const PriceLevel &left, const PriceLevel &right)
+                                       { return left.price == right.price; }) != output.end())
+                {
+                    throw std::invalid_argument("book snapshot contains a duplicate price");
                 }
             };
-            parse_side(message["bids"], event.bids);
-            parse_side(message["asks"], event.asks);
+            parse_side(message["bids"], event.bids, true);
+            parse_side(message["asks"], event.asks, false);
         }
 
         bool supported_tick_size(const std::string &tick_size)
@@ -134,10 +150,8 @@ namespace polymarket::detail
     std::vector<MarketBookEvent> parse_market_book_events(const std::string &message)
     {
         const auto parsed = json::parse(message);
-        const auto messages = parsed.is_array() ? parsed : json::array({parsed});
         std::vector<MarketBookEvent> events;
-
-        for (const auto &item : messages)
+        const auto handle_item = [&events](const json &item)
         {
             const auto event_type = item.value("event_type", "");
             if (event_type == "book")
@@ -163,7 +177,18 @@ namespace polymarket::detail
             {
                 for (const auto &change : item["price_changes"])
                 {
-                    const auto asset_id = change.value("asset_id", "");
+                    // Reference the parsed strings; like value(), get_ref
+                    // throws on non-object changes and non-string fields.
+                    if (!change.is_object())
+                    {
+                        throw std::invalid_argument("price change must be an object");
+                    }
+                    const auto asset_field = change.find("asset_id");
+                    if (asset_field == change.end())
+                    {
+                        continue;
+                    }
+                    const auto &asset_id = asset_field->get_ref<const std::string &>();
                     if (asset_id.empty())
                     {
                         continue;
@@ -175,15 +200,28 @@ namespace polymarket::detail
                         events.push_back({asset_id});
                         event = std::prev(events.end());
                     }
-                    const auto side = change.value("side", "");
-                    if (side != "BUY" && side != "SELL")
+                    const auto side_field = change.find("side");
+                    const bool buy = side_field != change.end() &&
+                                     side_field->get_ref<const std::string &>() == "BUY";
+                    if (!buy && (side_field == change.end() ||
+                                 side_field->get_ref<const std::string &>() != "SELL"))
                     {
                         throw std::invalid_argument(
                             "price change side must be BUY or SELL");
                     }
-                    event->changes.push_back({side == "BUY", parse_level(change)});
+                    event->changes.push_back({buy, parse_level(change)});
                 }
             }
+        };
+
+        if (parsed.is_array())
+        {
+            for (const auto &item : parsed)
+                handle_item(item);
+        }
+        else
+        {
+            handle_item(parsed);
         }
         return events;
     }
@@ -199,10 +237,15 @@ namespace polymarket::detail
             for (const auto &level : event.asks) validate_level(level);
             book.bids = event.bids;
             book.asks = event.asks;
-            std::sort(book.bids.begin(), book.bids.end(), [](const auto &left, const auto &right)
-                      { return left.price > right.price; });
-            std::sort(book.asks.begin(), book.asks.end(), [](const auto &left, const auto &right)
-                      { return left.price < right.price; });
+            const auto descending = [](const auto &left, const auto &right)
+            { return left.price > right.price; };
+            const auto ascending = [](const auto &left, const auto &right)
+            { return left.price < right.price; };
+            // Parsed snapshots arrive in book order; sort others.
+            if (!std::is_sorted(book.bids.begin(), book.bids.end(), descending))
+                std::sort(book.bids.begin(), book.bids.end(), descending);
+            if (!std::is_sorted(book.asks.begin(), book.asks.end(), ascending))
+                std::sort(book.asks.begin(), book.asks.end(), ascending);
         }
         else
         {

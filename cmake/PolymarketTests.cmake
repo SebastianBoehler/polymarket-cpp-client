@@ -155,6 +155,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_websocket_resilience PRIVATE polymarket::client)
     add_test(NAME test_websocket_resilience COMMAND test_websocket_resilience)
 
+    add_executable(test_network_routing tests/test_network_routing.cpp)
+    target_link_libraries(test_network_routing PRIVATE polymarket::client)
+    add_test(NAME test_network_routing COMMAND test_network_routing)
+
     add_executable(test_oracle_watcher tests/test_oracle_watcher.cpp)
     target_link_libraries(test_oracle_watcher PRIVATE polymarket::client)
     add_test(NAME test_oracle_watcher COMMAND test_oracle_watcher)

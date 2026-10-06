@@ -1,6 +1,7 @@
 #pragma once
 
 #include "polymarket/clob_types.hpp"
+#include "polymarket/geoblock.hpp"
 #include "polymarket/types.hpp"
 #include "polymarket/http_client.hpp"
 #include "polymarket/order_signer.hpp"
@@ -204,6 +205,12 @@ namespace polymarket
 
         // Set proxy for HTTP requests (e.g., "http://user:pass@proxy.example.com:8080")
         void set_proxy(const std::string &proxy_url) { http_.set_proxy(proxy_url); data_http_.set_proxy(proxy_url); }
+
+        // Order-placement eligibility for this client's route (proxy/interface included)
+        Result<GeoblockStatus> get_geoblock_status() const
+        {
+            return check_geoblock(http_.options());
+        }
 
         // Set custom user agent
         void set_user_agent(const std::string &user_agent) { http_.set_user_agent(user_agent); data_http_.set_user_agent(user_agent); }

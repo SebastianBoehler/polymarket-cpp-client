@@ -15,6 +15,7 @@
 namespace polymarket::detail
 {
     class BoundedMessageQueue;
+    class WebSocketTunnel;
 
     struct WebSocketCallbacks
     {
@@ -77,6 +78,8 @@ namespace polymarket::detail
         static void validate_options(const WebSocketOptions &options);
         void require_inactive_locked() const;
         void apply_options_locked();
+        void prepare_route_locked();
+        std::string tunnel_error() const;
         void install_transport_callback();
         void handle_transport_message(const ix::WebSocketMessagePtr &message);
         void handle_open();
@@ -143,6 +146,11 @@ namespace polymarket::detail
         ix::WebSocket ws_;
         std::unique_ptr<BoundedMessageQueue> message_queue_;
         WebSocketOptions options_;
+        std::string url_;
+
+        // Set while a routed connection is active; read by IX callbacks.
+        mutable std::mutex tunnel_mutex_;
+        std::shared_ptr<WebSocketTunnel> tunnel_;
 
         mutable std::mutex lifecycle_mutex_;
         mutable std::mutex callback_update_mutex_;
