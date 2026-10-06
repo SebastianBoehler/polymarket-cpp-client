@@ -1,5 +1,6 @@
 #include "polymarket/http_client.hpp"
 #include "http_global.hpp"
+#include "network_route.hpp"
 #include <stdexcept>
 #include <utility>
 
@@ -196,43 +197,16 @@ namespace polymarket
     {
         std::lock_guard<std::recursive_mutex> lock(curl_mutex_);
         options_.proxy_url = proxy_url;
-        proxy_url_ = proxy_url;
-        if (curl_)
-        {
-            if (proxy_url_.empty())
-            {
-                curl_easy_setopt(curl_, CURLOPT_PROXY, nullptr);
-                curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYPEER, 1L);
-                curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYHOST, 2L);
-                curl_easy_setopt(curl_, CURLOPT_PROXY_SSL_VERIFYPEER, 1L);
-                curl_easy_setopt(curl_, CURLOPT_PROXY_SSL_VERIFYHOST, 2L);
-                return;
-            }
+        apply_route();
+    }
 
-            curl_easy_setopt(curl_, CURLOPT_PROXY, proxy_url_.c_str());
-
-            // Detect proxy type from URL scheme
-            if (proxy_url_.find("socks5://") == 0 || proxy_url_.find("socks5h://") == 0)
-            {
-                // SOCKS5 proxy - use socks5h for DNS resolution through proxy
-                curl_easy_setopt(curl_, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
-            }
-            else if (proxy_url_.find("socks4://") == 0)
-            {
-                curl_easy_setopt(curl_, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
-            }
-            else
-            {
-                // HTTP/HTTPS proxy
-                curl_easy_setopt(curl_, CURLOPT_HTTPPROXYTUNNEL, 1L); // Use CONNECT for HTTPS
-                curl_easy_setopt(curl_, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
-            }
-
-            curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYPEER, 1L);
-            curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYHOST, 2L);
-            curl_easy_setopt(curl_, CURLOPT_PROXY_SSL_VERIFYPEER, 1L);
-            curl_easy_setopt(curl_, CURLOPT_PROXY_SSL_VERIFYHOST, 2L);
-        }
+    void HttpClient::apply_route()
+    {
+        if (!curl_) return;
+        const auto route =
+            detail::resolve_network_route(options_.proxy_url, options_.interface_name);
+        proxy_url_ = route.proxy_url;
+        detail::apply_network_route(curl_, route);
     }
 
     void HttpClient::set_user_agent(const std::string &user_agent)
@@ -264,7 +238,6 @@ namespace polymarket
     {
         std::lock_guard<std::recursive_mutex> lock(curl_mutex_);
         options_ = options;
-        proxy_url_ = options.proxy_url;
         apply_options();
     }
 
@@ -283,7 +256,7 @@ namespace polymarket
         curl_easy_setopt(curl_, CURLOPT_FORBID_REUSE, options_.allow_connection_reuse ? 0L : 1L);
         curl_easy_setopt(curl_, CURLOPT_FRESH_CONNECT, options_.allow_connection_reuse ? 0L : 1L);
         curl_easy_setopt(curl_, CURLOPT_USERAGENT, options_.user_agent.empty() ? nullptr : options_.user_agent.c_str());
-        set_proxy(options_.proxy_url);
+        apply_route();
     }
 
 } // namespace polymarket

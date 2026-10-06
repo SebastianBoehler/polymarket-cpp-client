@@ -113,6 +113,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/evm_reorg_reconciliation.cpp
     src/evm_utils.cpp
     src/gamma_market_fetcher.cpp
+    src/geoblock.cpp
     src/http_client.cpp
     src/http_client_connection.cpp
     src/http_global.cpp
@@ -121,6 +122,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/json_rpc_transactions.cpp
     src/json_rpc_ws_dispatch.cpp
     src/json_rpc_ws_runtime.cpp
+    src/network_route.cpp
     src/websocket_client_callbacks.cpp
     src/websocket_client.cpp
     src/websocket_client_resilience.cpp
@@ -128,6 +130,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/websocket_client_transport.cpp
     src/websocket_resilience.cpp
     src/websocket_market_data.cpp
+    src/websocket_tunnel.cpp
     src/websocket_user_data.cpp
     src/market_fetcher.cpp
     src/market_discovery.cpp

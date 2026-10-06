@@ -1,6 +1,8 @@
+#include "network_route.hpp"
 #include "websocket_callback_context.hpp"
 #include "websocket_client_state.hpp"
 #include "websocket_resilience.hpp"
+#include "websocket_tunnel.hpp"
 
 namespace polymarket::detail
 {
@@ -36,7 +38,38 @@ namespace polymarket::detail
     {
         std::lock_guard<std::mutex> lock(lifecycle_mutex_);
         require_inactive_locked();
+        url_ = url;
         ws_.setUrl(url);
+    }
+
+    void WebSocketClientState::prepare_route_locked()
+    {
+        auto route = resolve_network_route(options_.proxy_url, options_.interface_name);
+        std::shared_ptr<WebSocketTunnel> tunnel;
+        if (!route.empty())
+        {
+            tunnel = std::make_shared<WebSocketTunnel>(url_, std::move(route));
+            ws_.setUrl(tunnel->local_url());
+            ws_.setExtraHeaders(
+                {{"Host", tunnel->host_header()}, {"Origin", tunnel->origin_header()}});
+        }
+        else
+        {
+            ws_.setUrl(url_);
+            ws_.setExtraHeaders({});
+        }
+        std::lock_guard<std::mutex> lock(tunnel_mutex_);
+        tunnel_ = std::move(tunnel);
+    }
+
+    std::string WebSocketClientState::tunnel_error() const
+    {
+        std::shared_ptr<WebSocketTunnel> tunnel;
+        {
+            std::lock_guard<std::mutex> lock(tunnel_mutex_);
+            tunnel = tunnel_;
+        }
+        return tunnel ? tunnel->last_error() : std::string();
     }
 
     bool WebSocketClientState::connect()
@@ -72,6 +105,7 @@ namespace polymarket::detail
 
             try
             {
+                prepare_route_locked();
                 start_transport_worker();
                 install_transport_callback();
                 if (options_.reconnect_enabled) ws_.enableAutomaticReconnection();
@@ -195,7 +229,11 @@ namespace polymarket::detail
         }
         state_cv_.notify_all();
 
-        invoke_error_callback(message->errorInfo.reason);
+        // IXWebSocket only sees the loopback leg; name the routed failure.
+        const auto route_error = tunnel_error();
+        invoke_error_callback(route_error.empty()
+                                  ? message->errorInfo.reason
+                                  : message->errorInfo.reason + " (" + route_error + ")");
     }
 
     bool WebSocketClientState::wait_until_connected(std::chrono::milliseconds timeout)

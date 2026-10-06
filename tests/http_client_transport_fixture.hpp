@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace
@@ -95,6 +96,12 @@ namespace
             truncate_next_response_.store(true);
         }
 
+        void set_response_body(std::string body)
+        {
+            std::lock_guard<std::mutex> lock(requests_mutex_);
+            response_body_ = std::move(body);
+        }
+
     private:
         int fd_{-1};
         int port_{0};
@@ -107,6 +114,7 @@ namespace
         bool heartbeat_started_{false};
         bool heartbeat_released_{true};
         std::atomic<bool> truncate_next_response_{false};
+        std::string response_body_{R"({"ok":true})"};
 
         static std::size_t content_length(const std::string &request)
         {
@@ -185,7 +193,11 @@ namespace
                         }
                     }
                 }
-                std::string body = R"({"ok":true})";
+                std::string body;
+                {
+                    std::lock_guard<std::mutex> lock(requests_mutex_);
+                    body = response_body_;
+                }
                 std::string response;
                 if (parsed.path == "/redirect")
                 {
