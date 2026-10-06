@@ -17,18 +17,6 @@ namespace polymarket::detail
             return {EvmAbiValue::uint256(1), EvmAbiValue::uint256(2)};
         }
 
-        std::vector<uint8_t> uint256_word(const std::string &value, const char *label)
-        {
-            try
-            {
-                return parse_uint256_word(value);
-            }
-            catch (const std::invalid_argument &error)
-            {
-                throw std::invalid_argument(std::string(label) + ": " + error.what());
-            }
-        }
-
         bool is_zero_word(const std::vector<uint8_t> &word)
         {
             return std::all_of(word.begin(), word.end(), [](uint8_t byte) { return byte == 0; });
@@ -47,6 +35,18 @@ namespace polymarket::detail
         }
 
     } // namespace
+
+    std::vector<uint8_t> parse_uint256_amount(const std::string &value, const char *label)
+    {
+        try
+        {
+            return parse_uint256_word(value);
+        }
+        catch (const std::invalid_argument &error)
+        {
+            throw std::invalid_argument(std::string(label) + ": " + error.what());
+        }
+    }
 
     std::string normalize_condition_id(const std::string &condition_id)
     {
@@ -175,15 +175,16 @@ namespace polymarket::detail
                                      const std::array<std::string, 2> &balances,
                                      const std::string &requested)
     {
-        const auto yes = uint256_word(balances[0], "balance");
-        const auto no = uint256_word(balances[1], "balance");
+        const auto yes = parse_uint256_amount(balances[0], "balance");
+        const auto no = parse_uint256_amount(balances[1], "balance");
         const auto &max_amount = yes < no ? balances[0] : balances[1];
         if (uint256_is_zero(max_amount))
             throw std::invalid_argument("no complementary positions to merge for condition " + condition_id);
         if (requested == "max")
             return max_amount;
         require_positive_amount(requested, "merge amount");
-        if (uint256_word(max_amount, "balance") < uint256_word(requested, "merge amount"))
+        if (parse_uint256_amount(max_amount, "balance") <
+            parse_uint256_amount(requested, "merge amount"))
             throw std::invalid_argument("merge amount " + requested + " exceeds the mergeable " + max_amount +
                                         " for condition " + condition_id);
         return requested;
@@ -191,12 +192,12 @@ namespace polymarket::detail
 
     void require_positive_amount(const std::string &amount, const char *label)
     {
-        if (is_zero_word(uint256_word(amount, label)))
+        if (is_zero_word(parse_uint256_amount(amount, label)))
             throw std::invalid_argument(std::string(label) + " must be positive");
     }
 
     bool uint256_is_zero(const std::string &value)
     {
-        return is_zero_word(uint256_word(value, "amount"));
+        return is_zero_word(parse_uint256_amount(value, "amount"));
     }
 } // namespace polymarket::detail

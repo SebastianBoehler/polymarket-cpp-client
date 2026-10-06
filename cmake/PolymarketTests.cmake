@@ -52,6 +52,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_trading_approvals PRIVATE polymarket::client)
     add_test(NAME test_trading_approvals COMMAND test_trading_approvals)
 
+    add_executable(test_trading_approvals_failures tests/test_trading_approvals_failures.cpp)
+    target_include_directories(test_trading_approvals_failures PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_trading_approvals_failures PRIVATE polymarket::client)
+    add_test(NAME test_trading_approvals_failures COMMAND test_trading_approvals_failures)
+
     add_executable(test_transaction_waiters tests/test_transaction_waiters.cpp)
     target_include_directories(test_transaction_waiters PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_transaction_waiters PRIVATE polymarket::client)

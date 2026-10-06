@@ -5,12 +5,12 @@ binary market positions on Polygon, matching `split_position`,
 `merge_positions`, `merge_multiple_positions` and `redeem_positions` in the
 official Python SDK.
 
-| Operation                                       | Effect                                                        |
-| ----------------------------------------------- | ------------------------------------------------------------- |
-| `split_position(condition_id, amount)`          | Lock `amount` pUSD into `amount` YES + `amount` NO shares     |
+| Operation | Effect |
+|---|---|
+| `split_position(condition_id, amount)` | Lock `amount` pUSD into `amount` YES + `amount` NO shares |
 | `merge_positions(condition_id, amount = "max")` | Burn YES+NO pairs back into pUSD; `"max"` merges min(YES, NO) |
-| `merge_multiple_positions(requests)`            | Merge several conditions in one call                          |
-| `redeem_positions(condition_id)`                | Redeem every position held in a closed, resolved market       |
+| `merge_multiple_positions(requests)` | Merge several conditions in one call |
+| `redeem_positions(condition_id)` | Redeem every position held in a closed, resolved market |
 
 Amounts are integer base units as base-10 strings. pUSD and outcome shares
 both use 6 decimals, so `"1000000"` is 1 pUSD or 1 share.
@@ -37,10 +37,10 @@ auto handle = client.redeem_positions("0x6b04...6fbc");
 auto outcome = handle.wait(); // throws on revert, relayer failure or timeout
 ```
 
-| `wallet_type`      | Holder                    | Sent by                                           | Gas                 |
-| ------------------ | ------------------------- | ------------------------------------------------- | ------------------- |
-| `EOA` (default)    | the key's address         | signed legacy (EIP-155) transaction via `rpc_url` | POL from the EOA    |
-| `POLY_GNOSIS_SAFE` | the key's Polymarket Safe | Safe transaction via `relayer-v2.polymarket.com`  | paid by the relayer |
+| `wallet_type` | Holder | Sent by | Gas |
+|---|---|---|---|
+| `EOA` (default) | the key's address | signed legacy (EIP-155) transaction via `rpc_url` | POL from the EOA |
+| `POLY_GNOSIS_SAFE` | the key's Polymarket Safe | Safe transaction via `relayer-v2.polymarket.com` | paid by the relayer |
 
 The Safe address is derived from the key with CREATE2. `funder_address` is
 optional; if it is set and is not that Safe, the constructor throws. The

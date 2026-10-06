@@ -1,4 +1,5 @@
 #include "approval_calls.hpp"
+#include "position_calls.hpp"
 #include "evm_uint.hpp"
 #include "polymarket/evm_abi.hpp"
 #include "polymarket/evm_utils.hpp"
@@ -25,18 +26,6 @@ namespace polymarket::detail
                                          std::to_string(words.size()));
             return words[0];
         }
-
-        std::vector<uint8_t> amount_word(const std::string &amount, const char *label)
-        {
-            try
-            {
-                return parse_uint256_word(amount);
-            }
-            catch (const std::invalid_argument &error)
-            {
-                throw std::invalid_argument(std::string(label) + ": " + error.what());
-            }
-        }
     } // namespace
 
     void require_address(const std::string &value, const char *label)
@@ -53,14 +42,14 @@ namespace polymarket::detail
     std::string resolve_approval_amount(const std::string &amount)
     {
         if (amount == "max") return max_uint256;
-        (void)amount_word(amount, "approval amount");
+        (void)parse_uint256_amount(amount, "approval amount");
         return amount;
     }
 
     ContractCall erc20_approve_call(const std::string &token, const std::string &spender,
                                     const std::string &amount)
     {
-        (void)amount_word(amount, "approval amount");
+        (void)parse_uint256_amount(amount, "approval amount");
         return {token,
                 evm_abi_encode_call("approve(address,uint256)",
                                     {EvmAbiValue::address(spender), EvmAbiValue::uint256(amount)})};
@@ -69,7 +58,7 @@ namespace polymarket::detail
     ContractCall erc20_transfer_call(const std::string &token, const std::string &recipient,
                                      const std::string &amount)
     {
-        (void)amount_word(amount, "transfer amount");
+        (void)parse_uint256_amount(amount, "transfer amount");
         return {token,
                 evm_abi_encode_call("transfer(address,uint256)", {EvmAbiValue::address(recipient),
                                                                   EvmAbiValue::uint256(amount)})};
@@ -140,7 +129,8 @@ namespace polymarket::detail
             const auto context =
                 "allowance(" + approval.token_address + ", " + approval.spender + ")";
             const auto allowance = decode_uint256_result(results[index++], context);
-            if (parse_uint256_word(allowance) < amount_word(approval.amount, "required amount"))
+            if (parse_uint256_word(allowance) <
+                parse_uint256_amount(approval.amount, "required amount"))
                 state.missing.erc20.push_back(approval);
         }
         for (const auto &approval : required.erc1155)
