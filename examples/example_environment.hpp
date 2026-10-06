@@ -5,8 +5,7 @@
 
 namespace polymarket_example
 {
-    // POLYMARKET_ENV selects "production" (default) or "preproduction".
-    // Throws std::invalid_argument for any other name.
+    // POLYMARKET_ENV: "production" (default) or "preproduction".
     inline polymarket::Environment selected_environment()
     {
         const char *name = std::getenv("POLYMARKET_ENV");

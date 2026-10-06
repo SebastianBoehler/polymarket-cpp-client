@@ -19,8 +19,6 @@ namespace polymarket
 {
     using detail::percent_encode_query_value;
 
-    // The legacy constructors keep production endpoints and contracts and
-    // only override the CLOB host. Other chains need an Environment.
     static Environment legacy_environment(const std::string &base_url, int chain_id)
     {
         if (chain_id != 137)

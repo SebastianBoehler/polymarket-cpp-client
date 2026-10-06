@@ -13,6 +13,7 @@
 
 #include "polymarket/order_signer.hpp"
 #include "order_test_live.hpp"
+#include "../examples/example_environment.hpp"
 #include "polymarket/http_client.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -82,7 +83,7 @@ int main(int argc, char *argv[])
 
     try
     {
-        const auto environment = order_test::selected_environment();
+        const auto environment = polymarket_example::selected_environment();
         std::cout << "Environment: " << environment.name << " (" << environment.clob_url << ")\n\n";
 
         // Initialize signer

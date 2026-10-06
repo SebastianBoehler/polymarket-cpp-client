@@ -5,9 +5,7 @@
 #include <iostream>
 #include <string_view>
 
-// Read-only smoke test against the preproduction CLOB. It sends no orders and
-// needs no credentials. Preproduction runs on Polygon mainnet, so this test
-// must stay read-only.
+// Preproduction runs on Polygon mainnet, so this test must stay read-only.
 int main()
 {
     using check_support::check;

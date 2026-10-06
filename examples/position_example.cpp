@@ -56,7 +56,6 @@ int main(int argc, char **argv)
     if ((action != "split" && action != "merge" && action != "redeem") || (action == "split" && amount.empty()))
         return usage();
 
-    // Endpoints and contracts follow POLYMARKET_ENV; the RPC stays explicit.
     auto config = PositionClientConfig::for_environment(polymarket_example::selected_environment());
     config.private_key = env("PRIVATE_KEY");
     config.rpc_url = env("POLYGON_RPC_ENDPOINT");

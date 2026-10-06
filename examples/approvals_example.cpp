@@ -45,7 +45,6 @@ int main(int argc, char **argv)
         execute = true;
     }
 
-    // Endpoints and contracts follow POLYMARKET_ENV; the RPC stays explicit.
     auto config = PositionClientConfig::for_environment(polymarket_example::selected_environment());
     config.private_key = env("PRIVATE_KEY");
     config.rpc_url = env("POLYGON_RPC_ENDPOINT");

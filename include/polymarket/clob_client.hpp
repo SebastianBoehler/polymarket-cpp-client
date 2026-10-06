@@ -44,11 +44,8 @@ namespace polymarket
                    const std::string &funder_address,
                    const HttpClientOptions &http_options);
 
-        // The constructors above override only the production CLOB host with
-        // base_url; the Data API and exchange contracts stay on production and
-        // only chain 137 is accepted. The constructors below take every CLOB,
-        // Data API and contract setting from `environment`, which is validated
-        // first. Without http_options the client keeps the 10 s request timeout.
+        // The constructors above change only the production CLOB host (chain 137 only).
+        // These take every host and contract from a validated `environment`.
         explicit ClobClient(const Environment &environment,
                             const std::optional<HttpClientOptions> &http_options = std::nullopt);
         ClobClient(const Environment &environment, const std::string &private_key,
@@ -262,7 +259,6 @@ namespace polymarket
 
         const Environment &environment() const { return environment_; }
 
-        // Exchange contracts from the client's environment
         std::string get_exchange_address() const;
         std::string get_neg_risk_exchange_address() const;
 
