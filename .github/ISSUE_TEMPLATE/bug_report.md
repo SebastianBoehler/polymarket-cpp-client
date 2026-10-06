@@ -27,6 +27,7 @@ What should have happened?
 - Compiler:
 - CMake version:
 - Install method: FetchContent / release archive / source build
+- Network route: direct / proxy (scheme only, no credentials) / bound interface
 
 ## Notes
 
