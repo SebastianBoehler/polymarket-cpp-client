@@ -13,8 +13,6 @@ namespace approvals_test
 
     const std::string recipient = "0x000000000000000000000000000000000000dEaD";
 
-    // Built on use: a namespace-scope inline variable may be initialized
-    // before kContracts, which Apple clang does.
     inline TradingApprovals required_set()
     {
         return required_trading_approvals(kContracts);

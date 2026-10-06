@@ -24,10 +24,6 @@ namespace check_support
         check(actual == expected, name + " mismatch\n  expected: " + expected + "\n  actual:   " + actual);
     }
 
-    // Matches the type with dynamic_cast instead of a `catch (const Error &)`
-    // clause. Instantiations that differ only in their catch clause have
-    // identical code, and AppleClang Release builds folded them into one, so
-    // every expect_throws<X> in a binary caught the same single type.
     template <typename Error>
     void expect_throws(const std::string &name, const std::function<void()> &action)
     {
