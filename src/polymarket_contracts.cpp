@@ -46,6 +46,7 @@ namespace polymarket
         c.neg_risk_module = "0x200000900045e3B6259600682756002200028933";
         c.combinatorial_module = "0x30000034706c7d8e12009dab006be20000c031a8";
         c.auto_redeem_operator = "0xa1200000d0002264C9a1698e001292D00E1b00af";
+        c.perps_deposit_contract = "0xDCa4af75705dbB50f62437045afF9921947917d2";
         c.proxy_factory = "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052";
         c.proxy_implementation = "0x44e999d5c2F66Ef0861317f9A4805AC2e90aEB4f";
         c.safe_factory = "0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b";
@@ -84,6 +85,7 @@ namespace polymarket
             {"neg_risk_module", &neg_risk_module},
             {"combinatorial_module", &combinatorial_module},
             {"auto_redeem_operator", &auto_redeem_operator},
+            {"perps_deposit_contract", &perps_deposit_contract},
             {"proxy_factory", &proxy_factory},
             {"proxy_implementation", &proxy_implementation},
             {"safe_factory", &safe_factory},

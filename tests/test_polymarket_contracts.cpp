@@ -80,6 +80,7 @@ namespace
                 {"neg_risk_module", c.neg_risk_module},
                 {"combinatorial_module", c.combinatorial_module},
                 {"auto_redeem_operator", c.auto_redeem_operator},
+                {"perps_deposit_contract", c.perps_deposit_contract},
                 {"proxy_factory", c.proxy_factory},
                 {"proxy_implementation", c.proxy_implementation},
                 {"safe_factory", c.safe_factory},
@@ -108,6 +109,8 @@ namespace
               "neg-risk collateral adapter");
         check(c.protocol_v2_router == "0x12121212006e4CD160D18e3f00711DA5c3372600", "V2 router address");
         check(c.safe_multisend == "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761", "Safe MultiSend address");
+        check(c.perps_deposit_contract == "0xDCa4af75705dbB50f62437045afF9921947917d2",
+              "perps deposit address");
         check(c.exchange(false) == c.standard_exchange && c.exchange(true) == c.neg_risk_exchange,
               "exchange selector");
 

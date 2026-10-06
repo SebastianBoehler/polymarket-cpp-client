@@ -149,6 +149,8 @@ set(POLYMARKET_CLIENT_SOURCES
     src/polymarket_events.cpp
     src/polymarket_contracts.cpp
     src/position_calls.cpp
+    src/approval_calls.cpp
+    src/trading_approvals.cpp
     src/position_gamma.cpp
     src/position_client.cpp
     src/position_senders.cpp
