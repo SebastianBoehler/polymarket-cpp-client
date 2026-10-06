@@ -23,9 +23,21 @@ namespace polymarket
         // Read over RPC rather than from indexed data, which can lag recent grants.
         const auto state = get_trading_approvals_state();
         if (state.is_fully_approved) return std::nullopt;
-        return execute_calls(detail::trading_approval_calls(state.missing),
-                             "Trading setup approvals")
-            .wait(timeout);
+        const auto handle =
+            execute_calls(detail::trading_approval_calls(state.missing), "Trading setup approvals");
+        try
+        {
+            return handle.wait(timeout);
+        }
+        catch (const std::exception &error)
+        {
+            // An EOA batch already mined its earlier approvals; keep their hashes.
+            const auto &hashes = handle.transaction_hashes();
+            if (hashes.size() < 2)
+                throw;
+            throw PartialBatchError(hashes, hashes.size() - 1, hashes.size(),
+                                    std::current_exception(), error.what());
+        }
     }
 
     TransactionHandle PositionClient::approve_erc20(const std::string &token_address,
