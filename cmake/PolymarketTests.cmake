@@ -32,6 +32,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_polymarket_contracts PRIVATE polymarket::client)
     add_test(NAME test_polymarket_contracts COMMAND test_polymarket_contracts)
 
+    add_executable(test_environment tests/test_environment.cpp)
+    target_link_libraries(test_environment PRIVATE polymarket::client)
+    add_test(NAME test_environment COMMAND test_environment)
+
     add_executable(test_position_client tests/test_position_client.cpp)
     target_include_directories(test_position_client PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_position_client PRIVATE polymarket::client)
