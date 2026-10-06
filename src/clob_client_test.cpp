@@ -253,7 +253,6 @@ int main()
                     test_metadata_cache_invalidation_refreshes_values() &&
                     test_signer_only_l1_bootstrap_installs_credentials() &&
                     test_credentials_validation() &&
-                    test_clob_constructors_reject_unsupported_chains() &&
                     test_clob_constructors_require_non_eoa_funder() &&
                     test_clob_warm_connection_uses_time_only() && test_order_result_schema_failures() &&
                     test_order_post_response_contracts() && test_cancellation_response_contracts() &&

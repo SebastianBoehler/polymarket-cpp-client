@@ -13,6 +13,7 @@
 
 #include "polymarket/order_signer.hpp"
 #include "order_test_live.hpp"
+#include "../examples/example_environment.hpp"
 #include "polymarket/http_client.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -31,7 +32,8 @@ void print_usage()
               << "  FUNDER_ADDRESS   - Address holding funds (for proxy wallets)\n"
               << "  API_KEY          - Polymarket API key\n"
               << "  API_SECRET       - Polymarket API secret\n"
-              << "  API_PASSPHRASE   - Polymarket API passphrase\n\n"
+              << "  API_PASSPHRASE   - Polymarket API passphrase\n"
+              << "  POLYMARKET_ENV   - production (default) or preproduction\n\n"
               << "Options:\n"
               << "  --live           - Actually place orders (default: dry-run)\n"
               << "  --help           - Show this help\n"
@@ -81,9 +83,12 @@ int main(int argc, char *argv[])
 
     try
     {
+        const auto environment = polymarket_example::selected_environment();
+        std::cout << "Environment: " << environment.name << " (" << environment.clob_url << ")\n\n";
+
         // Initialize signer
         std::cout << "[1] Initializing order signer...\n";
-        OrderSigner signer(private_key, 137); // Polygon mainnet
+        OrderSigner signer(private_key, static_cast<int>(environment.contracts.chain_id));
 
         std::cout << "    Derived address: " << signer.address() << "\n";
 
@@ -109,7 +114,7 @@ int main(int argc, char *argv[])
         order.signature_type = SignatureType::EOA;
 
         // Use neg_risk exchange for crypto markets
-        auto signed_order = signer.sign_order(order, order_test::NEG_RISK_CTF_EXCHANGE);
+        auto signed_order = signer.sign_order(order, environment.contracts.neg_risk_exchange);
 
         // Also test with FIXED parameters for comparison with TypeScript
         std::cout << "\n[2b] Testing with FIXED params for TypeScript comparison...\n";
@@ -128,7 +133,8 @@ int main(int argc, char *argv[])
         fixed_order.timestamp = "1713398400000";
 
         std::string fixed_salt = "123456789";
-        auto signed_order_fixed = signer.sign_order_with_salt(fixed_order, order_test::NEG_RISK_CTF_EXCHANGE, fixed_salt);
+        auto signed_order_fixed = signer.sign_order_with_salt(
+            fixed_order, environment.contracts.neg_risk_exchange, fixed_salt);
         std::cout << "    Fixed salt: " << fixed_salt << "\n";
         std::cout << "    C++ Signature: " << signed_order_fixed.signature << "\n";
         std::cout << "    Expected (official V2 SDK): 0x172933dc26efdf531dc959a95743b5c13147c5027a1eaa172701f1e599a130851f8126ce1c4fa043e360e4ee30211f49151d6f192a32b1cbad2123463e3d45641c\n";
@@ -170,7 +176,7 @@ int main(int argc, char *argv[])
 
         http_global_init();
         HttpClient http;
-        http.set_base_url(order_test::CLOB_API);
+        http.set_base_url(environment.clob_url);
         http.set_timeout_ms(5000);
 
         auto response = http.get("/");
@@ -222,7 +228,7 @@ int main(int argc, char *argv[])
             std::cout << "    POLY_ADDRESS: " << headers.poly_address << "\n";
 
             HttpClient auth_http;
-            auth_http.set_base_url(order_test::CLOB_API);
+            auth_http.set_base_url(environment.clob_url);
             auth_http.set_timeout_ms(10000);
 
             std::map<std::string, std::string> auth_headers;
@@ -247,7 +253,8 @@ int main(int argc, char *argv[])
 
         if (live_mode)
         {
-            if (!order_test::run_live_order(private_key, funder_address, creds, have_creds, signer))
+            if (!order_test::run_live_order(environment, private_key, funder_address, creds,
+                                            have_creds, signer))
             {
                 http_global_cleanup();
                 return 1;

@@ -8,8 +8,10 @@
 #include <nlohmann/json.hpp>
 #include <charconv>
 #include <chrono>
+#include <limits>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 
 using json = nlohmann::json;
 
@@ -17,19 +19,23 @@ namespace polymarket
 {
     using detail::percent_encode_query_value;
 
-    static const PolymarketContracts &mainnet_contracts()
+    static Environment legacy_environment(const std::string &base_url, int chain_id)
     {
-        static const PolymarketContracts contracts = PolymarketContracts::polygon_mainnet();
-        return contracts;
+        if (chain_id != 137)
+            throw std::invalid_argument("unsupported CLOB chain ID " + std::to_string(chain_id) +
+                                        "; use an Environment for other chains");
+        Environment environment = Environment::production();
+        environment.clob_url = base_url;
+        return environment;
     }
 
-    static constexpr const char *DATA_API_URL = "https://data-api.polymarket.com";
-
-    static int validated_chain_id(int chain_id)
+    static Environment validated_environment(const Environment &environment)
     {
-        if (chain_id != 137 && chain_id != 80002)
-            throw std::invalid_argument("unsupported CLOB chain ID");
-        return chain_id;
+        environment.validate();
+        if (environment.contracts.chain_id > static_cast<uint64_t>(std::numeric_limits<int>::max()))
+            throw std::invalid_argument(
+                "Environment.contracts.chain_id exceeds the CLOB signer range");
+        return environment;
     }
 
     static std::string validated_funder(SignatureType signature_type,
@@ -49,23 +55,22 @@ namespace polymarket
         throw std::invalid_argument("unsupported signature type");
     }
 
-    static void configure_default_transports(HttpClient &clob, HttpClient &data,
-                                             const std::string &clob_url)
-    {
-        clob.set_base_url(clob_url);
-        data.set_base_url(DATA_API_URL);
-        clob.set_timeout_ms(10000);
-        data.set_timeout_ms(10000);
-    }
-
     static void configure_transports(HttpClient &clob, HttpClient &data,
-                                     const std::string &clob_url,
-                                     const HttpClientOptions &options)
+                                     const Environment &environment,
+                                     const std::optional<HttpClientOptions> &options)
     {
-        clob.configure(options);
-        data.configure(options);
-        clob.set_base_url(clob_url);
-        data.set_base_url(DATA_API_URL);
+        if (options)
+        {
+            clob.configure(*options);
+            data.configure(*options);
+        }
+        else
+        {
+            clob.set_timeout_ms(10000);
+            data.set_timeout_ms(10000);
+        }
+        clob.set_base_url(environment.clob_url);
+        data.set_base_url(environment.data_url);
     }
 
     static ClobMarketPage fetch_market_page(
@@ -87,84 +92,103 @@ namespace polymarket
         }
     }
 
+    ClobClient::ClobClient(Environment environment, const std::string *private_key,
+                           const ApiCredentials *creds, SignatureType sig_type,
+                           const std::string &funder_address,
+                           const std::optional<HttpClientOptions> &http_options)
+        : environment_(std::move(environment)),
+          funder_address_(private_key ? validated_funder(sig_type, funder_address) : std::string()),
+          sig_type_(private_key ? sig_type : SignatureType::EOA)
+    {
+        configure_transports(http_, data_http_, environment_, http_options);
+        if (!private_key) return;
+        order_signer_ = std::make_unique<OrderSigner>(
+            *private_key, static_cast<int>(environment_.contracts.chain_id));
+        if (!creds) return;
+        detail::validate_api_credentials(*creds);
+        api_creds_ = std::make_unique<ApiCredentials>(*creds);
+    }
+
     ClobClient::ClobClient(const std::string &base_url, int chain_id)
-        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url), sig_type_(SignatureType::EOA)
+        : ClobClient(legacy_environment(base_url, chain_id), nullptr, nullptr, SignatureType::EOA,
+                     {}, std::nullopt)
     {
-        configure_default_transports(http_, data_http_, base_url);
     }
 
-    ClobClient::ClobClient(const std::string &base_url, int chain_id, const HttpClientOptions &http_options)
-        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url), sig_type_(SignatureType::EOA)
+    ClobClient::ClobClient(const std::string &base_url, int chain_id,
+                           const HttpClientOptions &http_options)
+        : ClobClient(legacy_environment(base_url, chain_id), nullptr, nullptr, SignatureType::EOA,
+                     {}, http_options)
     {
-        configure_transports(http_, data_http_, base_url, http_options);
     }
 
     ClobClient::ClobClient(const std::string &base_url, int chain_id,
                            const std::string &private_key, SignatureType sig_type,
                            const std::string &funder_address)
-        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url),
-          funder_address_(validated_funder(sig_type, funder_address)),
-          sig_type_(sig_type)
+        : ClobClient(legacy_environment(base_url, chain_id), &private_key, nullptr, sig_type,
+                     funder_address, std::nullopt)
     {
-        configure_default_transports(http_, data_http_, base_url);
-        order_signer_ = std::make_unique<OrderSigner>(private_key, chain_id);
     }
 
     ClobClient::ClobClient(const std::string &base_url, int chain_id,
                            const std::string &private_key, SignatureType sig_type,
-                           const std::string &funder_address,
-                           const HttpClientOptions &http_options)
-        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url),
-          funder_address_(validated_funder(sig_type, funder_address)),
-          sig_type_(sig_type)
+                           const std::string &funder_address, const HttpClientOptions &http_options)
+        : ClobClient(legacy_environment(base_url, chain_id), &private_key, nullptr, sig_type,
+                     funder_address, http_options)
     {
-        configure_transports(http_, data_http_, base_url, http_options);
-        order_signer_ = std::make_unique<OrderSigner>(private_key, chain_id);
     }
 
     ClobClient::ClobClient(const std::string &base_url, int chain_id,
-                           const std::string &private_key,
-                           const ApiCredentials &creds,
-                           SignatureType sig_type,
-                           const std::string &funder_address)
-        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url),
-          funder_address_(validated_funder(sig_type, funder_address)),
-          sig_type_(sig_type)
+                           const std::string &private_key, const ApiCredentials &creds,
+                           SignatureType sig_type, const std::string &funder_address)
+        : ClobClient(legacy_environment(base_url, chain_id), &private_key, &creds, sig_type,
+                     funder_address, std::nullopt)
     {
-        configure_default_transports(http_, data_http_, base_url);
-
-        order_signer_ = std::make_unique<OrderSigner>(private_key, chain_id);
-        detail::validate_api_credentials(creds);
-        api_creds_ = std::make_unique<ApiCredentials>(creds);
     }
 
     ClobClient::ClobClient(const std::string &base_url, int chain_id,
-                           const std::string &private_key,
-                           const ApiCredentials &creds,
-                           SignatureType sig_type,
-                           const std::string &funder_address,
+                           const std::string &private_key, const ApiCredentials &creds,
+                           SignatureType sig_type, const std::string &funder_address,
                            const HttpClientOptions &http_options)
-        : chain_id_(validated_chain_id(chain_id)), base_url_(base_url),
-          funder_address_(validated_funder(sig_type, funder_address)),
-          sig_type_(sig_type)
+        : ClobClient(legacy_environment(base_url, chain_id), &private_key, &creds, sig_type,
+                     funder_address, http_options)
     {
-        configure_transports(http_, data_http_, base_url, http_options);
+    }
 
-        order_signer_ = std::make_unique<OrderSigner>(private_key, chain_id);
-        detail::validate_api_credentials(creds);
-        api_creds_ = std::make_unique<ApiCredentials>(creds);
+    ClobClient::ClobClient(const Environment &environment,
+                           const std::optional<HttpClientOptions> &http_options)
+        : ClobClient(validated_environment(environment), nullptr, nullptr, SignatureType::EOA, {},
+                     http_options)
+    {
+    }
+
+    ClobClient::ClobClient(const Environment &environment, const std::string &private_key,
+                           SignatureType sig_type, const std::string &funder_address,
+                           const std::optional<HttpClientOptions> &http_options)
+        : ClobClient(validated_environment(environment), &private_key, nullptr, sig_type,
+                     funder_address, http_options)
+    {
+    }
+
+    ClobClient::ClobClient(const Environment &environment, const std::string &private_key,
+                           const ApiCredentials &creds, SignatureType sig_type,
+                           const std::string &funder_address,
+                           const std::optional<HttpClientOptions> &http_options)
+        : ClobClient(validated_environment(environment), &private_key, &creds, sig_type,
+                     funder_address, http_options)
+    {
     }
 
     ClobClient::~ClobClient() = default;
 
     std::string ClobClient::get_exchange_address() const
     {
-        return mainnet_contracts().standard_exchange;
+        return environment_.contracts.standard_exchange;
     }
 
     std::string ClobClient::get_neg_risk_exchange_address() const
     {
-        return mainnet_contracts().neg_risk_exchange;
+        return environment_.contracts.neg_risk_exchange;
     }
 
     bool ClobClient::warm_connection()

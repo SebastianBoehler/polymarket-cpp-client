@@ -1,5 +1,6 @@
 #include <http_client.hpp>
 #include <polymarket/clob_client.hpp>
+#include <polymarket/environment.hpp>
 #include <polymarket/evm_event_indexer.hpp>
 #include <polymarket/evm_abi.hpp>
 #include <polymarket/evm_transaction.hpp>
@@ -22,7 +23,9 @@ int main()
         polymarket::HttpClient client;
         const polymarket::Config config;
         const polymarket::PositionClientConfig position_config;
-        if (position_config.contracts.chain_id != 137 ||
+        const auto environment = polymarket::Environment::preproduction();
+        environment.validate();
+        if (position_config.contracts.chain_id != 137 || environment.contracts.chain_id != 137 ||
             polymarket::evm_function_selector("transfer(address,uint256)") != "0xa9059cbb")
             return 1;
         // The installed stream must link and reject absent credentials without connecting.

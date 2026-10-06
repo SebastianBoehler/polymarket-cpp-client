@@ -32,6 +32,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_polymarket_contracts PRIVATE polymarket::client)
     add_test(NAME test_polymarket_contracts COMMAND test_polymarket_contracts)
 
+    add_executable(test_environment tests/test_environment.cpp)
+    target_link_libraries(test_environment PRIVATE polymarket::client)
+    add_test(NAME test_environment COMMAND test_environment)
+
     add_executable(test_position_client tests/test_position_client.cpp)
     target_include_directories(test_position_client PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_position_client PRIVATE polymarket::client)
@@ -91,6 +95,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     add_executable(test_json_rpc_transactions tests/test_json_rpc_transactions.cpp)
     target_link_libraries(test_json_rpc_transactions PRIVATE polymarket::client)
     add_test(NAME test_json_rpc_transactions COMMAND test_json_rpc_transactions)
+
+    add_executable(test_clob_environment tests/test_clob_environment.cpp)
+    target_link_libraries(test_clob_environment PRIVATE polymarket::client)
+    add_test(NAME test_clob_environment COMMAND test_clob_environment)
 
     add_executable(test_json_rpc_ws_owner_reset tests/test_json_rpc_ws_owner_reset.cpp)
     target_include_directories(test_json_rpc_ws_owner_reset PRIVATE
@@ -167,6 +175,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_oracle_watcher_historical PRIVATE polymarket::client)
     add_test(NAME test_oracle_watcher_historical COMMAND test_oracle_watcher_historical)
     set_tests_properties(test_oracle_watcher_historical PROPERTIES LABELS live)
+
+    add_executable(test_preproduction_live tests/test_preproduction_live.cpp)
+    target_link_libraries(test_preproduction_live PRIVATE polymarket::client)
+    add_test(NAME test_preproduction_live COMMAND test_preproduction_live)
+    set_tests_properties(test_preproduction_live PROPERTIES LABELS live)
 
     add_executable(test_arb_sizing tests/test_arb_sizing.cpp)
     target_include_directories(test_arb_sizing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

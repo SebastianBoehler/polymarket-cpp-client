@@ -224,7 +224,6 @@ namespace clob_test
     bool test_metadata_cache_coalesces_concurrent_cold_misses();
     bool test_metadata_cache_invalidation_refreshes_values();
     bool test_signer_only_l1_bootstrap_installs_credentials();
-    bool test_clob_constructors_reject_unsupported_chains();
     bool test_clob_constructors_require_non_eoa_funder();
     bool test_clob_warm_connection_uses_time_only();
     bool test_order_result_schema_failures();

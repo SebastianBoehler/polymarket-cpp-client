@@ -151,6 +151,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/order_execution.cpp
     src/polymarket_events.cpp
     src/polymarket_contracts.cpp
+    src/environment.cpp
     src/position_calls.cpp
     src/approval_calls.cpp
     src/trading_approvals.cpp

@@ -60,46 +60,6 @@ namespace clob_test
                      "installed credentials must generate a valid L2 signature");
     }
 
-    bool test_clob_constructors_reject_unsupported_chains()
-    {
-        constexpr const char *private_key =
-            "0x0000000000000000000000000000000000000000000000000000000000000001";
-        constexpr const char *funder = "0x1111111111111111111111111111111111111111";
-        LocalServer server;
-        HttpClientOptions options;
-        ApiCredentials credentials{"key", "c2VjcmV0", "pass"};
-        const auto rejects = [](auto construct)
-        {
-            try
-            {
-                construct();
-            }
-            catch (const std::invalid_argument &)
-            {
-                return true;
-            }
-            catch (...)
-            {
-            }
-            return false;
-        };
-
-        const bool all_rejected =
-            rejects([&] { ClobClient client(server.url(), 1); }) &&
-            rejects([&] { ClobClient client(server.url(), 1, options); }) &&
-            rejects([&] { ClobClient client(server.url(), 1, private_key); }) &&
-            rejects([&] { ClobClient client(server.url(), 1, private_key,
-                                            SignatureType::POLY_PROXY, funder, options); }) &&
-            rejects([&] { ClobClient client(server.url(), 1, private_key, credentials); }) &&
-            rejects([&] { ClobClient client(server.url(), 1, private_key, credentials,
-                                            SignatureType::POLY_PROXY, funder, options); });
-        ClobClient polygon(server.url(), 137);
-        ClobClient amoy(server.url(), 80002);
-        return check(all_rejected, "every CLOB constructor must reject unsupported chains") &&
-               check(polygon.get_address().empty() && amoy.get_address().empty(),
-                     "Polygon mainnet and Amoy chains must remain supported");
-    }
-
     bool test_clob_constructors_require_non_eoa_funder()
     {
         constexpr const char *key =

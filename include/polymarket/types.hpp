@@ -8,6 +8,7 @@
 
 namespace polymarket
 {
+    struct Environment;
 
     // Price level in orderbook
     struct PriceLevel
@@ -278,6 +279,10 @@ namespace polymarket
         std::vector<std::string> crypto_tickers = {
             "btc", "eth", "xrp", "sol", "doge", "bnb",
             "ada", "avax", "matic", "link", "dot", "ltc"};
+
+        // CLOB, Gamma and RTDS endpoints from `environment`, which is validated
+        // first; every other field keeps its default.
+        static Config for_environment(const Environment &environment);
     };
 
     // Monotonic nanoseconds for receipt ages and latency measurements.

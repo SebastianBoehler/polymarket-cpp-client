@@ -1,6 +1,7 @@
 #pragma once
 
 #include "polymarket/clob_types.hpp"
+#include "polymarket/environment.hpp"
 #include "polymarket/geoblock.hpp"
 #include "polymarket/types.hpp"
 #include "polymarket/http_client.hpp"
@@ -42,6 +43,19 @@ namespace polymarket
                    SignatureType sig_type,
                    const std::string &funder_address,
                    const HttpClientOptions &http_options);
+
+        // The constructors above change only the production CLOB host (chain 137 only).
+        // These take every host and contract from a validated `environment`.
+        explicit ClobClient(const Environment &environment,
+                            const std::optional<HttpClientOptions> &http_options = std::nullopt);
+        ClobClient(const Environment &environment, const std::string &private_key,
+                   SignatureType sig_type = SignatureType::EOA,
+                   const std::string &funder_address = "",
+                   const std::optional<HttpClientOptions> &http_options = std::nullopt);
+        ClobClient(const Environment &environment, const std::string &private_key,
+                   const ApiCredentials &creds, SignatureType sig_type = SignatureType::EOA,
+                   const std::string &funder_address = "",
+                   const std::optional<HttpClientOptions> &http_options = std::nullopt);
 
         ~ClobClient();
 
@@ -243,7 +257,8 @@ namespace polymarket
         HttpClient::ConnectionStats get_connection_stats() const { return http_.get_stats(); }
         RequestMetrics get_last_request_metrics() const { return http_.get_last_request_metrics(); }
 
-        // Get exchange address for the chain
+        const Environment &environment() const { return environment_; }
+
         std::string get_exchange_address() const;
         std::string get_neg_risk_exchange_address() const;
 
@@ -266,14 +281,19 @@ namespace polymarket
     private:
         HttpClient http_;
         HttpClient data_http_;
-        int chain_id_;
-        std::string base_url_;
+        Environment environment_;
         std::string funder_address_;
         SignatureType sig_type_;
 
         // Order signer (null for public access)
         std::unique_ptr<OrderSigner> order_signer_;
         std::unique_ptr<ApiCredentials> api_creds_;
+
+        // Every public constructor delegates here; null private_key means public access.
+        ClobClient(Environment environment, const std::string *private_key,
+                   const ApiCredentials *creds, SignatureType sig_type,
+                   const std::string &funder_address,
+                   const std::optional<HttpClientOptions> &http_options);
 
         template <typename Value>
         struct MetadataCacheEntry

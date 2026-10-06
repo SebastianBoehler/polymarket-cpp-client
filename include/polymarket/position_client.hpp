@@ -16,6 +16,8 @@
 
 namespace polymarket
 {
+    struct Environment;
+
     // One contract call inside a transaction.
     struct ContractCall
     {
@@ -168,6 +170,10 @@ namespace polymarket
         std::string relayer_api_key_address; // defaults to the signer address
         long relayer_retry_delay_ms = 2000;  // between retried submits
         int relayer_max_submit_retries = 10;
+
+        // RPC, Gamma, relayer and contracts from `environment`, which is
+        // validated first. The caller still sets private_key and the wallet.
+        static PositionClientConfig for_environment(const Environment &environment);
     };
 
     // Split, merge and redeem binary market positions (CTF and Protocol V2
