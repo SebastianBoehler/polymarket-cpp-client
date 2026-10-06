@@ -1,3 +1,4 @@
+#include "example_environment.hpp"
 #include "polymarket/clob_client.hpp"
 #include <iostream>
 #include <cstdlib>
@@ -16,6 +17,8 @@ int main()
     try
     {
         http_global_init();
+        const auto environment = polymarket_example::selected_environment();
+        std::cout << "Environment: " << environment.name << "\n";
 
         // ============================================================
         // PUBLIC ENDPOINTS (No authentication required)
@@ -23,7 +26,7 @@ int main()
 
         std::cout << "=== Public Endpoints ===\n\n";
 
-        ClobClient public_client{"https://clob.polymarket.com", 137};
+        ClobClient public_client{environment};
 
         // Get markets
         auto market_page = public_client.get_markets();
@@ -117,13 +120,7 @@ int main()
         // Determine signature type based on funder address
         SignatureType sig_type = funder_address.empty() ? SignatureType::EOA : SignatureType::POLY_PROXY;
 
-        ClobClient client{
-            "https://clob.polymarket.com",
-            137,
-            private_key,
-            creds,
-            sig_type,
-            funder_address};
+        ClobClient client{environment, private_key, creds, sig_type, funder_address};
 
         // Get balance
         auto balance = client.get_balance_allowance("COLLATERAL");

@@ -1,3 +1,4 @@
+#include "example_environment.hpp"
 #include "polymarket/position_client.hpp"
 
 #include <cstdlib>
@@ -17,7 +18,8 @@
 // Environment: PRIVATE_KEY and POLYGON_RPC_ENDPOINT are required. With
 // POLYMARKET_PROXY_ADDRESS set, operations run from that Gnosis Safe through
 // the relayer (gasless; needs RELAYER_API_KEY, optional RELAYER_API_KEY_ADDRESS).
-// Otherwise they are sent from the EOA, which pays gas in POL.
+// Otherwise they are sent from the EOA, which pays gas in POL. POLYMARKET_ENV
+// selects the Gamma, relayer and contract preset (default production).
 
 namespace
 {
@@ -54,7 +56,8 @@ int main(int argc, char **argv)
     if ((action != "split" && action != "merge" && action != "redeem") || (action == "split" && amount.empty()))
         return usage();
 
-    PositionClientConfig config;
+    // Endpoints and contracts follow POLYMARKET_ENV; the RPC stays explicit.
+    auto config = PositionClientConfig::for_environment(polymarket_example::selected_environment());
     config.private_key = env("PRIVATE_KEY");
     config.rpc_url = env("POLYGON_RPC_ENDPOINT");
     if (config.private_key.empty() || config.rpc_url.empty())

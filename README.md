@@ -186,6 +186,28 @@ std::cout << "avg latency: " << client.get_connection_stats().avg_latency_ms << 
 Order helpers round prices, sizes, and maker/taker amounts to the market's tick
 size. Leave `tick_size` empty to resolve it from the client's metadata cache.
 
+### Select an environment
+
+`Environment` holds every endpoint and contract for one deployment. Pass it to
+`ClobClient`, or build stream and position configs from it:
+
+```cpp
+#include <polymarket/environment.hpp>
+
+const auto env = polymarket::Environment::preproduction(); // or production()
+polymarket::ClobClient client(env, private_key, creds);
+polymarket::UserStream stream(polymarket::Config::for_environment(env), creds);
+auto position_config = polymarket::PositionClientConfig::for_environment(env);
+```
+
+`preproduction()` uses separate CLOB, Gamma, Data API, and relayer hosts, but
+it is not a testnet. It runs on Polygon mainnet with the production contracts,
+RPC, and CLOB WebSocket hosts, so on-chain operations and settled orders use
+real funds. API keys are per environment. Copy a preset and override fields to
+target a fork or a local server. The string constructors
+(`ClobClient(base_url, 137, ...)`) override only the production CLOB host and
+accept only chain 137.
+
 ### Route traffic through a proxy or VPN interface
 
 ```cpp
@@ -267,6 +289,9 @@ Build with `-DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON` and run from `build/`.
 | `evm_event_indexer_example`  | Persistent HTTP catch-up + live WebSocket indexer with a cursor file                 |
 | `feed_latency_benchmark`     | Compares receive timing across the Polymarket market WS and a Polygon RPC WS         |
 | `polymarket_arb`             | Analysis-only scan of complementary YES/NO books (`--15m --symbol btc --fetch-only`) |
+
+Examples that call Polymarket services, and `order_test`, read
+`POLYMARKET_ENV` (`production` by default, or `preproduction`).
 
 `polymarket_arb` rejects `--live`: the CLOB batch endpoint processes orders
 independently, so two complementary FOK orders are not an atomic trade.

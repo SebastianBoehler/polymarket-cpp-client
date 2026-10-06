@@ -1,3 +1,4 @@
+#include "example_environment.hpp"
 #include "polymarket/position_client.hpp"
 
 #include <cstdlib>
@@ -17,7 +18,8 @@
 // POLYMARKET_PROXY_ADDRESS set, the approvals are set on that Gnosis Safe
 // through the relayer in one transaction (gasless; needs RELAYER_API_KEY,
 // optional RELAYER_API_KEY_ADDRESS). Otherwise the EOA sends one transaction
-// per missing approval and pays gas in POL.
+// per missing approval and pays gas in POL. POLYMARKET_ENV selects the
+// relayer and contract preset (default production).
 
 namespace
 {
@@ -43,7 +45,8 @@ int main(int argc, char **argv)
         execute = true;
     }
 
-    PositionClientConfig config;
+    // Endpoints and contracts follow POLYMARKET_ENV; the RPC stays explicit.
+    auto config = PositionClientConfig::for_environment(polymarket_example::selected_environment());
     config.private_key = env("PRIVATE_KEY");
     config.rpc_url = env("POLYGON_RPC_ENDPOINT");
     if (config.private_key.empty() || config.rpc_url.empty())

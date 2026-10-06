@@ -1,3 +1,4 @@
+#include "example_environment.hpp"
 #include "polymarket/clob_client.hpp"
 #include <iostream>
 #include <cstdlib>
@@ -60,7 +61,7 @@ int main()
         std::cout << "Testing get_positions for address: " << funder_address << "\n\n";
 
         // Create unauthenticated client (positions API doesn't need auth)
-        ClobClient client{"https://clob.polymarket.com", 137};
+        ClobClient client{polymarket_example::selected_environment()};
 
         // Test get_positions
         std::cout << "=== All Positions ===\n\n";

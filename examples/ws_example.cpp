@@ -1,3 +1,4 @@
+#include "example_environment.hpp"
 #include "polymarket/websocket_client.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -19,7 +20,7 @@ int main()
     std::atomic<bool> connected{false};
 
     WebSocketClient ws;
-    ws.set_url("wss://ws-subscriptions-clob.polymarket.com/ws/market");
+    ws.set_url(polymarket_example::selected_environment().clob_market_ws_url);
     ws.set_ping_interval_ms(10000);
     ws.set_auto_reconnect(false);
 

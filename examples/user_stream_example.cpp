@@ -1,3 +1,4 @@
+#include "example_environment.hpp"
 #include "polymarket/clob_client.hpp"
 #include "polymarket/user_stream.hpp"
 
@@ -24,6 +25,7 @@ int main(int argc, char **argv)
 
     try
     {
+        const auto environment = polymarket_example::selected_environment();
         ApiCredentials credentials;
         if (has_api_credentials)
         {
@@ -32,11 +34,11 @@ int main(int argc, char **argv)
         else
         {
             // Derive L2 API credentials from the signer (no orders are placed).
-            ClobClient client("https://clob.polymarket.com", 137, pk_env);
+            ClobClient client(environment, pk_env);
             credentials = client.create_or_derive_api_key();
         }
 
-        UserStream stream(Config{}, credentials);
+        UserStream stream(Config::for_environment(environment), credentials);
         stream.on_order([](const UserOrderEvent &order)
                         { std::cout << "[order] " << order.type << ' ' << order.side << ' '
                                     << order.size_matched << '/' << order.original_size

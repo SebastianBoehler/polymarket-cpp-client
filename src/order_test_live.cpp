@@ -27,12 +27,12 @@ namespace polymarket::order_test
             bool neg_risk = false;
         };
 
-        LiveMarketData find_live_market()
+        LiveMarketData find_live_market(const Environment &environment)
         {
             LiveMarketData live_market;
             const auto now_ts = static_cast<uint64_t>(std::time(nullptr));
             constexpr uint64_t min_time_left = 2 * 60;
-            ClobClient market_data_client(CLOB_API, 137);
+            ClobClient market_data_client(environment);
             market_data_client.set_user_agent("polymarket-cpp-client/order-test");
 
             std::vector<std::pair<uint64_t, uint64_t>> candidates;
@@ -57,7 +57,7 @@ namespace polymarket::order_test
                 const uint64_t time_left = expiry_ts - now_ts;
 
                 HttpClient gamma_http;
-                gamma_http.set_base_url("https://gamma-api.polymarket.com");
+                gamma_http.set_base_url(environment.gamma_url);
                 gamma_http.set_timeout_ms(10000);
                 gamma_http.set_user_agent("polymarket-cpp-client/order-test");
 
@@ -128,16 +128,14 @@ namespace polymarket::order_test
         }
     }
 
-    bool run_live_order(const std::string &private_key,
-                        const std::string &funder_address,
-                        const ApiCredentials &credentials,
-                        bool have_credentials,
-                        const OrderSigner &signer)
+    bool run_live_order(const Environment &environment, const std::string &private_key,
+                        const std::string &funder_address, const ApiCredentials &credentials,
+                        bool have_credentials, const OrderSigner &signer)
     {
         std::cout << "\n[7] LIVE MODE - Placing $1 test order on BTC market...\n";
         std::cout << "    Fetching nearest active BTC 15m market...\n";
 
-        const LiveMarketData live_market = find_live_market();
+        const LiveMarketData live_market = find_live_market(environment);
         if (live_market.token_id.empty() || live_market.best_ask <= 0.0 || live_market.tick_size.empty())
         {
             std::cerr << "    Could not find active BTC 15m market with complete trading metadata\n";
@@ -146,7 +144,7 @@ namespace polymarket::order_test
 
         std::cout << "    YES token: " << live_market.token_id.substr(0, 30) << "...\n";
 
-        const std::string exchange_address = live_market.neg_risk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE;
+        const std::string &exchange_address = environment.contracts.exchange(live_market.neg_risk);
         std::cout << "    Exchange: " << exchange_address << "\n";
 
         if (!have_credentials)
@@ -159,7 +157,8 @@ namespace polymarket::order_test
         const SignatureType live_signature_type = (funder_address != signer.address())
                                                       ? SignatureType::POLY_GNOSIS_SAFE
                                                       : SignatureType::EOA;
-        ClobClient order_client(CLOB_API, 137, private_key, credentials, live_signature_type, funder_address);
+        ClobClient order_client(environment, private_key, credentials, live_signature_type,
+                                funder_address);
 
         CreateMarketOrderParams market_order;
         market_order.token_id = live_market.token_id;

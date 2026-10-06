@@ -1,18 +1,21 @@
 #pragma once
 
+#include "polymarket/environment.hpp"
 #include "polymarket/order_signer.hpp"
 
+#include <cstdlib>
 #include <string>
 
 namespace polymarket::order_test
 {
-    inline constexpr char CLOB_API[] = "https://clob.polymarket.com";
-    inline constexpr char NEG_RISK_CTF_EXCHANGE[] = "0xe2222d279d744050d28e00520010520000310F59";
-    inline constexpr char CTF_EXCHANGE[] = "0xE111180000d2663C0091e4f400237545B87B996B";
+    // POLYMARKET_ENV selects "production" (default) or "preproduction".
+    inline Environment selected_environment()
+    {
+        const char *name = std::getenv("POLYMARKET_ENV");
+        return Environment::from_name(name && *name ? name : "production");
+    }
 
-    bool run_live_order(const std::string &private_key,
-                        const std::string &funder_address,
-                        const ApiCredentials &credentials,
-                        bool have_credentials,
-                        const OrderSigner &signer);
+    bool run_live_order(const Environment &environment, const std::string &private_key,
+                        const std::string &funder_address, const ApiCredentials &credentials,
+                        bool have_credentials, const OrderSigner &signer);
 }
