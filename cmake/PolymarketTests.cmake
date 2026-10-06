@@ -96,6 +96,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_json_rpc_transactions PRIVATE polymarket::client)
     add_test(NAME test_json_rpc_transactions COMMAND test_json_rpc_transactions)
 
+    add_executable(test_clob_environment tests/test_clob_environment.cpp)
+    target_link_libraries(test_clob_environment PRIVATE polymarket::client)
+    add_test(NAME test_clob_environment COMMAND test_clob_environment)
+
     add_executable(test_json_rpc_ws_owner_reset tests/test_json_rpc_ws_owner_reset.cpp)
     target_include_directories(test_json_rpc_ws_owner_reset PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/tests)
