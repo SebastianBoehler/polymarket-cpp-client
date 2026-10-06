@@ -11,8 +11,14 @@ namespace approvals_test
 {
     using namespace position_test;
 
-    inline const std::string recipient = "0x000000000000000000000000000000000000dEaD";
-    inline const auto required_set = required_trading_approvals(kContracts);
+    const std::string recipient = "0x000000000000000000000000000000000000dEaD";
+
+    // Built on use: a namespace-scope inline variable may be initialized
+    // before kContracts, which Apple clang does.
+    inline TradingApprovals required_set()
+    {
+        return required_trading_approvals(kContracts);
+    }
 
     inline std::string word(const std::string &value)
     {
@@ -24,7 +30,7 @@ namespace approvals_test
     inline void expect_approval_reads(clob_test::LocalServer &node, const std::string &owner,
                                       const std::vector<std::string> &results)
     {
-        const auto checks = detail::trading_approval_check_calls(required_set, owner);
+        const auto checks = detail::trading_approval_check_calls(required_set(), owner);
         for (size_t i = 0; i < checks.size(); ++i)
         {
             const auto &expected = checks[i];
@@ -43,8 +49,9 @@ namespace approvals_test
 
     inline std::vector<std::string> all_approved()
     {
-        std::vector<std::string> results(required_set.erc20.size(), word(max_uint256));
-        results.resize(required_set.erc20.size() + required_set.erc1155.size(), word("1"));
+        const auto required = required_set();
+        std::vector<std::string> results(required.erc20.size(), word(max_uint256));
+        results.resize(required.erc20.size() + required.erc1155.size(), word("1"));
         return results;
     }
 
