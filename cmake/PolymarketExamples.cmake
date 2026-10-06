@@ -42,6 +42,9 @@ if(POLYMARKET_CLIENT_BUILD_EXAMPLES)
     add_executable(position_example examples/position_example.cpp)
     target_link_libraries(position_example PRIVATE polymarket::client)
 
+    add_executable(approvals_example examples/approvals_example.cpp)
+    target_link_libraries(approvals_example PRIVATE polymarket::client)
+
     add_executable(uma_oracle_watch examples/uma_oracle_watch.cpp)
     target_link_libraries(uma_oracle_watch PRIVATE polymarket::client)
 

@@ -35,6 +35,9 @@ namespace polymarket
         std::string combinatorial_module;
         std::string auto_redeem_operator;
 
+        // Perps collateral deposits; a pUSD spender in the trading approval set
+        std::string perps_deposit_contract;
+
         // Wallet infrastructure
         std::string proxy_factory;
         std::string proxy_implementation;

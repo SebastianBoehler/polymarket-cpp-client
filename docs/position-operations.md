@@ -116,23 +116,65 @@ calls throws `PartialBatchError` (see [Batches and atomicity](#batches-and-atomi
 
 ## Approvals
 
-Operations do not check or set approvals. Before the first operation a wallet
-needs:
+Operations do not check approvals. Before the first operation a wallet needs:
 
 - split: a pUSD `approve` for the operator contract (collateral adapter,
   neg-risk collateral adapter or V2 router);
 - merge and redeem: `setApprovalForAll` on the position token
   (ConditionalTokens or the V2 position manager) for the same operator.
 
-Wallets that have traded through polymarket.com may already have some of
-these; check `allowance` and `isApprovedForAll` if unsure. For an EOA, a
-missing approval shows up as a revert during gas estimation, before anything
-is sent. For a Safe it surfaces only after submission, as a failed relayer
-transaction.
+For an EOA, a missing approval shows up as a revert during gas estimation,
+before anything is sent. For a Safe it surfaces only after submission, as a
+failed relayer transaction.
+
+### Trading approvals
+
+`setup_trading_approvals()` grants, once per wallet, the same set as the
+official SDKs' `setup_trading_approvals` (`required_trading_approvals(contracts)`
+in `include/polymarket/trading_approvals.hpp`): 17 approvals that cover CLOB
+trading as well as split, merge and redeem.
+
+| Token                   | Approval                            | Spenders / operators                                                                                            |
+| ----------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| pUSD `collateral_token` | `approve(spender, 2^256 - 1)`       | standard and neg-risk exchanges, both collateral adapters, V2 router, exchange V3, perps deposit contract       |
+| ConditionalTokens       | `setApprovalForAll(operator, true)` | standard and neg-risk exchanges, both collateral adapters, auto-redeem operator, binary module, neg-risk module |
+| V2 `position_manager`   | `setApprovalForAll(operator, true)` | V2 router, exchange V3, auto-redeem operator                                                                    |
+
+```cpp
+auto state = client.get_trading_approvals_state(); // or (other_wallet)
+if (!state.is_fully_approved)
+    client.setup_trading_approvals(); // sends only state.missing, then waits
+```
+
+- `get_trading_approvals_state(wallet = this wallet)` reads every approval
+  with `eth_call` (`allowance`, `isApprovedForAll`) and lists only the missing
+  ones. An allowance below `2^256 - 1` counts as missing, as in the official
+  SDKs. The official SDKs read this from the Data API (`/v2/approvals`), which
+  can lag; this client always reads the chain.
+- `setup_trading_approvals(timeout = 3 min)` sends `approve` calls first, then
+  `setApprovalForAll`, and waits. A Safe sends them as one atomic MultiSend
+  transaction; an EOA sends one transaction per approval (not atomic, see
+  [Batches and atomicity](#batches-and-atomicity); rerunning picks up where it
+  stopped). It returns `std::nullopt` without sending anything when the wallet
+  is already fully approved.
+
+Single approvals and transfers return a `TransactionHandle` without waiting:
+
+| Method                                                      | Call                                                                            |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `approve_erc20(token, spender, amount)`                     | ERC-20 `approve`; `amount` is a uint256 in base units or `"max"`, `"0"` revokes |
+| `approve_erc1155_for_all(token, operator, approved = true)` | ERC-1155 `setApprovalForAll`                                                    |
+| `transfer_erc20(token, recipient, amount)`                  | ERC-20 `transfer` of a positive base-unit amount                                |
+
+Each also takes an optional relayer `metadata` string.
 
 ## Example
 
 ```bash
+# Trading approvals: list the missing ones, then grant them
+./build/approvals_example
+./build/approvals_example --execute
+
 # Dry run: resolve the market and print balances
 ./build/position_example redeem 0x6b04...6fbc
 
@@ -145,7 +187,7 @@ transaction.
 ./build/position_example split 0x01...44 1000000 --execute
 ```
 
-The example reads `PRIVATE_KEY` and `POLYGON_RPC_ENDPOINT`. With
+The examples read `PRIVATE_KEY` and `POLYGON_RPC_ENDPOINT`. With
 `POLYMARKET_PROXY_ADDRESS` set it uses the Safe and the relayer
 (`RELAYER_API_KEY`, optional `RELAYER_API_KEY_ADDRESS`); otherwise it sends
 from the EOA.
@@ -154,7 +196,7 @@ from the EOA.
 
 - Lookup by market id or position id, and combo (multi-leg) positions.
 - `POLY_PROXY` and deposit-wallet (`POLY_1271`) relayer paths.
-- Setting trading approvals (`setup_trading_approvals`).
+- Reading approvals from the Data API (`/v2/approvals`); state is read on chain.
 
 ## Verification
 
@@ -163,6 +205,9 @@ from the EOA.
   by the official Python SDK (`test_evm_abi`, `test_evm_abi_shapes`,
   `test_evm_transaction`, `test_position_calls`, `test_safe_relayer`).
 - `test_position_client` and `test_safe_relayer_flows` run EOA and Safe flows;
+  `test_trading_approvals` runs approval reads, setup (EOA and Safe MultiSend),
+  single approvals and transfers; `test_approval_calls` checks approval and
+  transfer calldata against the py-sdk golden vectors;
   `test_transaction_waiters` covers receipt and relayer waits whose timeout is
   shorter than the poll interval.
 - These flows run against local fake RPC, Gamma and relayer servers.
@@ -174,5 +219,8 @@ from the EOA.
     `wait(1s, 2s)` on the pending split timed out after about 1.3 s.
   - An EOA batch whose second call fails gas estimation threw
     `PartialBatchError` with the mined hash of the first call.
+  - `setup_trading_approvals` on a Safe that lacked only the perps deposit
+    allowance sent that one `approve` through the relayer; a fresh
+    `get_trading_approvals_state` then reported the Safe fully approved.
   - No Protocol V2 market was listed on Gamma yet, so 31-byte ids were only
     checked against fixtures from the official Python SDK.

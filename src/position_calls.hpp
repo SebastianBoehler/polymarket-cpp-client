@@ -3,6 +3,7 @@
 #include "polymarket/polymarket_contracts.hpp"
 #include "polymarket/position_client.hpp"
 #include <array>
+#include <cstdint>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -53,6 +54,10 @@ namespace polymarket::detail
     std::string resolve_merge_amount(const std::string &condition_id,
                                      const std::array<std::string, 2> &balances,
                                      const std::string &requested);
+
+    // Big-endian 32-byte word of a uint256 (base-10 or 0x-hex); words compare
+    // numerically with <. Throws std::invalid_argument prefixed with label.
+    std::vector<uint8_t> parse_uint256_amount(const std::string &value, const char *label);
 
     // Throws std::invalid_argument unless amount is a positive uint256.
     void require_positive_amount(const std::string &amount, const char *label);

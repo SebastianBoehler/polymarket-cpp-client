@@ -3,11 +3,13 @@
 #include "polymarket/json_rpc_client.hpp"
 #include "polymarket/order_signer.hpp"
 #include "polymarket/polymarket_contracts.hpp"
+#include "polymarket/trading_approvals.hpp"
 #include <array>
 #include <chrono>
 #include <exception>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -173,8 +175,9 @@ namespace polymarket
     // base units (pUSD and outcome tokens use 6 decimals) as base-10 strings.
     // condition_id is 0x + 32 bytes of hex, or 31 bytes for a Protocol V2 market.
     //
-    // Approvals are not checked: split needs a pUSD allowance for the operator
-    // contract, and merge/redeem need ERC-1155 approval for it.
+    // The operations do not check approvals: split needs a pUSD allowance for
+    // the operator contract, and merge/redeem need ERC-1155 approval for it.
+    // setup_trading_approvals() grants all of them once per wallet.
     class PositionClient
     {
     public:
@@ -209,6 +212,38 @@ namespace polymarket
 
         // On-chain [yes, no] balances of the wallet, in base units (decimal).
         std::array<std::string, 2> position_balances(const MarketPositionContext &market);
+
+        // Which of required_trading_approvals() the wallet (default: this
+        // client's wallet) still lacks, read with one eth_call per approval.
+        TradingApprovalsState
+        get_trading_approvals_state(const std::optional<std::string> &wallet = std::nullopt);
+
+        // Grants the missing trading approvals and waits for them to be mined.
+        // A Safe sends them as one atomic MultiSend; an EOA sends one
+        // transaction per approval (see merge_multiple_positions). Returns
+        // nullopt without sending anything when the wallet is fully approved.
+        std::optional<TransactionOutcome>
+        setup_trading_approvals(std::chrono::milliseconds timeout = std::chrono::minutes(3));
+
+        // ERC-20 approve(spender, amount). amount is a uint256 in base units,
+        // or "max"; "0" revokes.
+        TransactionHandle approve_erc20(const std::string &token_address,
+                                        const std::string &spender_address,
+                                        const std::string &amount,
+                                        const std::string &metadata = "");
+
+        // ERC-1155 setApprovalForAll(operator, approved).
+        TransactionHandle approve_erc1155_for_all(const std::string &token_address,
+                                                  const std::string &operator_address,
+                                                  bool approved = true,
+                                                  const std::string &metadata = "");
+
+        // ERC-20 transfer(recipient, amount) from the wallet; amount is a
+        // positive uint256 in base units.
+        TransactionHandle transfer_erc20(const std::string &token_address,
+                                         const std::string &recipient_address,
+                                         const std::string &amount,
+                                         const std::string &metadata = "");
 
         // Low-level: send arbitrary calls from the wallet. metadata (at most
         // 500 characters) is attached to relayer submissions.
