@@ -66,13 +66,16 @@ namespace clob_test
     {
         LocalServer server;
         ClobClient client(server.url(), 137);
+        const ClobClient defaults;
         const auto production = Environment::production();
         return check(client.environment().clob_url == server.url() &&
                          client.environment().data_url == production.data_url &&
                          client.get_exchange_address() == production.contracts.standard_exchange &&
                          client.get_neg_risk_exchange_address() ==
                              production.contracts.neg_risk_exchange,
-                     "legacy constructors must override only the CLOB host");
+                     "legacy constructors must override only the CLOB host") &&
+               check(defaults.environment().clob_url == production.clob_url,
+                     "the default CLOB host must match the production preset");
     }
 
     bool test_clob_environment_constructors_validate()

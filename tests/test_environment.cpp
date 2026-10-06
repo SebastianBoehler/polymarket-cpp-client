@@ -37,10 +37,6 @@ namespace
         expect_equal("production data", env.data_url, "https://data-api.polymarket.com");
         expect_equal("production relayer", env.relayer_url, "https://relayer-v2.polymarket.com");
         expect_equal("production rtds", env.rtds_ws_url, "wss://ws-live-data.polymarket.com");
-        expect_equal("production sports", env.sports_ws_url, "wss://sports-api.polymarket.com/ws");
-        check(env.relayer_max_polls == 100, "production relayer_max_polls must be 100");
-        check(env.relayer_poll_interval_ms == 2000,
-              "production relayer_poll_interval_ms must be 2000");
         env.validate();
     }
 
@@ -72,10 +68,7 @@ namespace
                   restored.contracts.collateral_token == prod.contracts.collateral_token &&
                   restored.clob_market_ws_url == prod.clob_market_ws_url &&
                   restored.clob_user_ws_url == prod.clob_user_ws_url &&
-                  restored.rtds_ws_url == prod.rtds_ws_url &&
-                  restored.sports_ws_url == prod.sports_ws_url &&
-                  restored.relayer_max_polls == prod.relayer_max_polls &&
-                  restored.relayer_poll_interval_ms == prod.relayer_poll_interval_ms,
+                  restored.rtds_ws_url == prod.rtds_ws_url,
               "preproduction must match production outside the four REST hosts");
         env.validate();
     }
@@ -97,7 +90,6 @@ namespace
         env.name = "local";
         env.clob_url = "http://127.0.0.1:8080";
         env.clob_market_ws_url = "ws://127.0.0.1:8081/ws/market";
-        env.relayer_poll_interval_ms = 0;
         env.validate();
     }
 
@@ -121,12 +113,32 @@ namespace
                        mutated([](Environment &e) { e.clob_user_ws_url = "https://x"; }));
         expect_invalid("missing scheme",
                        mutated([](Environment &e) { e.rpc_url = "polygon.drpc.org"; }));
-        expect_invalid("zero max polls", mutated([](Environment &e) { e.relayer_max_polls = 0; }));
-        expect_invalid("negative poll interval",
-                       mutated([](Environment &e) { e.relayer_poll_interval_ms = -1; }));
         expect_invalid("bad contract",
                        mutated([](Environment &e) { e.contracts.standard_exchange = "0x12"; }));
         expect_invalid("zero chain", mutated([](Environment &e) { e.contracts.chain_id = 0; }));
+    }
+
+    // Config and PositionClientConfig repeat the production URLs as member
+    // defaults; keep them in step with the production preset.
+    void test_default_configs_match_production()
+    {
+        const auto production = Environment::production();
+        const Config config;
+        const auto from_preset = Config::for_environment(production);
+        expect_equal("default clob rest", config.clob_rest_url, from_preset.clob_rest_url);
+        expect_equal("default market ws", config.clob_ws_url, from_preset.clob_ws_url);
+        expect_equal("default user ws", config.clob_user_ws_url, from_preset.clob_user_ws_url);
+        expect_equal("default gamma", config.gamma_api_url, from_preset.gamma_api_url);
+        expect_equal("default rtds", config.rtds_ws_url, from_preset.rtds_ws_url);
+
+        const PositionClientConfig position;
+        expect_equal("default position gamma", position.gamma_api_url, production.gamma_url);
+        expect_equal("default position relayer", position.relayer_url, production.relayer_url);
+        check(position.contracts.chain_id == production.contracts.chain_id &&
+                  position.contracts.standard_exchange == production.contracts.standard_exchange &&
+                  position.contracts.collateral_token == production.contracts.collateral_token,
+              "default PositionClientConfig contracts must match production");
+        check(position.rpc_url.empty(), "default PositionClientConfig must not pick an RPC");
     }
 
     void test_config_for_environment()
@@ -186,6 +198,7 @@ int main()
     test_from_name();
     test_local_override_is_valid();
     test_validate_rejects_bad_fields();
+    test_default_configs_match_production();
     test_config_for_environment();
     test_position_config_for_environment();
     return check_support::finish("test_environment");

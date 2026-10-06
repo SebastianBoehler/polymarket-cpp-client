@@ -26,10 +26,6 @@ namespace polymarket
         std::string data_url;
         std::string relayer_url;
         std::string rtds_ws_url;
-        std::string sports_ws_url;
-
-        int relayer_max_polls{100};
-        long relayer_poll_interval_ms{2000};
 
         static Environment production();
         static Environment preproduction();

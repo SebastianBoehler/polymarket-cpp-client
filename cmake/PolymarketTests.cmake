@@ -176,6 +176,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     add_test(NAME test_oracle_watcher_historical COMMAND test_oracle_watcher_historical)
     set_tests_properties(test_oracle_watcher_historical PROPERTIES LABELS live)
 
+    add_executable(test_preproduction_live tests/test_preproduction_live.cpp)
+    target_link_libraries(test_preproduction_live PRIVATE polymarket::client)
+    add_test(NAME test_preproduction_live COMMAND test_preproduction_live)
+    set_tests_properties(test_preproduction_live PROPERTIES LABELS live)
+
     add_executable(test_arb_sizing tests/test_arb_sizing.cpp)
     target_include_directories(test_arb_sizing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_arb_sizing PRIVATE polymarket::client)

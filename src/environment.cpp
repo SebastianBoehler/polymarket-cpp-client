@@ -38,7 +38,6 @@ namespace polymarket
         env.data_url = "https://data-api.polymarket.com";
         env.relayer_url = "https://relayer-v2.polymarket.com";
         env.rtds_ws_url = "wss://ws-live-data.polymarket.com";
-        env.sports_ws_url = "wss://sports-api.polymarket.com/ws";
         return env;
     }
 
@@ -76,16 +75,9 @@ namespace polymarket
             {"clob_market_ws_url", &clob_market_ws_url},
             {"clob_user_ws_url", &clob_user_ws_url},
             {"rtds_ws_url", &rtds_ws_url},
-            {"sports_ws_url", &sports_ws_url},
         };
         for (const auto &[field, url] : ws_urls)
             require_url(field, *url, "wss://", "ws://");
-
-        if (relayer_max_polls <= 0)
-            throw std::invalid_argument("Environment.relayer_max_polls must be positive");
-        if (relayer_poll_interval_ms < 0)
-            throw std::invalid_argument(
-                "Environment.relayer_poll_interval_ms must be non-negative");
 
         contracts.validate();
     }
