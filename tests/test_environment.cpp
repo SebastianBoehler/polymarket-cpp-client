@@ -1,5 +1,7 @@
 #include "check_support.hpp"
 #include "polymarket/environment.hpp"
+#include "polymarket/position_client.hpp"
+#include "polymarket/types.hpp"
 #include <stdexcept>
 #include <string>
 
@@ -7,7 +9,9 @@ namespace
 {
     using check_support::check;
     using check_support::expect_equal;
+    using polymarket::Config;
     using polymarket::Environment;
+    using polymarket::PositionClientConfig;
 
     void expect_invalid(const std::string &name, const std::function<void()> &action)
     {
@@ -124,6 +128,55 @@ namespace
                        mutated([](Environment &e) { e.contracts.standard_exchange = "0x12"; }));
         expect_invalid("zero chain", mutated([](Environment &e) { e.contracts.chain_id = 0; }));
     }
+
+    void test_config_for_environment()
+    {
+        auto env = Environment::preproduction();
+        env.clob_market_ws_url = "ws://127.0.0.1:9001/ws/market";
+        env.clob_user_ws_url = "ws://127.0.0.1:9001/ws/user";
+        env.rtds_ws_url = "ws://127.0.0.1:9002";
+        const auto config = Config::for_environment(env);
+        const Config defaults;
+        expect_equal("config clob rest", config.clob_rest_url, env.clob_url);
+        expect_equal("config market ws", config.clob_ws_url, env.clob_market_ws_url);
+        expect_equal("config user ws", config.clob_user_ws_url, env.clob_user_ws_url);
+        expect_equal("config gamma", config.gamma_api_url, env.gamma_url);
+        expect_equal("config rtds", config.rtds_ws_url, env.rtds_ws_url);
+        check(config.http_timeout_ms == defaults.http_timeout_ms &&
+                  config.ws_ping_interval_ms == defaults.ws_ping_interval_ms &&
+                  config.max_markets == defaults.max_markets &&
+                  config.crypto_tickers == defaults.crypto_tickers,
+              "Config::for_environment must keep non-endpoint defaults");
+
+        env.gamma_url.clear();
+        expect_invalid("config invalid environment", [&] { (void)Config::for_environment(env); });
+    }
+
+    void test_position_config_for_environment()
+    {
+        auto env = Environment::preproduction();
+        env.rpc_url = "http://127.0.0.1:8545";
+        env.contracts.standard_exchange = "0x1111111111111111111111111111111111111111";
+        const auto config = PositionClientConfig::for_environment(env);
+        const PositionClientConfig defaults;
+        expect_equal("position rpc", config.rpc_url, env.rpc_url);
+        expect_equal("position gamma", config.gamma_api_url, env.gamma_url);
+        expect_equal("position relayer", config.relayer_url, env.relayer_url);
+        expect_equal("position exchange", config.contracts.standard_exchange,
+                     env.contracts.standard_exchange);
+        check(config.contracts.chain_id == env.contracts.chain_id,
+              "PositionClientConfig::for_environment must copy the chain");
+        check(config.private_key.empty() && config.funder_address.empty() &&
+                  config.wallet_type == defaults.wallet_type && config.relayer_api_key.empty() &&
+                  config.rpc_timeout_ms == defaults.rpc_timeout_ms &&
+                  config.relayer_retry_delay_ms == defaults.relayer_retry_delay_ms &&
+                  config.relayer_max_submit_retries == defaults.relayer_max_submit_retries,
+              "PositionClientConfig::for_environment must leave wallet and retry settings alone");
+
+        env.contracts.collateral_token = "0x12";
+        expect_invalid("position invalid environment",
+                       [&] { (void)PositionClientConfig::for_environment(env); });
+    }
 } // namespace
 
 int main()
@@ -133,5 +186,7 @@ int main()
     test_from_name();
     test_local_override_is_valid();
     test_validate_rejects_bad_fields();
+    test_config_for_environment();
+    test_position_config_for_environment();
     return check_support::finish("test_environment");
 }

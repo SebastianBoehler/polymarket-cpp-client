@@ -1,4 +1,6 @@
 #include "polymarket/environment.hpp"
+#include "polymarket/position_client.hpp"
+#include "polymarket/types.hpp"
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -86,6 +88,29 @@ namespace polymarket
                 "Environment.relayer_poll_interval_ms must be non-negative");
 
         contracts.validate();
+    }
+
+    Config Config::for_environment(const Environment &environment)
+    {
+        environment.validate();
+        Config config;
+        config.clob_rest_url = environment.clob_url;
+        config.clob_ws_url = environment.clob_market_ws_url;
+        config.clob_user_ws_url = environment.clob_user_ws_url;
+        config.gamma_api_url = environment.gamma_url;
+        config.rtds_ws_url = environment.rtds_ws_url;
+        return config;
+    }
+
+    PositionClientConfig PositionClientConfig::for_environment(const Environment &environment)
+    {
+        environment.validate();
+        PositionClientConfig config;
+        config.rpc_url = environment.rpc_url;
+        config.gamma_api_url = environment.gamma_url;
+        config.relayer_url = environment.relayer_url;
+        config.contracts = environment.contracts;
+        return config;
     }
 
 } // namespace polymarket
