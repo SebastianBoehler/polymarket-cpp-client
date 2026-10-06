@@ -33,8 +33,7 @@ namespace polymarket
         {
             // An EOA batch already mined its earlier approvals; keep their hashes.
             const auto &hashes = handle.transaction_hashes();
-            if (hashes.size() < 2)
-                throw;
+            if (hashes.size() < 2) throw;
             throw PartialBatchError(hashes, hashes.size() - 1, hashes.size(),
                                     std::current_exception(), error.what());
         }

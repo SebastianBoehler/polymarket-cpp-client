@@ -7,8 +7,7 @@ using namespace approvals_test;
 
 namespace
 {
-    template <typename Cause>
-    bool cause_is(const PartialBatchError &error)
+    template <typename Cause> bool cause_is(const PartialBatchError &error)
     {
         try
         {
@@ -134,8 +133,8 @@ namespace
             expect_transaction(node, approve, true);
             expect_mined(node);
             expect_transaction(node, operator_call, false);
-            expect_rpc(node, "eth_getTransactionReceipt", [](const nlohmann::json &)
-                       { return nlohmann::json(nullptr); });
+            expect_rpc(node, "eth_getTransactionReceipt",
+                       [](const nlohmann::json &) { return nlohmann::json(nullptr); });
             try
             {
                 // A zero timeout polls once, then gives up.
