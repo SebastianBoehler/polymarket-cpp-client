@@ -20,6 +20,9 @@ namespace polymarket::detail
     };
 
     MarketState snapshot_market(const LiveMarketState &market);
+    // Numeric fields only; enough to evaluate the arbitrage trigger.
+    void snapshot_market_prices(const LiveMarketState &market, MarketState &state);
+    void snapshot_market_identity(const LiveMarketState &market, MarketState &state);
     void reset_market_leg(LiveMarketState &market, const std::string &token_id);
     std::optional<StreamBookTop> apply_stream_book_event(
         std::unordered_map<std::string, Orderbook> &books,

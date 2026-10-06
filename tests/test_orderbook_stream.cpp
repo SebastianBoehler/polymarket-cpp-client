@@ -81,6 +81,40 @@ int main()
         }
     }
 
+    for (
+        const auto *invalid_market_data :
+        {R"({"event_type":"book","asset_id":"yes","bids":[{"price":"0.4","size":"1"},{"price":"0.3","size":"2"},{"price":"0.4","size":"3"}],"asks":[]})",
+         R"({"event_type":"book","asset_id":"yes","bids":[{"price":"","size":"1"}],"asks":[]})",
+         R"({"event_type":"book","asset_id":"yes","bids":[{"price":"0.4","size":"1e-400"}],"asks":[]})",
+         R"({"event_type":"book","asset_id":"yes","bids":[{"price":"0.4x","size":"1"}],"asks":[]})",
+         R"({"event_type":"price_change","price_changes":["yes"]})",
+         R"({"event_type":"price_change","price_changes":[{"asset_id":7,"price":"0.4","size":"1","side":"BUY"}]})",
+         R"({"event_type":"price_change","price_changes":[{"asset_id":"yes","price":"0.4","size":"1","side":"HOLD"}]})"})
+    {
+        bool rejected = false;
+        try
+        {
+            (void)detail::parse_market_book_events(invalid_market_data);
+        }
+        catch (const std::exception &)
+        {
+            rejected = true;
+        }
+        if (!check(rejected, "malformed numbers, changes, and unsorted duplicates are rejected"))
+        {
+            std::cerr << "  input: " << invalid_market_data << '\n';
+            return 1;
+        }
+    }
+
+    // Snapshots arrive in book order regardless of wire order.
+    if (!check(snapshots[0].asks.size() == 2 && close_to(snapshots[0].asks[0].price, 0.45) &&
+                   close_to(snapshots[0].asks[1].price, 0.46),
+               "parsed snapshot asks ascend"))
+    {
+        return 1;
+    }
+
     Orderbook yes;
     detail::apply_market_book_event(yes, snapshots[0], 1000);
     if (!check(close_to(yes.best_ask(), 0.45), "snapshot best ask") ||

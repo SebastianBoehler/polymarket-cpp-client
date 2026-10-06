@@ -12,6 +12,10 @@ namespace polymarket
 
     namespace
     {
+        // Tick sizes change as prices approach 0 or 1, so they expire. A
+        // token's neg-risk flag is fixed at market creation; caching it for
+        // the client's lifetime keeps an extra round trip off the order path.
+        // clear_market_metadata_cache() still evicts both.
         constexpr auto METADATA_CACHE_TTL = std::chrono::minutes(5);
 
         class MetadataFetchCompletion
@@ -129,8 +133,8 @@ namespace polymarket
             std::lock_guard<std::mutex> lock(metadata_cache_mutex_);
             return neg_risk_cache_
                 .insert_or_assign(token_id,
-                                  MetadataCacheEntry<NegRiskInfo>{info,
-                                                                  std::chrono::steady_clock::now() + METADATA_CACHE_TTL})
+                                  MetadataCacheEntry<NegRiskInfo>{
+                                      info, std::chrono::steady_clock::time_point::max()})
                 .first->second.value;
         }
         catch (...)

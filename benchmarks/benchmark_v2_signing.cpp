@@ -16,7 +16,9 @@ namespace
         order.maker = maker;
         order.signer = maker;
         order.taker = "0x0000000000000000000000000000000000000000";
-        order.token_id = "1234567890";
+        // Real CLOB token IDs are 77-digit uint256 values.
+        order.token_id =
+            "83782113303236477866335970881283179052006378592241188539196785830237452024272";
         order.maker_amount = "1000000";
         order.taker_amount = "2000000";
         order.side = OrderSide::BUY;

@@ -133,19 +133,18 @@ namespace polymarket::detail
             std::shared_lock lock(markets_mutex_);
             const auto found = markets_.find(condition_id);
             if (found == markets_.end()) return;
+            // Most updates do not cross the trigger; gate on prices before
+            // copying the market's identifier strings.
+            snapshot_market_prices(*found->second, market);
+            if (market.best_ask_yes <= 0.0 || market.best_ask_no <= 0.0 ||
+                !has_fresh_arb_depth(market, now_ns(), config_.max_book_age_ms * 1'000'000ULL,
+                                     market.minimum_order_size) ||
+                market.combined() >= config_.trigger_combined)
+                return;
+            snapshot_market_identity(*found->second, market);
             live = found->second;
-            market = snapshot_market(*live);
         }
-        if (market.best_ask_yes <= 0.0 || market.best_ask_no <= 0.0)
-            return;
-        const double required_shares = market.minimum_order_size;
-        if (!has_fresh_arb_depth(market, now_ns(),
-                                 config_.max_book_age_ms * 1'000'000ULL,
-                                 required_shares) ||
-            market.combined() >= config_.trigger_combined ||
-            !stream_is_current(expected_generation,
-                               expected_websocket_generation))
-            return;
+        if (!stream_is_current(expected_generation, expected_websocket_generation)) return;
 
         arb_opportunities_++;
         const auto callbacks = callbacks_snapshot();

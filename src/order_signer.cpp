@@ -15,26 +15,30 @@
 
 namespace polymarket
 {
+    namespace
+    {
+        std::string prefixed_hex(const uint8_t *data, std::size_t size)
+        {
+            static constexpr char digits[] = "0123456789abcdef";
+            std::string hex(2 + 2 * size, '0');
+            hex[1] = 'x';
+            for (std::size_t index = 0; index < size; ++index)
+            {
+                hex[2 + 2 * index] = digits[data[index] >> 4];
+                hex[3 + 2 * index] = digits[data[index] & 0x0f];
+            }
+            return hex;
+        }
+    } // namespace
+
     std::string to_hex(const std::vector<uint8_t> &data)
     {
-        std::stringstream ss;
-        ss << "0x";
-        for (auto b : data)
-        {
-            ss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(b);
-        }
-        return ss.str();
+        return prefixed_hex(data.data(), data.size());
     }
 
     std::string to_hex(const std::array<uint8_t, 32> &data)
     {
-        std::stringstream ss;
-        ss << "0x";
-        for (auto b : data)
-        {
-            ss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(b);
-        }
-        return ss.str();
+        return prefixed_hex(data.data(), data.size());
     }
 
     std::vector<uint8_t> from_hex(const std::string &hex)
