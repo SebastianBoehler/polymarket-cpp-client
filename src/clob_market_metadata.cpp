@@ -69,7 +69,9 @@ namespace polymarket
         MetadataFetchCompletion completion(metadata_cache_mutex_, metadata_cache_cv_,
                                            metadata_cache_in_flight_, in_flight_key);
 
-        auto response = http_.get("/tick-size?token_id=" + percent_encode_query_value(token_id));
+        auto response = read(
+            [&]
+            { return http_.get("/tick-size?token_id=" + percent_encode_query_value(token_id)); });
         if (!response.ok())
             return std::nullopt;
 
@@ -118,7 +120,9 @@ namespace polymarket
         MetadataFetchCompletion completion(metadata_cache_mutex_, metadata_cache_cv_,
                                            metadata_cache_in_flight_, in_flight_key);
 
-        auto response = http_.get("/neg-risk?token_id=" + percent_encode_query_value(token_id));
+        auto response = read(
+            [&]
+            { return http_.get("/neg-risk?token_id=" + percent_encode_query_value(token_id)); });
         if (!response.ok())
             return std::nullopt;
 
@@ -194,7 +198,7 @@ namespace polymarket
             path += "&fidelity=" + percent_encode_query_value(fidelity);
         }
 
-        auto response = http_.get(path);
+        auto response = read([&] { return http_.get(path); });
         if (!response.ok())
             return result;
 
@@ -242,7 +246,7 @@ namespace polymarket
     std::optional<ClobClient::LiveActivityMarket> ClobClient::get_market_live_activity(
         const std::string &condition_id)
     {
-        auto response = http_.get("/markets/live-activity/" + condition_id);
+        auto response = read([&] { return http_.get("/markets/live-activity/" + condition_id); });
         if (!response.ok())
             return std::nullopt;
 

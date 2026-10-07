@@ -1,4 +1,5 @@
 #include "polymarket/clob_client.hpp"
+#include "clob_client_internal.hpp"
 #include "clob_positions_internal.hpp"
 
 namespace polymarket
@@ -21,16 +22,15 @@ namespace polymarket
     {
         return detail::fetch_position_pages(
             position_address(*this, user_address), detail::PositionFilter::all,
-            [this](const std::string &path) { return data_http_.get(path); });
+            [this](const std::string &path) { return read([&] { return data_http_.get(path); }); });
     }
 
     std::vector<ClobClient::Position> ClobClient::get_redeemable_positions(
         const std::string &user_address)
     {
         return detail::fetch_position_pages(
-            position_address(*this, user_address),
-            detail::PositionFilter::redeemable,
-            [this](const std::string &path) { return data_http_.get(path); });
+            position_address(*this, user_address), detail::PositionFilter::redeemable,
+            [this](const std::string &path) { return read([&] { return data_http_.get(path); }); });
     }
 
     std::vector<ClobClient::Position> ClobClient::get_mergeable_positions(
@@ -38,6 +38,6 @@ namespace polymarket
     {
         return detail::fetch_position_pages(
             position_address(*this, user_address), detail::PositionFilter::mergeable,
-            [this](const std::string &path) { return data_http_.get(path); });
+            [this](const std::string &path) { return read([&] { return data_http_.get(path); }); });
     }
 }

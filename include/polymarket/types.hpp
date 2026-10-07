@@ -1,5 +1,6 @@
 #pragma once
 
+#include "polymarket/rate_limit.hpp"
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -274,6 +275,8 @@ namespace polymarket
         uint64_t max_book_age_ms = 2000;
         int http_timeout_ms = 5000;
         int max_markets = 50;
+        // MarketFetcher retries rate-limited reads with this policy; nullopt disables.
+        std::optional<RateLimitRetry> rate_limit_retry = RateLimitRetry{};
 
         // Crypto tickers for 15m/4h/1h markets
         std::vector<std::string> crypto_tickers = {

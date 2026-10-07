@@ -1,4 +1,5 @@
 #include "safe_relayer.hpp"
+#include "rate_limit_internal.hpp"
 #include "polymarket/evm_abi.hpp"
 #include "evm_uint.hpp"
 #include "polymarket/evm_utils.hpp"
@@ -209,8 +210,18 @@ namespace polymarket::detail
         return std::regex_search(body, match, nonce_mismatch) && decimal_less(match[1].str(), match[2].str());
     }
 
-    RelayerClient::RelayerClient(const std::string &base_url, std::string api_key, std::string api_key_address)
-        : headers_{{"RELAYER_API_KEY", std::move(api_key)}, {"RELAYER_API_KEY_ADDRESS", std::move(api_key_address)}}
+    RelayerClient::RelayerClient(const std::string &base_url, std::string api_key,
+                                 std::string api_key_address)
+        : RelayerClient(base_url, std::move(api_key), std::move(api_key_address), RateLimitRetry{})
+    {
+    }
+
+    RelayerClient::RelayerClient(const std::string &base_url, std::string api_key,
+                                 std::string api_key_address,
+                                 std::optional<RateLimitRetry> read_retry)
+        : headers_{{"RELAYER_API_KEY", std::move(api_key)},
+                   {"RELAYER_API_KEY_ADDRESS", std::move(api_key_address)}},
+          read_retry_(read_retry)
     {
         http_.set_base_url(base_url);
     }
@@ -236,7 +247,15 @@ namespace polymarket::detail
     std::string RelayerClient::safe_nonce(const std::string &signer_address)
     {
         const std::string endpoint = "/v1/account/transactions/params";
-        const auto body = parse(http_.get(endpoint + "?address=" + signer_address + "&type=SAFE", headers_), endpoint);
+        const auto body =
+            parse(retry_rate_limited(read_retry_,
+                                     [&]
+                                     {
+                                         return http_.get(endpoint + "?address=" + signer_address +
+                                                              "&type=SAFE",
+                                                          headers_);
+                                     }),
+                  endpoint);
         const auto nonce = string_field(body, "nonce", endpoint, true);
         if (!is_digits(nonce))
             throw std::runtime_error("invalid relayer response from " + endpoint + ": nonce is not numeric");
@@ -259,7 +278,9 @@ namespace polymarket::detail
     RelayerTransaction RelayerClient::get_transaction(const std::string &transaction_id)
     {
         const std::string endpoint = "/v1/account/transactions/" + transaction_id;
-        const auto body = parse(http_.get(endpoint, headers_), endpoint);
+        const auto body =
+            parse(retry_rate_limited(read_retry_, [&] { return http_.get(endpoint, headers_); }),
+                  endpoint);
         if (!body.contains("transaction_hash"))
             throw std::runtime_error("invalid relayer response from " + endpoint + ": missing transaction_hash");
         RelayerTransaction tx;

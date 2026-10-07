@@ -15,10 +15,13 @@ namespace polymarket
     std::optional<OrderScoringResult> ClobClient::is_order_scoring(const std::string &order_id)
     {
         constexpr const char *endpoint = "/order-scoring";
-        auto headers = get_l2_headers("GET", endpoint, "");
-        auto response = http_.get(std::string(endpoint) +
-                                      "?order_id=" + percent_encode_query_value(order_id),
-                                  headers);
+        auto response = read(
+            [&]
+            {
+                return http_.get(std::string(endpoint) +
+                                     "?order_id=" + percent_encode_query_value(order_id),
+                                 get_l2_headers("GET", endpoint, ""));
+            });
 
         if (!response.ok())
             return std::nullopt;
@@ -52,8 +55,12 @@ namespace polymarket
             return results;
         const json body = order_ids;
         std::string body_str = body.dump();
-        auto headers = get_l2_headers("POST", "/orders-scoring", body_str);
-        auto response = http_.post("/orders-scoring", body_str, headers);
+        auto response = read(
+            [&]
+            {
+                return http_.post("/orders-scoring", body_str,
+                                  get_l2_headers("POST", "/orders-scoring", body_str));
+            });
 
         if (!response.ok())
             return results;
@@ -92,10 +99,14 @@ namespace polymarket
     {
         std::vector<Notification> result;
 
-        auto headers = get_l2_headers("GET", "/notifications", "");
-        auto response = http_.get("/notifications?signature_type=" +
-                                      percent_encode_query_value(std::to_string(static_cast<int>(sig_type_))),
-                                  headers);
+        auto response = read(
+            [&]
+            {
+                return http_.get(
+                    "/notifications?signature_type=" +
+                        percent_encode_query_value(std::to_string(static_cast<int>(sig_type_))),
+                    get_l2_headers("GET", "/notifications", ""));
+            });
 
         if (!response.ok())
             return result;
@@ -161,10 +172,9 @@ namespace polymarket
     std::vector<ClobClient::EarningsInfo> ClobClient::get_total_earnings_for_user_for_day_all(const std::string &date)
     {
         constexpr const char *endpoint = "/rewards/user/total";
-        auto headers = get_l2_headers("GET", endpoint, "");
         const std::string path = std::string(endpoint) + "?date=" + percent_encode_query_value(date) +
                                  "&signature_type=" + std::to_string(static_cast<int>(sig_type_));
-        auto response = http_.get(path, headers);
+        auto response = read([&] { return http_.get(path, get_l2_headers("GET", endpoint, "")); });
         if (!response.ok())
             return {};
         std::vector<EarningsInfo> result;
@@ -191,7 +201,7 @@ namespace polymarket
         if (token_id.empty())
             return std::nullopt;
         const std::string path = "/fee-rate?token_id=" + percent_encode_query_value(token_id);
-        auto response = http_.get(path);
+        auto response = read([&] { return http_.get(path); });
 
         if (!response.ok())
             return std::nullopt;

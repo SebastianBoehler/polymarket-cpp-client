@@ -1,4 +1,5 @@
 #include "polymarket/sdk_error.hpp"
+#include "rate_limit_internal.hpp"
 #include <algorithm>
 #include <cctype>
 #include <nlohmann/json.hpp>
@@ -109,6 +110,9 @@ namespace polymarket
             error.retryable = true;
             return error;
         }
+
+        error.retry_after_seconds = detail::parse_retry_after_seconds(response);
+        error.rate_limit = detail::parse_rate_limit_update(response, RateLimitUpdate::Bucket::None);
 
         const auto api_message = parse_api_error_message(response.body);
         error.message = api_message.empty() ? "API request failed" : api_message;

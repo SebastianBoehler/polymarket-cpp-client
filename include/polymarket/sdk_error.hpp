@@ -1,6 +1,7 @@
 #pragma once
 
 #include "polymarket/http_client.hpp"
+#include "polymarket/rate_limit.hpp"
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -29,6 +30,9 @@ namespace polymarket
         std::string response_body_excerpt;
         std::string request_id;
         bool retryable{false};
+        // Server-suggested wait from Retry-After or a retry_after_seconds body field.
+        std::optional<double> retry_after_seconds;
+        std::optional<RateLimitUpdate> rate_limit;
     };
 
     template <typename T>

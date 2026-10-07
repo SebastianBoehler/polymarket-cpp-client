@@ -73,14 +73,14 @@ namespace polymarket
         data.set_base_url(environment.data_url);
     }
 
-    static ClobMarketPage fetch_market_page(
-        HttpClient &http, const std::string &endpoint,
-        const std::string &next_cursor)
+    template <typename Fetch>
+    static ClobMarketPage fetch_market_page(Fetch &&fetch, const std::string &endpoint,
+                                            const std::string &next_cursor)
     {
         std::string path = endpoint;
         if (!next_cursor.empty())
             path += "?next_cursor=" + percent_encode_query_value(next_cursor);
-        const auto response = http.get(path);
+        const auto response = fetch(path);
         if (!response.ok()) return {};
         try
         {
@@ -252,7 +252,7 @@ namespace polymarket
 
     std::optional<uint64_t> ClobClient::get_server_time()
     {
-        auto response = http_.get("/time");
+        auto response = read([&] { return http_.get("/time"); });
         if (!response.ok())
             return std::nullopt;
 
@@ -271,13 +271,15 @@ namespace polymarket
 
     ClobMarketPage ClobClient::get_markets(const std::string &next_cursor)
     {
-        return fetch_market_page(http_, "/markets", next_cursor);
+        return fetch_market_page([this](const std::string &path)
+                                 { return read([&] { return http_.get(path); }); }, "/markets",
+                                 next_cursor);
     }
 
     std::optional<ClobMarket> ClobClient::get_market(const std::string &condition_id)
     {
         if (condition_id.empty()) return std::nullopt;
-        auto response = http_.get("/markets/" + condition_id);
+        auto response = read([&] { return http_.get("/markets/" + condition_id); });
         if (!response.ok())
             return std::nullopt;
 
@@ -291,19 +293,24 @@ namespace polymarket
     ClobMarketPage ClobClient::get_sampling_markets(
         const std::string &next_cursor)
     {
-        return fetch_market_page(http_, "/sampling-markets", next_cursor);
+        return fetch_market_page([this](const std::string &path)
+                                 { return read([&] { return http_.get(path); }); },
+                                 "/sampling-markets", next_cursor);
     }
 
     ClobMarketPage ClobClient::get_simplified_markets(
         const std::string &next_cursor)
     {
-        return fetch_market_page(http_, "/simplified-markets", next_cursor);
+        return fetch_market_page([this](const std::string &path)
+                                 { return read([&] { return http_.get(path); }); },
+                                 "/simplified-markets", next_cursor);
     }
 
     ClobMarketPage ClobClient::get_sampling_simplified_markets(
         const std::string &next_cursor)
     {
-        return fetch_market_page(http_, "/sampling-simplified-markets",
-                                 next_cursor);
+        return fetch_market_page([this](const std::string &path)
+                                 { return read([&] { return http_.get(path); }); },
+                                 "/sampling-simplified-markets", next_cursor);
     }
 }

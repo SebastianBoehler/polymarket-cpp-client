@@ -37,6 +37,7 @@ namespace clob_test
         std::string body;
         int delay_ms{0};
         std::function<std::string(const Request &)> body_factory;
+        std::map<std::string, std::string> headers;
     };
 
     class LocalServer
@@ -75,6 +76,12 @@ namespace clob_test
         {
             std::lock_guard<std::mutex> lock(mutex_);
             responses_.push_back({status, std::move(body), delay_ms, {}});
+        }
+
+        void enqueue(std::string body, int status, std::map<std::string, std::string> headers)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            responses_.push_back({status, std::move(body), 0, {}, std::move(headers)});
         }
 
         void enqueue(std::function<std::string(const Request &)> body_factory,
@@ -169,9 +176,14 @@ namespace clob_test
                 if (response.delay_ms > 0)
                     std::this_thread::sleep_for(std::chrono::milliseconds(response.delay_ms));
                 const std::string reason = response.status == 200 ? "OK" : "ERROR";
-                const std::string wire = "HTTP/1.1 " + std::to_string(response.status) + " " + reason +
-                                         "\r\nContent-Type: application/json\r\nContent-Length: " +
-                                         std::to_string(response.body.size()) + "\r\nConnection: close\r\n\r\n" + response.body;
+                std::string extra_headers;
+                for (const auto &[name, value] : response.headers)
+                    extra_headers += name + ": " + value + "\r\n";
+                const std::string wire =
+                    "HTTP/1.1 " + std::to_string(response.status) + " " + reason +
+                    "\r\nContent-Type: application/json\r\nContent-Length: " +
+                    std::to_string(response.body.size()) + "\r\nConnection: close\r\n" +
+                    extra_headers + "\r\n" + response.body;
                 send(client, wire.data(), wire.size(), 0);
                 close(client);
             }

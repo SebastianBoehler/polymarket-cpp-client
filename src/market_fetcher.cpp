@@ -1,4 +1,5 @@
 #include "polymarket/market_fetcher.hpp"
+#include "rate_limit_internal.hpp"
 #include "query_encoding.hpp"
 #include "rest_orderbook_parsing.hpp"
 #include <nlohmann/json.hpp>
@@ -14,6 +15,7 @@ namespace polymarket
     {
         http_.set_base_url(config_.clob_rest_url);
         http_.set_timeout_ms(config_.http_timeout_ms);
+        if (config_.rate_limit_retry) detail::validate_rate_limit_retry(*config_.rate_limit_retry);
     }
 
     std::vector<ClobMarket> MarketFetcher::fetch_all_markets(int max_markets)
@@ -44,7 +46,8 @@ namespace polymarket
                                          ? endpoint
                                          : endpoint + "?next_cursor=" +
                                                detail::percent_encode_query_value(next_cursor);
-            const auto response = http_.get(path);
+            const auto response = detail::retry_rate_limited(config_.rate_limit_retry,
+                                                             [&] { return http_.get(path); });
             if (!response.ok())
             {
                 std::cerr << "Failed to fetch markets: " << response.status_code
@@ -106,7 +109,8 @@ namespace polymarket
         const std::string &condition_id)
     {
         if (condition_id.empty()) return std::nullopt;
-        const auto response = http_.get("/markets/" + condition_id);
+        const auto response = detail::retry_rate_limited(
+            config_.rate_limit_retry, [&] { return http_.get("/markets/" + condition_id); });
         if (!response.ok())
         {
             return std::nullopt;
@@ -127,8 +131,12 @@ namespace polymarket
 
     std::optional<Orderbook> MarketFetcher::fetch_orderbook(const std::string &token_id)
     {
-        const auto response = http_.get(
-            "/book?token_id=" + detail::percent_encode_query_value(token_id));
+        const auto response = detail::retry_rate_limited(
+            config_.rate_limit_retry,
+            [&]
+            {
+                return http_.get("/book?token_id=" + detail::percent_encode_query_value(token_id));
+            });
         return response.ok()
                    ? parse_orderbook_response(response.body, token_id)
                    : std::nullopt;
@@ -136,7 +144,9 @@ namespace polymarket
 
     bool MarketFetcher::refresh_market_metadata(MarketState &market)
     {
-        const auto response = http_.get("/clob-markets/" + market.condition_id);
+        const auto response = detail::retry_rate_limited(
+            config_.rate_limit_retry,
+            [&] { return http_.get("/clob-markets/" + market.condition_id); });
         if (!response.ok())
         {
             return false;
