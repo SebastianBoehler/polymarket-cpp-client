@@ -1,6 +1,7 @@
 #pragma once
 
 #include "polymarket/clob_client.hpp"
+#include "rate_limit_internal.hpp"
 #include "query_encoding.hpp"
 #include "rest_numeric.hpp"
 
@@ -79,3 +80,11 @@ namespace polymarket::detail
     ClobClient::EarningsInfo parse_user_earning_info(const json &item);
     ClobClient::EarningsInfo parse_total_user_earning_info(const json &item);
 }
+
+namespace polymarket
+{
+    template <typename Attempt> HttpResponse ClobClient::read(Attempt &&attempt) const
+    {
+        return detail::retry_rate_limited(rate_limit_retry(), attempt);
+    }
+} // namespace polymarket

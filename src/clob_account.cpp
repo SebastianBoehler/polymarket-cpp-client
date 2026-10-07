@@ -61,8 +61,9 @@ namespace polymarket
     {
         std::vector<std::string> result;
 
-        auto headers = get_l2_headers("GET", "/auth/api-keys", "");
-        auto response = http_.get("/auth/api-keys", headers);
+        auto response = read(
+            [&]
+            { return http_.get("/auth/api-keys", get_l2_headers("GET", "/auth/api-keys", "")); });
 
         if (!response.ok())
             return result;
@@ -106,8 +107,8 @@ namespace polymarket
             return Result<std::optional<OpenOrder>>::failure(make_auth_error("Client not authenticated", endpoint));
         }
 
-        auto headers = get_l2_headers("GET", endpoint, "");
-        auto response = http_.get(endpoint, headers);
+        auto response =
+            read([&] { return http_.get(endpoint, get_l2_headers("GET", endpoint, "")); });
 
         if (!response.ok())
         {
@@ -158,8 +159,8 @@ namespace polymarket
             path += market.empty() ? "?" : "?market=" + percent_encode_query_value(market) + "&";
             path += "next_cursor=" + percent_encode_query_value(pagination.cursor());
 
-            auto headers = get_l2_headers("GET", endpoint, "");
-            auto response = http_.get(path, headers);
+            auto response =
+                read([&] { return http_.get(path, get_l2_headers("GET", endpoint, "")); });
 
             if (!response.ok())
             {
@@ -201,8 +202,8 @@ namespace polymarket
 
             const std::string path = std::string(endpoint) +
                                      "?next_cursor=" + percent_encode_query_value(pagination.cursor());
-            auto headers = get_l2_headers("GET", endpoint, "");
-            auto response = http_.get(path, headers);
+            auto response =
+                read([&] { return http_.get(path, get_l2_headers("GET", endpoint, "")); });
 
             if (!response.ok())
                 return {};
@@ -230,8 +231,8 @@ namespace polymarket
                            "&signature_type=" + std::to_string(static_cast<int>(sig_type_));
         if (!token_id.empty())
             path += "&token_id=" + percent_encode_query_value(token_id);
-        auto headers = get_l2_headers("GET", request_path, "");
-        auto response = http_.get(path, headers);
+        auto response =
+            read([&] { return http_.get(path, get_l2_headers("GET", request_path, "")); });
 
         if (!response.ok())
             return std::nullopt;
@@ -269,8 +270,8 @@ namespace polymarket
                            "&signature_type=" + std::to_string(static_cast<int>(sig_type_));
         if (!token_id.empty())
             path += "&token_id=" + percent_encode_query_value(token_id);
-        auto headers = get_l2_headers("GET", request_path, "");
-        auto response = http_.get(path, headers);
+        auto response =
+            read([&] { return http_.get(path, get_l2_headers("GET", request_path, "")); });
         return response.ok();
     }
 }

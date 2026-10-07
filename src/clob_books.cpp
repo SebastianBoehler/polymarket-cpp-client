@@ -14,7 +14,8 @@ namespace polymarket
     std::optional<Orderbook> ClobClient::get_order_book(const std::string &token_id)
     {
         if (token_id.empty()) return std::nullopt;
-        auto response = http_.get("/book?token_id=" + percent_encode_query_value(token_id));
+        auto response = read(
+            [&] { return http_.get("/book?token_id=" + percent_encode_query_value(token_id)); });
         if (!response.ok())
             return std::nullopt;
 
@@ -32,7 +33,8 @@ namespace polymarket
         if (remaining.size() != token_ids.size() || remaining.count("") != 0)
             return result;
 
-        auto response = http_.post("/books", book_request_body(token_ids).dump());
+        auto response =
+            read([&] { return http_.post("/books", book_request_body(token_ids).dump()); });
         if (!response.ok())
             return result;
 
@@ -60,8 +62,12 @@ namespace polymarket
 
     std::optional<PriceInfo> ClobClient::get_price(const std::string &token_id, const std::string &side)
     {
-        auto response = http_.get("/price?token_id=" + percent_encode_query_value(token_id) +
-                                  "&side=" + percent_encode_query_value(side));
+        auto response = read(
+            [&]
+            {
+                return http_.get("/price?token_id=" + percent_encode_query_value(token_id) +
+                                 "&side=" + percent_encode_query_value(side));
+            });
         if (!response.ok())
             return std::nullopt;
 
@@ -88,7 +94,11 @@ namespace polymarket
         }
 
         const auto normalized_side = uppercase(side);
-        auto response = http_.post("/prices", book_request_body(token_ids, normalized_side).dump());
+        auto response = read(
+            [&]
+            {
+                return http_.post("/prices", book_request_body(token_ids, normalized_side).dump());
+            });
         if (!response.ok())
             return result;
 
@@ -118,7 +128,12 @@ namespace polymarket
 
     std::optional<PriceInfo> ClobClient::get_last_trade_price(const std::string &token_id)
     {
-        auto response = http_.get("/last-trade-price?token_id=" + percent_encode_query_value(token_id));
+        auto response = read(
+            [&]
+            {
+                return http_.get("/last-trade-price?token_id=" +
+                                 percent_encode_query_value(token_id));
+            });
         if (!response.ok())
             return std::nullopt;
 
@@ -144,7 +159,8 @@ namespace polymarket
             return result;
         }
 
-        auto response = http_.post("/last-trades-prices", book_request_body(token_ids).dump());
+        auto response = read(
+            [&] { return http_.post("/last-trades-prices", book_request_body(token_ids).dump()); });
         if (!response.ok())
             return result;
 
@@ -172,7 +188,9 @@ namespace polymarket
 
     std::optional<MidpointInfo> ClobClient::get_midpoint(const std::string &token_id)
     {
-        auto response = http_.get("/midpoint?token_id=" + percent_encode_query_value(token_id));
+        auto response = read(
+            [&]
+            { return http_.get("/midpoint?token_id=" + percent_encode_query_value(token_id)); });
         if (!response.ok())
             return std::nullopt;
 
@@ -198,7 +216,8 @@ namespace polymarket
             return result;
         }
 
-        auto response = http_.post("/midpoints", book_request_body(token_ids).dump());
+        auto response =
+            read([&] { return http_.post("/midpoints", book_request_body(token_ids).dump()); });
         if (!response.ok())
             return result;
 
@@ -228,7 +247,8 @@ namespace polymarket
 
     std::optional<SpreadInfo> ClobClient::get_spread(const std::string &token_id)
     {
-        auto response = http_.get("/spread?token_id=" + percent_encode_query_value(token_id));
+        auto response = read(
+            [&] { return http_.get("/spread?token_id=" + percent_encode_query_value(token_id)); });
         if (!response.ok())
             return std::nullopt;
 
@@ -254,7 +274,8 @@ namespace polymarket
             return result;
         }
 
-        auto response = http_.post("/spreads", book_request_body(token_ids).dump());
+        auto response =
+            read([&] { return http_.post("/spreads", book_request_body(token_ids).dump()); });
         if (!response.ok())
             return result;
 

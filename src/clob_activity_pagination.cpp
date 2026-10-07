@@ -28,8 +28,12 @@ namespace polymarket
                 return {};
             }
 
-            auto response = http_.get("/rewards/markets/current?next_cursor=" +
-                                      percent_encode_query_value(pagination.cursor()));
+            auto response = read(
+                [&]
+                {
+                    return http_.get("/rewards/markets/current?next_cursor=" +
+                                     percent_encode_query_value(pagination.cursor()));
+                });
             if (!response.ok())
                 return {};
             try
@@ -77,7 +81,7 @@ namespace polymarket
             const std::string path = "/rewards/markets/" + condition_id +
                                      "?next_cursor=" +
                                      percent_encode_query_value(pagination.cursor());
-            auto response = http_.get(path);
+            auto response = read([&] { return http_.get(path); });
             if (!response.ok())
                 return {};
             try
@@ -133,8 +137,8 @@ namespace polymarket
                                      "?date=" + percent_encode_query_value(date) +
                                      "&signature_type=" + std::to_string(static_cast<int>(sig_type_)) +
                                      "&next_cursor=" + percent_encode_query_value(pagination.cursor());
-            auto headers = get_l2_headers("GET", endpoint, "");
-            auto response = http_.get(path, headers);
+            auto response =
+                read([&] { return http_.get(path, get_l2_headers("GET", endpoint, "")); });
             if (!response.ok())
                 return {};
             try

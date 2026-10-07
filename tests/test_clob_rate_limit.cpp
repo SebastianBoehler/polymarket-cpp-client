@@ -95,6 +95,116 @@ namespace clob_test
                      "a throwing listener must not change the request result") &&
                check(calls == 1, "an empty listener must stop notifications");
     }
+
+    bool test_public_reads_retry_after_429()
+    {
+        LocalServer server;
+        ClobClient client(server.url(), 137);
+        const std::map<std::string, std::string> retry_now = {{"Retry-After", "0"}};
+
+        server.enqueue(R"({"error":"slow down"})", 429, retry_now);
+        server.enqueue(R"({"mid":"0.5"})");
+        const auto midpoint = client.get_midpoint("token-1");
+        server.enqueue(R"({"error":"slow down"})", 429, retry_now);
+        server.enqueue(R"({"error":"slow down"})", 429, retry_now);
+        server.enqueue(R"([])");
+        const auto books = client.get_order_books({"token-1"});
+        const auto requests = server.requests();
+
+        return check(midpoint && requests.size() == 5, "GET reads must retry a 429") &&
+               check(requests[0].target == requests[1].target && requests[2].method == "POST" &&
+                         requests[2].target == "/books" && requests[4].target == "/books",
+                     "batch POST reads must retry a 429 up to the default two times") &&
+               check(books.empty(), "the retried batch read must return the final response");
+    }
+
+    // Retry-After: 1 moves the retry into a new second, so a regenerated L2
+    // header carries a new timestamp.
+    bool test_authenticated_reads_resign_each_attempt()
+    {
+        LocalServer server;
+        auto client = authenticated_client(server.url());
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "1"}});
+        server.enqueue(R"({"apiKeys":["test-key"]})");
+        const auto keys = client.get_api_keys();
+        const auto requests = server.requests();
+
+        return check(keys == std::vector<std::string>{"test-key"} && requests.size() == 2,
+                     "authenticated reads must retry a 429") &&
+               check(requests[0].headers.at("poly_timestamp") !=
+                         requests[1].headers.at("poly_timestamp"),
+                     "each attempt must carry a fresh L2 timestamp") &&
+               check(requests[1].headers.at("poly_signature") ==
+                         expected_signature(requests[1], "/auth/api-keys"),
+                     "the retried request must carry a valid signature");
+    }
+
+    bool test_data_api_reads_retry_after_429()
+    {
+        LocalServer server;
+        auto environment = Environment::production();
+        environment.clob_url = server.url();
+        environment.data_url = server.url();
+        ClobClient client(environment);
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "0"}});
+        server.enqueue(R"([])");
+        const auto positions = client.get_positions("0x1111111111111111111111111111111111111111");
+        const auto requests = server.requests();
+
+        return check(positions.empty() && requests.size() == 2 &&
+                         requests[1].target.rfind("/positions?", 0) == 0,
+                     "Data API reads must retry a 429");
+    }
+
+    bool test_retry_policy_limits()
+    {
+        LocalServer server;
+        ClobClient client(server.url(), 137);
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "10"}});
+        const bool long_wait_failed = !client.get_midpoint("token-1");
+        const auto after_long_wait = server.requests().size();
+
+        client.set_rate_limit_retry(std::nullopt);
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "0"}});
+        const bool disabled_failed = !client.get_midpoint("token-1");
+        const auto after_disabled = server.requests().size();
+
+        client.set_rate_limit_retry(RateLimitRetry{1, std::chrono::milliseconds(5000)});
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "0"}});
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "0"}});
+        const bool exhausted_failed = !client.get_midpoint("token-1");
+        const auto after_exhausted = server.requests().size();
+
+        bool rejected_invalid = false;
+        try
+        {
+            client.set_rate_limit_retry(RateLimitRetry{-1, std::chrono::milliseconds(0)});
+        }
+        catch (const std::invalid_argument &)
+        {
+            rejected_invalid = true;
+        }
+
+        return check(long_wait_failed && after_long_wait == 1,
+                     "a Retry-After above max_delay must fail without retrying") &&
+               check(disabled_failed && after_disabled == 2, "a disabled policy must not retry") &&
+               check(exhausted_failed && after_exhausted == 4,
+                     "retries must stop at the policy count") &&
+               check(rejected_invalid, "an invalid policy must be rejected");
+    }
+
+    bool test_writes_are_not_retried()
+    {
+        LocalServer server;
+        auto client = authenticated_client(server.url());
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "0"}});
+        const bool cancelled = client.cancel_all();
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "0"}});
+        const bool deleted = client.delete_api_key();
+
+        return check(!cancelled && !deleted && server.requests().size() == 2,
+                     "cancellations and other writes must not be retried");
+    }
 } // namespace clob_test
 
 int main()
@@ -103,7 +213,10 @@ int main()
     polymarket::http_global_init();
     const bool ok = test_listener_receives_order_and_cancel_buckets() &&
                     test_rate_limited_order_is_not_retried() &&
-                    test_throwing_listener_and_removal();
+                    test_throwing_listener_and_removal() && test_public_reads_retry_after_429() &&
+                    test_authenticated_reads_resign_each_attempt() &&
+                    test_data_api_reads_retry_after_429() && test_retry_policy_limits() &&
+                    test_writes_are_not_retried();
     polymarket::http_global_cleanup();
     return ok ? 0 : 1;
 }

@@ -241,6 +241,11 @@ namespace polymarket
         // an empty function removes the listener.
         void set_rate_limit_listener(std::function<void(const RateLimitUpdate &)> listener);
 
+        // Read requests that get HTTP 429 are retried after the server's
+        // Retry-After delay; orders, cancellations and other writes never are.
+        // Defaults to RateLimitRetry{}; std::nullopt disables retries.
+        void set_rate_limit_retry(std::optional<RateLimitRetry> policy);
+
         // ============================================================
         // CONNECTION WARMING (for low-latency trading)
         // ============================================================
@@ -317,7 +322,12 @@ namespace polymarket
         using RateLimitListener = std::function<void(const RateLimitUpdate &)>;
         mutable std::mutex rate_limit_mutex_;
         std::shared_ptr<const RateLimitListener> rate_limit_listener_;
+        std::optional<RateLimitRetry> rate_limit_retry_{RateLimitRetry{}};
         void notify_rate_limit(const HttpResponse &response, RateLimitUpdate::Bucket bucket) const;
+        std::optional<RateLimitRetry> rate_limit_retry() const;
+        // Runs a read request under the retry policy; attempt() must rebuild
+        // signed headers. Defined in clob_client_internal.hpp.
+        template <typename Attempt> HttpResponse read(Attempt &&attempt) const;
 
         // Helper methods
         std::map<std::string, std::string> get_l2_headers(const std::string &method,
