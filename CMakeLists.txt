@@ -165,6 +165,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/order_signer_domain.cpp
     src/order_signer_v2.cpp
     src/sdk_error.cpp
+    src/rate_limit.cpp
     src/clob_account.cpp
     src/clob_activity.cpp
     src/clob_activity_pagination.cpp
