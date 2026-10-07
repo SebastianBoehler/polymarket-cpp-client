@@ -171,6 +171,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/clob_activity_pagination.cpp
     src/clob_books.cpp
     src/clob_client.cpp
+    src/clob_rate_limit.cpp
     src/clob_market_parsing.cpp
     src/clob_market_metadata.cpp
     src/clob_mutation_parsing.cpp

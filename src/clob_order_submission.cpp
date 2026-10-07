@@ -120,6 +120,7 @@ namespace polymarket
         const std::string body_str = body.dump();
         auto headers = get_l2_headers("POST", "/order", body_str);
         auto response = http_.post("/order", body_str, headers);
+        notify_rate_limit(response, RateLimitUpdate::Bucket::Order);
 
         if (!response.ok())
         {
@@ -163,6 +164,7 @@ namespace polymarket
         const std::string body_str = body.dump();
         auto headers = get_l2_headers("POST", "/orders", body_str);
         auto response = http_.post("/orders", body_str, headers);
+        notify_rate_limit(response, RateLimitUpdate::Bucket::Order);
 
         if (!response.ok())
         {
@@ -236,6 +238,7 @@ namespace polymarket
         auto headers = get_l2_headers("DELETE", "/order", body_str);
 
         auto response = http_.del("/order", body_str, headers);
+        notify_rate_limit(response, RateLimitUpdate::Bucket::Cancel);
         if (!response.ok())
         {
             return Result<bool>::failure(make_sdk_error(response, "/order"));
@@ -265,6 +268,7 @@ namespace polymarket
         auto headers = get_l2_headers("DELETE", "/orders", body_str);
 
         auto response = http_.del("/orders", body_str, headers);
+        notify_rate_limit(response, RateLimitUpdate::Bucket::Cancel);
         if (!response.ok()) return false;
         try
         {
@@ -281,6 +285,7 @@ namespace polymarket
     {
         auto headers = get_l2_headers("DELETE", "/cancel-all", "");
         auto response = http_.del("/cancel-all", "", headers);
+        notify_rate_limit(response, RateLimitUpdate::Bucket::Cancel);
         return confirms_bulk_cancellation(response);
     }
 
@@ -293,6 +298,7 @@ namespace polymarket
         auto headers = get_l2_headers("DELETE", "/cancel-market-orders", body_str);
 
         auto response = http_.del("/cancel-market-orders", body_str, headers);
+        notify_rate_limit(response, RateLimitUpdate::Bucket::Cancel);
         return confirms_bulk_cancellation(response);
     }
 }
