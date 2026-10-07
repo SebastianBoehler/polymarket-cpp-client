@@ -1,4 +1,5 @@
 #include "polymarket/position_client.hpp"
+#include "rate_limit_internal.hpp"
 #include "position_calls.hpp"
 #include "position_client_impl.hpp"
 #include <set>
@@ -26,7 +27,8 @@ namespace polymarket
         std::string path = "/markets?condition_ids=" + normalized;
         if (closed_only)
             path += "&closed=true";
-        const auto response = impl_->gamma.get(path);
+        const auto response = detail::retry_rate_limited(impl_->rate_limit_retry,
+                                                         [&] { return impl_->gamma.get(path); });
         if (!response.ok())
             throw std::runtime_error("Gamma market lookup failed for condition " + normalized + ": status " +
                                      std::to_string(response.status_code) + " " + response.error);

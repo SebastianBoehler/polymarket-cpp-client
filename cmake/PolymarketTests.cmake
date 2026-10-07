@@ -167,6 +167,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_clob_rate_limit PRIVATE polymarket::client)
     add_test(NAME test_clob_rate_limit COMMAND test_clob_rate_limit)
 
+    add_executable(test_position_rate_limit tests/test_position_rate_limit.cpp)
+    target_include_directories(test_position_rate_limit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_position_rate_limit PRIVATE polymarket::client)
+    add_test(NAME test_position_rate_limit COMMAND test_position_rate_limit)
+
     add_executable(test_websocket_resilience tests/test_websocket_resilience.cpp)
     target_include_directories(test_websocket_resilience PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_websocket_resilience PRIVATE polymarket::client)

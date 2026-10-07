@@ -3,6 +3,7 @@
 #include "polymarket/json_rpc_client.hpp"
 #include "polymarket/order_signer.hpp"
 #include "polymarket/polymarket_contracts.hpp"
+#include "polymarket/rate_limit.hpp"
 #include "polymarket/trading_approvals.hpp"
 #include <array>
 #include <chrono>
@@ -170,6 +171,8 @@ namespace polymarket
         std::string relayer_api_key_address; // defaults to the signer address
         long relayer_retry_delay_ms = 2000;  // between retried submits
         int relayer_max_submit_retries = 10;
+        // Retries for rate-limited Gamma and relayer reads; nullopt disables.
+        std::optional<RateLimitRetry> rate_limit_retry = RateLimitRetry{};
 
         // RPC, Gamma, relayer and contracts from `environment`, which is
         // validated first. The caller still sets private_key and the wallet.

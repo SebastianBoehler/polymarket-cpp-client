@@ -80,6 +80,10 @@ namespace polymarket::detail
     public:
         RelayerClient(const std::string &base_url, std::string api_key, std::string api_key_address);
 
+        // read_retry applies to the nonce and status reads, never to /submit.
+        RelayerClient(const std::string &base_url, std::string api_key, std::string api_key_address,
+                      std::optional<RateLimitRetry> read_retry);
+
         // Next Safe nonce for the Safe owned by signer_address.
         std::string safe_nonce(const std::string &signer_address);
         RelayerTransaction submit(const nlohmann::json &payload);
@@ -90,5 +94,6 @@ namespace polymarket::detail
 
         HttpClient http_;
         std::map<std::string, std::string> headers_;
+        std::optional<RateLimitRetry> read_retry_;
     };
 } // namespace polymarket::detail

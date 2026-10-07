@@ -23,6 +23,7 @@ namespace polymarket
         std::shared_ptr<EvmJsonRpcHttpClient> rpc;
         std::shared_ptr<detail::RelayerClient> relayer; // Safe only
         HttpClient gamma;
+        std::optional<RateLimitRetry> rate_limit_retry;
         std::chrono::milliseconds relayer_retry_delay;
         int relayer_max_submit_retries;
         std::mutex send_mutex; // one nonce sequence at a time

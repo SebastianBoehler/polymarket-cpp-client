@@ -1,4 +1,5 @@
 #include "polymarket/evm_transaction.hpp"
+#include "rate_limit_internal.hpp"
 #include "evm_uint.hpp"
 #include "polymarket/evm_utils.hpp"
 #include "position_client_impl.hpp"
@@ -28,6 +29,8 @@ namespace polymarket
           relayer_retry_delay(config.relayer_retry_delay_ms),
           relayer_max_submit_retries(config.relayer_max_submit_retries)
     {
+        if (config.rate_limit_retry) detail::validate_rate_limit_retry(*config.rate_limit_retry);
+        rate_limit_retry = config.rate_limit_retry;
         rpc->set_timeout_ms(config.rpc_timeout_ms);
         gamma.set_base_url(config.gamma_api_url);
 
@@ -42,7 +45,9 @@ namespace polymarket
                 throw std::invalid_argument("POLY_GNOSIS_SAFE needs relayer_api_key");
             relayer = std::make_shared<detail::RelayerClient>(
                 config.relayer_url, config.relayer_api_key,
-                config.relayer_api_key_address.empty() ? signer_address : config.relayer_api_key_address);
+                config.relayer_api_key_address.empty() ? signer_address
+                                                       : config.relayer_api_key_address,
+                rate_limit_retry);
         }
         else
         {

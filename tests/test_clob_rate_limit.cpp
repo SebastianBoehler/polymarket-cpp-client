@@ -118,13 +118,13 @@ namespace clob_test
                check(books.empty(), "the retried batch read must return the final response");
     }
 
-    // Retry-After: 1 moves the retry into a new second, so a regenerated L2
-    // header carries a new timestamp.
+    // L2 timestamps have one-second resolution on the wall clock, so a 2 s
+    // Retry-After leaves margin for clock adjustment between attempts.
     bool test_authenticated_reads_resign_each_attempt()
     {
         LocalServer server;
         auto client = authenticated_client(server.url());
-        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "1"}});
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "2"}});
         server.enqueue(R"({"apiKeys":["test-key"]})");
         const auto keys = client.get_api_keys();
         const auto requests = server.requests();
