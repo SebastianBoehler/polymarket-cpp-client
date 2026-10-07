@@ -243,7 +243,29 @@ if (!result) {
 ```
 
 `SdkError` includes the endpoint, HTTP status, response excerpt, retryability,
-and the request ID when the server returns one.
+and the request ID when the server returns one. Rejections also carry
+`retry_after_seconds` and the `Poly-RateLimit-*` state when the server sends them.
+
+### Rate limits
+
+Reads that get HTTP 429 are retried up to twice, each after exactly the
+server's `Retry-After` delay (1 s when absent). A requested delay above 5 s
+returns the error instead. Orders, cancellations, and other writes are never
+retried; check `retry_after_seconds` on their error and decide yourself.
+
+```cpp
+client.set_rate_limit_retry(polymarket::RateLimitRetry{1, std::chrono::seconds(2)});
+client.set_rate_limit_retry(std::nullopt); // fail on the first 429
+
+client.set_rate_limit_listener([](const polymarket::RateLimitUpdate &update) {
+    if (update.warning) std::cerr << "order rate would be rejected under enforcement\n";
+});
+```
+
+The listener receives the `Poly-RateLimit-*` headers from order and cancel
+responses. `PositionClientConfig::rate_limit_retry` and `Config::rate_limit_retry`
+set the same policy for `PositionClient` and `MarketFetcher`. Unlike the official
+SDKs, CLOB reads are retried too; disable it for latency-critical paths.
 
 ### On-chain positions
 
