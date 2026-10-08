@@ -165,6 +165,25 @@ namespace polymarket
         std::optional<bool> neg_risk; // If set, skips API call to fetch neg_risk
     };
 
+    // Limit order for ClobClient::place_limit_order.
+    struct PlaceLimitOrderParams
+    {
+        std::string token_id;
+        double price{0.0};
+        double size{0.0};
+        OrderSide side{OrderSide::BUY};
+        // Rejected instead of matched if it would cross the book on arrival.
+        bool post_only{false};
+        // Unix seconds. Set: posted as GTD, at least 180 s ahead to allow for
+        // latency and clock skew. Unset: posted as GTC.
+        std::optional<std::uint64_t> expiration;
+        std::string tick_size; // Empty uses the market minimum
+        std::string metadata = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::string builder_code =
+            "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::optional<bool> neg_risk; // If set, skips API call to fetch neg_risk
+    };
+
     // Signed order paired with the execution policy used when posting it.
     struct PreparedOrder
     {

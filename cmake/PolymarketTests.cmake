@@ -151,6 +151,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_market_price PRIVATE polymarket::client)
     add_test(NAME test_market_price COMMAND test_market_price)
 
+    add_executable(test_order_placement tests/test_order_placement.cpp)
+    target_link_libraries(test_order_placement PRIVATE polymarket::client)
+    add_test(NAME test_order_placement COMMAND test_order_placement)
+
     add_executable(test_order_type_serialization tests/test_order_type_serialization.cpp)
     target_link_libraries(test_order_type_serialization PRIVATE polymarket::client)
     add_test(NAME test_order_type_serialization COMMAND test_order_type_serialization)

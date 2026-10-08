@@ -148,6 +148,7 @@ set(POLYMARKET_CLIENT_SOURCES
     src/order_amounts.cpp
     src/clob_order_execution.cpp
     src/clob_order_submission.cpp
+    src/clob_order_placement.cpp
     src/order_execution.cpp
     src/market_price.cpp
     src/polymarket_events.cpp

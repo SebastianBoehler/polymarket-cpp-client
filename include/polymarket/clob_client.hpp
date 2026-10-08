@@ -160,6 +160,12 @@ namespace polymarket
         OrderResponse create_and_post_market_order(const CreateMarketOrderParams &params,
                                                    OrderType order_type = OrderType::FAK);
 
+        // Validates, signs and posts a limit order: GTC, or GTD when an
+        // expiration is set. When the tick size comes from the market, a price
+        // off the cached grid refreshes it once, since ticks change near 0 and 1.
+        // Nothing is posted if validation or signing fails.
+        Result<OrderResponse> place_limit_order(const PlaceLimitOrderParams &params);
+
         // Order management
         bool cancel_order(const std::string &order_id);
         Result<bool> cancel_order_result(const std::string &order_id);
@@ -344,6 +350,8 @@ namespace polymarket
 
         std::string order_type_to_string(OrderType type);
         std::string order_side_to_string(OrderSide side);
+        Result<OrderResponse> post_signed_order(const SignedOrder &order, OrderType order_type,
+                                                bool post_only);
 
         // JSON parsing helpers
         std::vector<ClobMarket> parse_markets(const std::string &json);

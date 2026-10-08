@@ -98,6 +98,12 @@ namespace polymarket
 
     Result<OrderResponse> ClobClient::post_order_result(const SignedOrder &order, OrderType order_type)
     {
+        return post_signed_order(order, order_type, false);
+    }
+
+    Result<OrderResponse> ClobClient::post_signed_order(const SignedOrder &order,
+                                                        OrderType order_type, bool post_only)
+    {
         std::string serialized_type;
         try
         {
@@ -114,9 +120,8 @@ namespace polymarket
             return Result<OrderResponse>::failure(make_auth_error("Client not authenticated", "/order"));
         }
 
-        const auto body = detail::order_payload_json(order,
-                                                     api_creds_ ? api_creds_->api_key : "",
-                                                     serialized_type);
+        const auto body = detail::order_payload_json(order, api_creds_ ? api_creds_->api_key : "",
+                                                     serialized_type, post_only);
         const std::string body_str = body.dump();
         auto headers = get_l2_headers("POST", "/order", body_str);
         auto response = http_.post("/order", body_str, headers);
