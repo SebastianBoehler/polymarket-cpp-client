@@ -146,6 +146,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_order_execution PRIVATE polymarket::client)
     add_test(NAME test_order_execution COMMAND test_order_execution)
 
+    add_executable(test_market_price tests/test_market_price.cpp)
+    target_include_directories(test_market_price PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_market_price PRIVATE polymarket::client)
+    add_test(NAME test_market_price COMMAND test_market_price)
+
     add_executable(test_order_type_serialization tests/test_order_type_serialization.cpp)
     target_link_libraries(test_order_type_serialization PRIVATE polymarket::client)
     add_test(NAME test_order_type_serialization COMMAND test_order_type_serialization)

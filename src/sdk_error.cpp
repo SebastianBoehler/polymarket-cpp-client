@@ -179,6 +179,8 @@ namespace polymarket
             return "signing";
         case SdkErrorCode::InvalidArgument:
             return "invalid_argument";
+        case SdkErrorCode::InsufficientLiquidity:
+            return "insufficient_liquidity";
         }
         return "unknown";
     }

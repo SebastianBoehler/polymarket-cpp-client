@@ -3,6 +3,7 @@
 #include "polymarket/clob_types.hpp"
 #include "polymarket/environment.hpp"
 #include "polymarket/geoblock.hpp"
+#include "polymarket/market_price.hpp"
 #include "polymarket/types.hpp"
 #include "polymarket/http_client.hpp"
 #include "polymarket/order_signer.hpp"
@@ -100,6 +101,13 @@ namespace polymarket
         std::optional<TickSizeInfo> get_tick_size(const std::string &token_id);
         std::optional<NegRiskInfo> get_neg_risk(const std::string &token_id);
         void clear_market_metadata_cache(const std::string &token_id = "");
+
+        // Fetches the book and the market tick size, then simulates a market
+        // order of `amount` (collateral for BUY, shares for SELL). The estimated
+        // price is the one create_market_order would sign against the same book.
+        Result<MarketPriceEstimate> estimate_market_price(const std::string &token_id,
+                                                          OrderSide side, double amount,
+                                                          OrderType order_type = OrderType::FOK);
 
         // Prices history
         using PriceHistoryPoint = ::polymarket::PriceHistoryPoint;
