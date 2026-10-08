@@ -17,16 +17,16 @@ and untracked change and create logical commit groups.
 
 ## Repository map
 
-| Area                  | Public headers (`include/polymarket/`)                               | Implementation (`src/`)                                                        |
-| --------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| HTTP transport        | `http_client.hpp`, `network.hpp`                                     | `http_client*.cpp`, `http_global.cpp`, `network_route.cpp`                     |
-| WebSocket transport   | `websocket_client.hpp`                                               | `websocket_client*.cpp`, `websocket_resilience.cpp`, `websocket_tunnel.cpp`    |
-| CLOB REST and trading | `clob_client.hpp`, `clob_types.hpp`, `geoblock.hpp`                  | `clob_*.cpp`, `order_execution.cpp`, `order_amounts.cpp`, `geoblock.cpp`       |
-| Order signing         | `order_signer.hpp`, `decimal_math.hpp`                               | `order_signer*.cpp`, `decimal_math.cpp`                                        |
-| Market data streams   | `orderbook.hpp`, `types.hpp`                                         | `orderbook*.cpp`, `websocket_market_data.cpp`, `arb_*.cpp`                     |
-| User stream           | `user_stream.hpp`                                                    | `user_stream*.cpp`, `websocket_user_data.cpp`                                  |
-| On-chain positions    | `position_client.hpp`, `trading_approvals.hpp`, `evm_*.hpp`          | `position_*.cpp`, `approval_calls.cpp`, `safe_relayer.cpp`, `evm_*.cpp`        |
-| Polygon indexing      | `json_rpc_client.hpp`, `evm_event_indexer.hpp`, `oracle_watcher.hpp` | `json_rpc_*.cpp`, `evm_*indexer*.cpp`, `oracle_*.cpp`, `polymarket_events.cpp` |
+| Area                  | Public headers (`include/polymarket/`)                                  | Implementation (`src/`)                                                                      |
+| --------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| HTTP transport        | `http_client.hpp`, `network.hpp`                                        | `http_client*.cpp`, `http_global.cpp`, `network_route.cpp`                                   |
+| WebSocket transport   | `websocket_client.hpp`                                                  | `websocket_client*.cpp`, `websocket_resilience.cpp`, `websocket_tunnel.cpp`                  |
+| CLOB REST and trading | `clob_client.hpp`, `clob_types.hpp`, `market_price.hpp`, `geoblock.hpp` | `clob_*.cpp`, `order_execution.cpp`, `order_amounts.cpp`, `market_price.cpp`, `geoblock.cpp` |
+| Order signing         | `order_signer.hpp`, `decimal_math.hpp`                                  | `order_signer*.cpp`, `decimal_math.cpp`                                                      |
+| Market data streams   | `orderbook.hpp`, `types.hpp`                                            | `orderbook*.cpp`, `websocket_market_data.cpp`, `arb_*.cpp`                                   |
+| User stream           | `user_stream.hpp`                                                       | `user_stream*.cpp`, `websocket_user_data.cpp`                                                |
+| On-chain positions    | `position_client.hpp`, `trading_approvals.hpp`, `evm_*.hpp`             | `position_*.cpp`, `approval_calls.cpp`, `safe_relayer.cpp`, `evm_*.cpp`                      |
+| Polygon indexing      | `json_rpc_client.hpp`, `evm_event_indexer.hpp`, `oracle_watcher.hpp`    | `json_rpc_*.cpp`, `evm_*indexer*.cpp`, `oracle_*.cpp`, `polymarket_events.cpp`               |
 
 Tests live in `tests/` (fixtures in `*_fixture.hpp` and `*_test_support.hpp`);
 some contract tests live in `src/*_contract_tests.cpp`. Benchmarks live in
