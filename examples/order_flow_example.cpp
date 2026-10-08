@@ -42,8 +42,8 @@ namespace
 
     void print_error(const char *step, const polymarket::SdkError &error)
     {
-        std::cerr << step << " failed: " << polymarket::sdk_error_code_to_string(error.code)
-                  << ' ' << error.message << '\n';
+        std::cerr << step << " failed: " << polymarket::sdk_error_code_to_string(error.code) << ' '
+                  << error.message << '\n';
     }
 
     std::uint64_t unix_now_seconds()
@@ -81,8 +81,8 @@ int main(int argc, char **argv)
         {
             amount = std::stod(argv[3]);
             ClobClient public_client(environment);
-            const auto estimate = public_client.estimate_market_price(
-                token_id, OrderSide::BUY, amount, OrderType::FAK);
+            const auto estimate = public_client.estimate_market_price(token_id, OrderSide::BUY,
+                                                                      amount, OrderType::FAK);
             if (!estimate)
             {
                 print_error("estimate", estimate.error());
@@ -90,8 +90,8 @@ int main(int argc, char **argv)
             }
             const auto &value = estimate.value();
             std::cout << "BUY $" << amount << ": worst price " << value.price << ", average "
-                      << value.average_price << ", " << value.share_units / 1e6
-                      << " shares across " << value.levels << " level(s)"
+                      << value.average_price << ", " << value.share_units / 1e6 << " shares across "
+                      << value.levels << " level(s)"
                       << (value.fully_fillable ? "" : " (book too shallow; FAK fills part)")
                       << '\n';
             worst_price = value.price;
