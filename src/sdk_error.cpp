@@ -181,6 +181,10 @@ namespace polymarket
             return "invalid_argument";
         case SdkErrorCode::InsufficientLiquidity:
             return "insufficient_liquidity";
+        case SdkErrorCode::Timeout:
+            return "timeout";
+        case SdkErrorCode::TransactionFailed:
+            return "transaction_failed";
         }
         return "unknown";
     }

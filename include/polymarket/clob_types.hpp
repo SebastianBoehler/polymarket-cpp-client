@@ -92,6 +92,15 @@ namespace polymarket
         std::optional<std::string> error_msg;
     };
 
+    // Final state of the fills an order matched when it was posted.
+    struct OrderSettlement
+    {
+        // Unique hashes of fills that did not fail, in trade_ids order.
+        std::vector<std::string> transaction_hashes;
+        // Each fill once CONFIRMED or FAILED, in trade_ids order.
+        std::vector<Trade> trades;
+    };
+
     // Balance/Allowance info
     struct BalanceAllowance
     {

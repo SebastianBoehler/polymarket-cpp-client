@@ -19,7 +19,9 @@ namespace polymarket
         Parse,
         Signing,
         InvalidArgument,
-        InsufficientLiquidity
+        InsufficientLiquidity,
+        Timeout,
+        TransactionFailed
     };
 
     struct SdkError

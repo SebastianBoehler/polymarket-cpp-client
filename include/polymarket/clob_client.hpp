@@ -185,6 +185,20 @@ namespace polymarket
         std::vector<OpenOrder> get_open_orders(const std::string &market = "");
         Result<std::vector<OpenOrder>> get_open_orders_result(const std::string &market = "");
         std::vector<Trade> get_trades(const std::string &next_cursor = "");
+        // Empty when the account has no trade with this ID (yet).
+        std::optional<Trade> get_trade(const std::string &trade_id);
+        Result<std::optional<Trade>> get_trade_result(const std::string &trade_id);
+
+        // Blocks until every fill in `order.trade_ids` is CONFIRMED or FAILED,
+        // polling get_trade_result. Covers only the fills matched when the
+        // order was posted, not later fills of a remainder resting on the book.
+        // Fails with Timeout while fills are still settling (the order itself
+        // is unaffected), TransactionFailed when every fill failed, or the
+        // error of the first trade lookup that fails.
+        Result<OrderSettlement> wait_for_order_fill_settlement(
+            const OrderResponse &order,
+            std::chrono::milliseconds timeout = std::chrono::seconds(30),
+            std::chrono::milliseconds poll_interval = std::chrono::milliseconds(250));
 
         // Balance and allowance
         std::optional<BalanceAllowance> get_balance_allowance(
