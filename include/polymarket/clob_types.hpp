@@ -184,6 +184,24 @@ namespace polymarket
         std::optional<bool> neg_risk; // If set, skips API call to fetch neg_risk
     };
 
+    // Market order for ClobClient::place_market_order.
+    struct PlaceMarketOrderParams
+    {
+        std::string token_id;
+        OrderSide side{OrderSide::BUY};
+        double amount{0.0}; // Collateral to spend for BUY, shares to sell for SELL
+        // Most a BUY pays, or least a SELL accepts, per share. Set: the order
+        // is signed at this price without fetching the book. Unset: the price
+        // comes from walking the current book.
+        std::optional<double> worst_price;
+        OrderType order_type{OrderType::FAK}; // FAK or FOK
+        std::string tick_size;                // Empty uses the market minimum
+        std::string metadata = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::string builder_code =
+            "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::optional<bool> neg_risk; // If set, skips API call to fetch neg_risk
+    };
+
     // Signed order paired with the execution policy used when posting it.
     struct PreparedOrder
     {

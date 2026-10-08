@@ -166,6 +166,12 @@ namespace polymarket
         // Nothing is posted if validation or signing fails.
         Result<OrderResponse> place_limit_order(const PlaceLimitOrderParams &params);
 
+        // Validates, signs and posts a FAK or FOK market order. Without a
+        // worst_price it walks the book like estimate_market_price, so a FOK
+        // the book cannot fill fails with InsufficientLiquidity before signing.
+        // The market tick size is refreshed once if it rejects the price.
+        Result<OrderResponse> place_market_order(const PlaceMarketOrderParams &params);
+
         // Order management
         bool cancel_order(const std::string &order_id);
         Result<bool> cancel_order_result(const std::string &order_id);
