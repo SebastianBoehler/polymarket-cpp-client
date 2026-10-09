@@ -3,9 +3,11 @@
 #include "poll_deadline.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace polymarket
@@ -14,16 +16,28 @@ namespace polymarket
     {
         constexpr const char *trades_endpoint = "/data/trades";
 
+        // REST trades may report TRADE_STATUS_CONFIRMED where streams send CONFIRMED.
+        std::string normalized_status(const Trade &trade)
+        {
+            constexpr std::string_view prefix = "TRADE_STATUS_";
+            std::string status = trade.status;
+            std::transform(status.begin(), status.end(), status.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+            if (status.starts_with(prefix)) status.erase(0, prefix.size());
+            return status;
+        }
+
         // CONFIRMED is final on-chain; FAILED never will be. Earlier statuses
         // (MATCHED, MINED, RETRYING) can still change their transaction hash.
         bool is_settled(const Trade &trade)
         {
-            return trade.status == "CONFIRMED" || trade.status == "FAILED";
+            const auto status = normalized_status(trade);
+            return status == "CONFIRMED" || status == "FAILED";
         }
 
         bool is_failed(const Trade &trade)
         {
-            return trade.status == "FAILED";
+            return normalized_status(trade) == "FAILED";
         }
 
         void append_unique(std::vector<std::string> &values, const std::string &value)

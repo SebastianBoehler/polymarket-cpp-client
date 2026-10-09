@@ -123,6 +123,35 @@ namespace
               "an order whose every fill failed must report TransactionFailed");
     }
 
+    void test_prefixed_rest_statuses()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        server.enqueue(trade_page("t1", "TRADE_STATUS_MINED"));
+        server.enqueue(trade_page("t1", "TRADE_STATUS_CONFIRMED", "0x11"));
+        const auto confirmed =
+            client.wait_for_order_fill_settlement(matched_order({"t1"}), 5s, 1ms);
+        server.enqueue(trade_page("t2", "TRADE_STATUS_FAILED", "0x22"));
+        const auto failed = client.wait_for_order_fill_settlement(matched_order({"t2"}), 5s, 1ms);
+        server.enqueue(trade_page("t3", "TRADE_STATUS_FAILED", "0x33"));
+        server.enqueue(trade_page("t4", "TRADE_STATUS_CONFIRMED", "0x44"));
+        const auto mixed =
+            client.wait_for_order_fill_settlement(matched_order({"t3", "t4"}), 5s, 1ms);
+
+        check(confirmed &&
+                  confirmed.value().transaction_hashes == std::vector<std::string>{"0x11"} &&
+                  confirmed.value().trades.size() == 1 &&
+                  confirmed.value().trades[0].status == "TRADE_STATUS_CONFIRMED",
+              "a prefixed confirmed fill must settle and keep its raw status");
+        check(!failed && failed.error().code == SdkErrorCode::TransactionFailed &&
+                  failed.error().message.find("t2") != std::string::npos,
+              "a prefixed failed fill must report TransactionFailed");
+        check(mixed && mixed.value().transaction_hashes == std::vector<std::string>{"0x44"} &&
+                  mixed.value().trades.size() == 2,
+              "prefixed mixed fills must keep both trades and only the confirmed hash");
+        check(server.requests().size() == 5, "prefixed statuses polling request count mismatch");
+    }
+
     void test_deadline()
     {
         clob_test::LocalServer server;
@@ -206,6 +235,7 @@ int main()
     test_orders_without_fills_do_not_poll();
     test_polls_until_every_fill_confirms();
     test_failed_fills();
+    test_prefixed_rest_statuses();
     test_deadline();
     test_lookup_failures();
     test_get_trade_matches_id();
