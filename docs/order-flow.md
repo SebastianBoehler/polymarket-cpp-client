@@ -110,7 +110,11 @@ if (settlement)
 - `transaction_hashes` holds the unique hashes of fills that did not fail.
   `trades` holds every fill's final `Trade`, both in `trade_ids` order.
 - The wait blocks the calling thread. It polls with a monotonic deadline,
-  never sleeps past it, and polls once more at the deadline.
+  never sleeps past it, and polls once more at the deadline. A 429 whose
+  Retry-After would end past the deadline is returned as `RateLimit` instead
+  of being retried.
+- The deadline bounds sleeps, not requests. A trade lookup already in flight
+  at the deadline runs until the HTTP client's own timeout.
 - `get_trade(id)` and `get_trade_result(id)` read one trade directly. They
   return an empty value while the trade is not visible yet.
 
@@ -126,6 +130,7 @@ For push updates instead of polling, subscribe a `UserStream` and watch
 | `HttpTransport`         | Tick size or book could not be fetched (retryable)                                                                                  |
 | `ApiResponse`           | The server rejected the order; the message is the server's `errorMsg`                                                               |
 | `Timeout`               | Fills still settling at the deadline (retryable; the order is unaffected)                                                           |
+| `RateLimit`             | A trade lookup got HTTP 429 and its Retry-After does not fit in the remaining wait (retryable)                                      |
 | `TransactionFailed`     | Every fill of the order failed                                                                                                      |
 
 Validation errors are returned before any request is sent. Writes are never

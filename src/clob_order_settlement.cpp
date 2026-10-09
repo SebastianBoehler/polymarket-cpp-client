@@ -16,7 +16,6 @@ namespace polymarket
     {
         constexpr const char *trades_endpoint = "/data/trades";
 
-        // REST trades may report TRADE_STATUS_CONFIRMED where streams send CONFIRMED.
         std::string normalized_status(const Trade &trade)
         {
             constexpr std::string_view prefix = "TRADE_STATUS_";
@@ -69,6 +68,13 @@ namespace polymarket
 
     Result<std::optional<Trade>> ClobClient::get_trade_result(const std::string &trade_id)
     {
+        return lookup_trade(trade_id, std::nullopt);
+    }
+
+    Result<std::optional<Trade>>
+    ClobClient::lookup_trade(const std::string &trade_id,
+                             std::optional<std::chrono::steady_clock::time_point> deadline)
+    {
         if (!order_signer_ || !api_creds_)
             return Result<std::optional<Trade>>::failure(
                 make_auth_error("Client not authenticated", trades_endpoint));
@@ -78,8 +84,8 @@ namespace polymarket
 
         const std::string path =
             std::string(trades_endpoint) + "?id=" + detail::percent_encode_query_value(trade_id);
-        auto response =
-            read([&] { return http_.get(path, get_l2_headers("GET", trades_endpoint, "")); });
+        auto response = read(
+            [&] { return http_.get(path, get_l2_headers("GET", trades_endpoint, "")); }, deadline);
         if (!response.ok())
             return Result<std::optional<Trade>>::failure(make_sdk_error(response, trades_endpoint));
 
@@ -132,7 +138,7 @@ namespace polymarket
             for (std::size_t index = 0; index < trade_ids.size(); ++index)
             {
                 if (settled[index]) continue;
-                auto trade = get_trade_result(trade_ids[index]);
+                auto trade = lookup_trade(trade_ids[index], deadline);
                 if (!trade) return Result<OrderSettlement>::failure(trade.error());
                 if (trade.value() && is_settled(*trade.value()))
                     settled[index] = std::move(trade.value());

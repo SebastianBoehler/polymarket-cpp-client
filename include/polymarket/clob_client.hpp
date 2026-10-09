@@ -361,7 +361,13 @@ namespace polymarket
         std::optional<RateLimitRetry> rate_limit_retry() const;
         // Runs a read request under the retry policy; attempt() must rebuild
         // signed headers. Defined in clob_client_internal.hpp.
-        template <typename Attempt> HttpResponse read(Attempt &&attempt) const;
+        template <typename Attempt>
+        HttpResponse
+        read(Attempt &&attempt,
+             std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt) const;
+        Result<std::optional<Trade>>
+        lookup_trade(const std::string &trade_id,
+                     std::optional<std::chrono::steady_clock::time_point> deadline);
 
         // Helper methods
         std::map<std::string, std::string> get_l2_headers(const std::string &method,

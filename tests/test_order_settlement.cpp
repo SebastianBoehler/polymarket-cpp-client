@@ -196,6 +196,28 @@ namespace
         check(server.requests().size() == 5, "deadline polling request count mismatch");
     }
 
+    void test_rate_limit_retry_respects_deadline()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "0.3"}});
+        const auto started = std::chrono::steady_clock::now();
+        const auto limited = client.wait_for_order_fill_settlement(matched_order({"t1"}), 0ms);
+        const auto elapsed = std::chrono::steady_clock::now() - started;
+
+        server.enqueue(R"({"error":"slow down"})", 429, {{"Retry-After", "0.05"}});
+        server.enqueue(trade_page("t1", "CONFIRMED", "0x11"));
+        const auto retried = client.wait_for_order_fill_settlement(matched_order({"t1"}), 5s, 1ms);
+
+        check(!limited && limited.error().code == SdkErrorCode::RateLimit &&
+                  limited.error().retryable,
+              "a Retry-After past the deadline must return the 429 as RateLimit");
+        check(elapsed < 250ms, "a rate-limit retry must not sleep past the deadline");
+        check(retried && retried.value().transaction_hashes == std::vector<std::string>{"0x11"},
+              "a Retry-After within the deadline must still be retried");
+        check(server.requests().size() == 3, "deadline rate-limit request count mismatch");
+    }
+
     void test_lookup_failures()
     {
         clob_test::LocalServer server;
@@ -251,6 +273,7 @@ int main()
     test_prefixed_rest_statuses();
     test_null_hash_keeps_polling();
     test_deadline();
+    test_rate_limit_retry_respects_deadline();
     test_lookup_failures();
     test_get_trade_matches_id();
     return check_support::finish("test_order_settlement");
