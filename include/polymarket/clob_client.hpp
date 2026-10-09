@@ -352,6 +352,8 @@ namespace polymarket
         std::set<std::string> metadata_cache_in_flight_;
         std::map<std::string, MetadataCacheEntry<TickSizeInfo>> tick_size_cache_;
         std::map<std::string, MetadataCacheEntry<NegRiskInfo>> neg_risk_cache_;
+        Result<TickSizeInfo> tick_size_result(const std::string &token_id);
+        Result<Orderbook> order_book_result(const std::string &token_id);
 
         using RateLimitListener = std::function<void(const RateLimitUpdate &)>;
         mutable std::mutex rate_limit_mutex_;

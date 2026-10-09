@@ -41,20 +41,6 @@ namespace polymarket
                 return false;
             }
         }
-
-        std::optional<std::string> market_tick_size(ClobClient &client, const std::string &token_id)
-        {
-            const auto info = client.get_tick_size(token_id);
-            if (!info || info->minimum_tick_size.empty()) return std::nullopt;
-            return info->minimum_tick_size;
-        }
-
-        Result<OrderResponse> missing_tick_size()
-        {
-            return Result<OrderResponse>::failure({SdkErrorCode::HttpTransport,
-                                                   "could not resolve market tick size",
-                                                   "/tick-size", 0, "", "", true});
-        }
     } // namespace
 
     Result<OrderResponse> ClobClient::place_limit_order(const PlaceLimitOrderParams &params)
@@ -73,9 +59,10 @@ namespace polymarket
 
         if (params.tick_size.empty())
         {
-            const auto cached = market_tick_size(*this, params.token_id);
-            if (!cached) return missing_tick_size();
-            if (!on_tick_grid(params.price, *cached)) clear_market_metadata_cache(params.token_id);
+            const auto cached = tick_size_result(params.token_id);
+            if (!cached) return Result<OrderResponse>::failure(cached.error());
+            if (!on_tick_grid(params.price, cached.value().minimum_tick_size))
+                clear_market_metadata_cache(params.token_id);
         }
 
         CreateOrderParams order;
@@ -111,9 +98,13 @@ namespace polymarket
             return invalid_order("worst price must be between 0 and 1");
 
         const bool uses_market_tick = params.tick_size.empty();
-        auto tick_size = uses_market_tick ? market_tick_size(*this, params.token_id)
-                                          : std::optional<std::string>(params.tick_size);
-        if (!tick_size) return missing_tick_size();
+        std::string tick_size = params.tick_size;
+        if (uses_market_tick)
+        {
+            const auto info = tick_size_result(params.token_id);
+            if (!info) return Result<OrderResponse>::failure(info.error());
+            tick_size = info.value().minimum_tick_size;
+        }
 
         CreateMarketOrderParams order;
         order.token_id = params.token_id;
@@ -126,28 +117,26 @@ namespace polymarket
 
         if (params.worst_price)
         {
-            if (uses_market_tick && !on_tick_grid(*params.worst_price, *tick_size))
+            if (uses_market_tick && !on_tick_grid(*params.worst_price, tick_size))
                 clear_market_metadata_cache(params.token_id);
             order.price = params.worst_price;
         }
         else
         {
-            const auto book = get_order_book(params.token_id);
-            if (!book)
-                return Result<OrderResponse>::failure({SdkErrorCode::HttpTransport,
-                                                       "could not fetch order book", "/book", 0, "",
-                                                       "", true});
-            auto estimate = polymarket::estimate_market_price(*book, params.side, params.amount,
-                                                              *tick_size, params.order_type);
+            const auto book = order_book_result(params.token_id);
+            if (!book) return Result<OrderResponse>::failure(book.error());
+            auto estimate = polymarket::estimate_market_price(
+                book.value(), params.side, params.amount, tick_size, params.order_type);
             // Book levels on a finer grid than the cached tick mean the tick changed.
             if (!estimate && estimate.error().code == SdkErrorCode::InvalidArgument &&
                 uses_market_tick)
             {
                 clear_market_metadata_cache(params.token_id);
-                tick_size = market_tick_size(*this, params.token_id);
-                if (!tick_size) return missing_tick_size();
-                estimate = polymarket::estimate_market_price(*book, params.side, params.amount,
-                                                             *tick_size, params.order_type);
+                const auto refreshed = tick_size_result(params.token_id);
+                if (!refreshed) return Result<OrderResponse>::failure(refreshed.error());
+                tick_size = refreshed.value().minimum_tick_size;
+                estimate = polymarket::estimate_market_price(
+                    book.value(), params.side, params.amount, tick_size, params.order_type);
             }
             if (!estimate) return Result<OrderResponse>::failure(estimate.error());
             order.price = estimate.value().price;

@@ -182,15 +182,41 @@ namespace
         check(estimate && estimate.value().price == 0.6 &&
                   estimate.value().share_units == 3'666'663,
               "client estimate must walk the REST book");
-        check(!missing_tick && missing_tick.error().code == SdkErrorCode::HttpTransport &&
-                  missing_tick.error().retryable,
-              "missing tick size must be a retryable transport failure");
+        check(!missing_tick && missing_tick.error().code == SdkErrorCode::ApiResponse &&
+                  missing_tick.error().http_status == 500 && missing_tick.error().retryable &&
+                  missing_tick.error().endpoint == "/tick-size",
+              "a tick size server error must keep its HTTP status");
         check(!rejected && rejected.error().code == SdkErrorCode::InvalidArgument,
               "client must reject limit order types");
         check(requests.size() == 3 && requests[0].target == "/tick-size?token_id=123" &&
                   requests[1].target == "/book?token_id=123" &&
                   requests[2].target == "/tick-size?token_id=456",
               "client must fetch tick then book, stop on tick failure, and validate before I/O");
+    }
+
+    void test_client_preserves_book_errors()
+    {
+        clob_test::LocalServer server;
+        ClobClient client(server.url(), 137);
+        server.enqueue(R"({"minimum_tick_size":"0.1"})");
+        server.enqueue(R"({"error":"No orderbook exists for the requested token id"})", 404);
+        const auto missing = client.estimate_market_price("123", OrderSide::BUY, 2.0);
+        server.enqueue(R"({"asset_id":"123","bids":[)");
+        const auto malformed = client.estimate_market_price("123", OrderSide::BUY, 2.0);
+        server.enqueue(R"({"minimum_tick_size":null})");
+        const auto no_tick = client.estimate_market_price("456", OrderSide::BUY, 2.0);
+
+        check(!missing && missing.error().code == SdkErrorCode::ApiResponse &&
+                  missing.error().http_status == 404 && !missing.error().retryable &&
+                  missing.error().endpoint == "/book" &&
+                  missing.error().response_body_excerpt.find("No orderbook") != std::string::npos,
+              "a book 404 must surface as a non-retryable API rejection");
+        check(!malformed && malformed.error().code == SdkErrorCode::Parse &&
+                  !malformed.error().retryable && malformed.error().endpoint == "/book",
+              "a malformed book must surface as a parse failure");
+        check(!no_tick && no_tick.error().code == SdkErrorCode::Parse &&
+                  no_tick.error().endpoint == "/tick-size",
+              "a tick size response without a value must be a parse failure");
     }
 } // namespace
 
@@ -202,5 +228,6 @@ int main()
     test_shallow_book();
     test_invalid_input();
     test_client_fetches_tick_and_book();
+    test_client_preserves_book_errors();
     return check_support::finish("test_market_price");
 }

@@ -161,9 +161,9 @@ namespace
         check(!rejected && rejected.error().code == SdkErrorCode::ApiResponse &&
                   rejected.error().message == "not enough balance",
               "a rejected order must surface the server message");
-        check(!missing_tick && missing_tick.error().code == SdkErrorCode::HttpTransport &&
-                  missing_tick.error().retryable,
-              "missing tick metadata must be a retryable transport failure");
+        check(!missing_tick && missing_tick.error().code == SdkErrorCode::ApiResponse &&
+                  missing_tick.error().http_status == 500 && missing_tick.error().retryable,
+              "a tick size server error must keep its HTTP status");
         check(server.requests().size() == 3, "tick failure must stop before posting");
     }
 } // namespace

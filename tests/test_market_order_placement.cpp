@@ -141,6 +141,33 @@ namespace
               "a stale tick must be refetched once before signing");
     }
 
+    void test_preserves_metadata_and_book_errors()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
+        server.enqueue(R"({"error":"No orderbook exists for the requested token id"})", 404);
+        const auto missing_book = client.place_market_order(market_order(OrderSide::BUY, 2.0));
+        server.enqueue("not json");
+        const auto malformed_book = client.place_market_order(market_order(OrderSide::BUY, 2.0));
+        auto other = market_order(OrderSide::BUY, 2.0);
+        other.token_id = "456";
+        server.enqueue("not json");
+        const auto malformed_tick = client.place_market_order(other);
+
+        check(!missing_book && missing_book.error().code == SdkErrorCode::ApiResponse &&
+                  missing_book.error().http_status == 404 && !missing_book.error().retryable &&
+                  !missing_book.error().response_body_excerpt.empty(),
+              "a book 404 must surface as a non-retryable API rejection");
+        check(!malformed_book && malformed_book.error().code == SdkErrorCode::Parse &&
+                  !malformed_book.error().retryable,
+              "a malformed book must surface as a parse failure");
+        check(!malformed_tick && malformed_tick.error().code == SdkErrorCode::Parse &&
+                  malformed_tick.error().endpoint == "/tick-size",
+              "a malformed tick size must surface as a parse failure");
+        check(server.requests().size() == 4, "lookup failures must stop before posting");
+    }
+
     void test_rejects_before_any_request()
     {
         clob_test::LocalServer server;
@@ -174,6 +201,7 @@ int main()
     test_book_walk_prices_unbounded_orders();
     test_worst_price_skips_the_book();
     test_stale_tick_refreshes_once();
+    test_preserves_metadata_and_book_errors();
     test_rejects_before_any_request();
     return check_support::finish("test_market_order_placement");
 }

@@ -341,16 +341,11 @@ namespace polymarket
         if (auto error = validate_estimate_request(amount, order_type))
             return Result<MarketPriceEstimate>::failure(std::move(*error));
 
-        const auto tick_info = get_tick_size(token_id);
-        if (!tick_info || tick_info->minimum_tick_size.empty())
-            return Result<MarketPriceEstimate>::failure(
-                estimate_error(SdkErrorCode::HttpTransport, "could not resolve market tick size",
-                               "/tick-size", true));
-        const auto book = get_order_book(token_id);
-        if (!book)
-            return Result<MarketPriceEstimate>::failure(estimate_error(
-                SdkErrorCode::HttpTransport, "could not fetch order book", "/book", true));
-        return polymarket::estimate_market_price(*book, side, amount, tick_info->minimum_tick_size,
-                                                 order_type);
+        const auto tick_info = tick_size_result(token_id);
+        if (!tick_info) return Result<MarketPriceEstimate>::failure(tick_info.error());
+        const auto book = order_book_result(token_id);
+        if (!book) return Result<MarketPriceEstimate>::failure(book.error());
+        return polymarket::estimate_market_price(book.value(), side, amount,
+                                                 tick_info.value().minimum_tick_size, order_type);
     }
 } // namespace polymarket
