@@ -23,12 +23,11 @@ namespace polymarket
     {
         constexpr const char *endpoint = "/book";
         if (token_id.empty())
-            return Result<Orderbook>::failure(
-                {SdkErrorCode::InvalidArgument, "token_id is required", endpoint, 0, "", "", false});
+            return Result<Orderbook>::failure({SdkErrorCode::InvalidArgument,
+                                               "token_id is required", endpoint, 0, "", "", false});
         auto response = read(
             [&] { return http_.get("/book?token_id=" + percent_encode_query_value(token_id)); });
-        if (!response.ok())
-            return Result<Orderbook>::failure(make_sdk_error(response, endpoint));
+        if (!response.ok()) return Result<Orderbook>::failure(make_sdk_error(response, endpoint));
 
         try
         {

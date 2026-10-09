@@ -96,14 +96,16 @@ namespace polymarket
             std::lock_guard<std::mutex> lock(metadata_cache_mutex_);
             return Result<TickSizeInfo>::success(
                 tick_size_cache_
-                    .insert_or_assign(token_id,
-                                      MetadataCacheEntry<TickSizeInfo>{std::move(info),
-                                                                       std::chrono::steady_clock::now() + METADATA_CACHE_TTL})
+                    .insert_or_assign(
+                        token_id,
+                        MetadataCacheEntry<TickSizeInfo>{
+                            std::move(info), std::chrono::steady_clock::now() + METADATA_CACHE_TTL})
                     .first->second.value);
         }
         catch (const std::exception &ex)
         {
-            return Result<TickSizeInfo>::failure(make_parse_error(ex.what(), endpoint, response.body));
+            return Result<TickSizeInfo>::failure(
+                make_parse_error(ex.what(), endpoint, response.body));
         }
     }
 
