@@ -14,7 +14,7 @@ using namespace std::chrono_literals;
 namespace
 {
     std::string trade_page(const std::string &id, const std::string &status,
-                           const std::string &hash = "")
+                           const nlohmann::json &hash = "")
     {
         nlohmann::json trade = {
             {"id", id},
@@ -152,6 +152,19 @@ namespace
         check(server.requests().size() == 5, "prefixed statuses polling request count mismatch");
     }
 
+    void test_null_hash_keeps_polling()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        server.enqueue(trade_page("t1", "MATCHED_NOT_BROADCASTED", nullptr));
+        server.enqueue(trade_page("t1", "CONFIRMED", "0x11"));
+        const auto settled = client.wait_for_order_fill_settlement(matched_order({"t1"}), 5s, 1ms);
+
+        check(settled && settled.value().transaction_hashes == std::vector<std::string>{"0x11"},
+              "a pending fill with a null hash must keep polling until it confirms");
+        check(server.requests().size() == 2, "null hash polling request count mismatch");
+    }
+
     void test_deadline()
     {
         clob_test::LocalServer server;
@@ -236,6 +249,7 @@ int main()
     test_polls_until_every_fill_confirms();
     test_failed_fills();
     test_prefixed_rest_statuses();
+    test_null_hash_keeps_polling();
     test_deadline();
     test_lookup_failures();
     test_get_trade_matches_id();

@@ -88,7 +88,7 @@ namespace clob_test
             item.erase("error_msg");
             auto null_item = trade();
             null_item["maker_orders"] = nullptr;
-            null_item["transaction_hash"] = "";
+            null_item["transaction_hash"] = nullptr;
             null_item["error_msg"] = nullptr;
             server.enqueue(
                 page(json::array({std::move(item), std::move(null_item)}), "LTE=").dump());
