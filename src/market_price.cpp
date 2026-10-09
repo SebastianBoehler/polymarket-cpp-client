@@ -291,8 +291,12 @@ namespace polymarket
             return {code, message, endpoint, 0, "", "", retryable};
         }
 
-        std::optional<SdkError> validate_estimate_request(double amount, OrderType order_type)
+        std::optional<SdkError> validate_estimate_request(OrderSide side, double amount,
+                                                          OrderType order_type)
         {
+            if (side != OrderSide::BUY && side != OrderSide::SELL)
+                return estimate_error(SdkErrorCode::InvalidArgument,
+                                      "order side must be BUY or SELL");
             if (order_type != OrderType::FAK && order_type != OrderType::FOK)
                 return estimate_error(SdkErrorCode::InvalidArgument,
                                       "Market orders require FAK or FOK");
@@ -307,7 +311,7 @@ namespace polymarket
                                                       double amount, const std::string &tick_size,
                                                       OrderType order_type)
     {
-        if (auto error = validate_estimate_request(amount, order_type))
+        if (auto error = validate_estimate_request(side, amount, order_type))
             return Result<MarketPriceEstimate>::failure(std::move(*error));
         if ((side == OrderSide::BUY ? book.asks : book.bids).empty())
             return Result<MarketPriceEstimate>::failure(
@@ -338,7 +342,7 @@ namespace polymarket
         if (token_id.empty())
             return Result<MarketPriceEstimate>::failure(
                 estimate_error(SdkErrorCode::InvalidArgument, "token_id is required", "/book"));
-        if (auto error = validate_estimate_request(amount, order_type))
+        if (auto error = validate_estimate_request(side, amount, order_type))
             return Result<MarketPriceEstimate>::failure(std::move(*error));
 
         const auto tick_info = tick_size_result(token_id);

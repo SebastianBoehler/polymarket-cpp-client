@@ -148,6 +148,9 @@ namespace
               "limit order types must be rejected");
         check(invalid(estimate_market_price(book, OrderSide::BUY, 0.0, "0.1")),
               "zero amount must be rejected");
+        const auto bad_side = estimate_market_price(book, static_cast<OrderSide>(2), 1.0, "0.1");
+        check(invalid(bad_side) && bad_side.error().message == "order side must be BUY or SELL",
+              "an unknown side must be rejected");
         check(invalid(estimate_market_price(book, OrderSide::BUY,
                                             std::numeric_limits<double>::quiet_NaN(), "0.1")),
               "NaN amount must be rejected");
@@ -177,6 +180,7 @@ namespace
         const auto missing_tick = client.estimate_market_price("456", OrderSide::BUY, 2.0);
         const auto rejected =
             client.estimate_market_price("123", OrderSide::BUY, 2.0, OrderType::GTD);
+        const auto bad_side = client.estimate_market_price("123", static_cast<OrderSide>(2), 2.0);
         const auto requests = server.requests();
 
         check(estimate && estimate.value().price == 0.6 &&
@@ -188,6 +192,8 @@ namespace
               "a tick size server error must keep its HTTP status");
         check(!rejected && rejected.error().code == SdkErrorCode::InvalidArgument,
               "client must reject limit order types");
+        check(!bad_side && bad_side.error().code == SdkErrorCode::InvalidArgument,
+              "client must reject an unknown side");
         check(requests.size() == 3 && requests[0].target == "/tick-size?token_id=123" &&
                   requests[1].target == "/book?token_id=123" &&
                   requests[2].target == "/tick-size?token_id=456",
