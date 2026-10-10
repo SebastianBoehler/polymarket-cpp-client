@@ -25,4 +25,8 @@ namespace polymarket
     // surface the result to users instead of retrying rejected orders.
     Result<GeoblockStatus> check_geoblock(const HttpClientOptions &options = {},
                                           const std::string &base_url = geoblock_base_url);
+
+    // Same query on an existing client whose base URL is the geoblock host, so
+    // repeated checks reuse its connection and route.
+    Result<GeoblockStatus> check_geoblock(HttpClient &http);
 } // namespace polymarket

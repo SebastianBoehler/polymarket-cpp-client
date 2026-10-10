@@ -274,6 +274,20 @@ namespace
         const auto malformed = polymarket::check_geoblock(options, base_url);
         expect(!malformed.ok() && malformed.error().code == polymarket::SdkErrorCode::Parse,
                "geoblock response without a verdict must fail closed");
+
+        polymarket::HttpClient http(options);
+        http.set_base_url(base_url);
+        server.set_response_body(R"({"blocked":false,"country":"DE"})");
+        const auto proxy_targets_before = proxy.targets().size();
+        const auto first = polymarket::check_geoblock(http);
+        const auto second = polymarket::check_geoblock(http);
+        expect(first.ok() && second.ok() && !second.value().blocked &&
+                   second.value().country == "DE",
+               "geoblock checks on a shared client were not parsed");
+        expect(http.get_stats().total_requests == 2,
+               "geoblock checks must run on the caller's client");
+        expect(proxy.targets().size() > proxy_targets_before,
+               "geoblock checks on a shared client bypassed its proxy");
     }
 } // namespace
 

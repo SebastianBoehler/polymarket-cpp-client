@@ -121,6 +121,10 @@ if (!status) {
 
 A response without a boolean `blocked` field is a parse error, never "allowed".
 
+To check repeatedly, pass an `HttpClient` whose base URL is
+`polymarket::geoblock_base_url`. Each `check_geoblock(http)` call then reuses its
+connection and route instead of opening a new one.
+
 Proxies and VPNs change your network path, not where you are. Polymarket's
 [Terms of Use](https://polymarket.com/tos) prohibit using a VPN, proxy, or similar
 tool to misrepresent your location or get around its geographic restrictions.

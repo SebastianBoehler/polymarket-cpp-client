@@ -11,10 +11,21 @@ using json = nlohmann::json;
 
 namespace polymarket
 {
+    namespace
+    {
+        constexpr std::size_t gamma_worker_limit = 8;
+    }
+
     MarketFetcher::MarketFetcher(const Config &config) : config_(config)
     {
         http_.set_base_url(config_.clob_rest_url);
         http_.set_timeout_ms(config_.http_timeout_ms);
+        gamma_http_.resize(gamma_worker_limit);
+        for (auto &client : gamma_http_)
+        {
+            client.set_base_url(config_.gamma_api_url);
+            client.set_timeout_ms(config_.http_timeout_ms);
+        }
         if (config_.rate_limit_retry) detail::validate_rate_limit_retry(*config_.rate_limit_retry);
     }
 
