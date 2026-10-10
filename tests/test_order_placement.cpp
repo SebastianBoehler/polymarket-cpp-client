@@ -113,6 +113,32 @@ namespace
               "refreshed order must be signed on the finer grid");
     }
 
+    void test_unsupported_book_tick_is_not_cached()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        server.enqueue(R"({"asset_id":"123","tick_size":"0.03","bids":[],"asks":[]})");
+        const auto book = client.get_order_book("123");
+
+        CreateOrderParams params;
+        params.token_id = "123";
+        params.price = 0.51;
+        params.size = 10.0;
+        params.side = OrderSide::BUY;
+        params.neg_risk = false;
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
+        const auto resolved = client.create_order_result(params);
+        params.tick_size = "0.01";
+        const auto explicit_tick = client.create_order_result(params);
+        const auto requests = server.requests();
+
+        check(book.has_value() && resolved.ok() && explicit_tick.ok(),
+              "an unsupported book tick must not block valid orders");
+        check(targets(requests) ==
+                  std::vector<std::string>{"GET /book?token_id=123", "GET /tick-size?token_id=123"},
+              "an unsupported book tick must not be cached");
+    }
+
     void test_orders_use_their_own_connection()
     {
         clob_test::LocalServer server;
@@ -256,6 +282,7 @@ int main()
     test_off_grid_price_refreshes_tick_once();
     test_explicit_tick_skips_the_lookup();
     test_orders_use_their_own_connection();
+    test_unsupported_book_tick_is_not_cached();
     test_rejects_before_any_request();
     test_reports_server_rejection();
     test_preserves_metadata_errors_while_signing();

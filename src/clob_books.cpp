@@ -1,5 +1,6 @@
 #include "polymarket/clob_client.hpp"
 #include "clob_client_internal.hpp"
+#include "order_execution.hpp"
 #include "rest_orderbook_parsing.hpp"
 
 #include <nlohmann/json.hpp>
@@ -20,8 +21,9 @@ namespace polymarket
             if (found == book.end() || found->is_null()) return std::nullopt;
             try
             {
-                (void)json_orderbook_price(*found);
-                return json_scalar_string(*found);
+                auto tick_size = json_scalar_string(*found);
+                (void)rounding_config_for_tick_size(tick_size);
+                return tick_size;
             }
             catch (const std::exception &)
             {
@@ -88,15 +90,25 @@ namespace polymarket
             auto j = json::parse(response.body);
             if (!j.is_array() || j.size() != remaining.size())
                 return {};
+            struct BookMetadata
+            {
+                std::string asset_id;
+                std::optional<std::string> tick_size;
+                std::optional<bool> neg_risk;
+            };
+            std::vector<BookMetadata> metadata;
+            metadata.reserve(j.size());
             for (const auto &item : j)
             {
                 auto book = parse_orderbook(item.dump());
                 if (!book || remaining.erase(book->asset_id) != 1)
                     return {};
-                remember_market_metadata(book->asset_id, book_tick_size(item), book_neg_risk(item));
+                metadata.push_back({book->asset_id, book_tick_size(item), book_neg_risk(item)});
                 result.emplace(book->asset_id, std::move(*book));
             }
             if (!remaining.empty()) return {};
+            for (const auto &entry : metadata)
+                remember_market_metadata(entry.asset_id, entry.tick_size, entry.neg_risk);
         }
         catch (...)
         {
