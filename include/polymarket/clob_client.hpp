@@ -247,13 +247,28 @@ namespace polymarket
         std::string get_funder_address() const { return funder_address_; }
 
         // Set timeout
-        void set_timeout_ms(long timeout_ms) { http_.set_timeout_ms(timeout_ms); data_http_.set_timeout_ms(timeout_ms); }
+        void set_timeout_ms(long timeout_ms)
+        {
+            http_.set_timeout_ms(timeout_ms);
+            order_http_.set_timeout_ms(timeout_ms);
+            data_http_.set_timeout_ms(timeout_ms);
+        }
 
         // Apply transport options in one call
-        void configure_transport(const HttpClientOptions &options) { http_.configure(options); data_http_.configure(options); }
+        void configure_transport(const HttpClientOptions &options)
+        {
+            http_.configure(options);
+            order_http_.configure(options);
+            data_http_.configure(options);
+        }
 
         // Set proxy for HTTP requests (e.g., "http://user:pass@proxy.example.com:8080")
-        void set_proxy(const std::string &proxy_url) { http_.set_proxy(proxy_url); data_http_.set_proxy(proxy_url); }
+        void set_proxy(const std::string &proxy_url)
+        {
+            http_.set_proxy(proxy_url);
+            order_http_.set_proxy(proxy_url);
+            data_http_.set_proxy(proxy_url);
+        }
 
         // Order-placement eligibility for this client's route (proxy/interface included)
         Result<GeoblockStatus> get_geoblock_status() const
@@ -262,13 +277,28 @@ namespace polymarket
         }
 
         // Set custom user agent
-        void set_user_agent(const std::string &user_agent) { http_.set_user_agent(user_agent); data_http_.set_user_agent(user_agent); }
+        void set_user_agent(const std::string &user_agent)
+        {
+            http_.set_user_agent(user_agent);
+            order_http_.set_user_agent(user_agent);
+            data_http_.set_user_agent(user_agent);
+        }
 
         // DNS cache timeout (default: 60s)
-        void set_dns_cache_timeout(long seconds) { http_.set_dns_cache_timeout(seconds); data_http_.set_dns_cache_timeout(seconds); }
+        void set_dns_cache_timeout(long seconds)
+        {
+            http_.set_dns_cache_timeout(seconds);
+            order_http_.set_dns_cache_timeout(seconds);
+            data_http_.set_dns_cache_timeout(seconds);
+        }
 
         // TCP keepalive probe interval
-        void set_keepalive_interval(long seconds) { http_.set_keepalive_interval(seconds); data_http_.set_keepalive_interval(seconds); }
+        void set_keepalive_interval(long seconds)
+        {
+            http_.set_keepalive_interval(seconds);
+            order_http_.set_keepalive_interval(seconds);
+            data_http_.set_keepalive_interval(seconds);
+        }
 
         // Receives Poly-RateLimit-* state reported by order and cancel responses,
         // on the thread that made the request. Listener exceptions are ignored;
@@ -284,23 +314,44 @@ namespace polymarket
         // CONNECTION WARMING (for low-latency trading)
         // ============================================================
 
-        // Pre-warm TCP/TLS connection to reduce first-request latency
-        // Call this after startup to establish connection before trading
+        // Orders and cancellations use their own connection, so they never wait
+        // behind reads on the shared one. Both share the same transport options.
+
+        // Pre-warm TCP/TLS on both connections to reduce first-request latency
+        // Call this after startup to establish connections before trading
         bool warm_connection();
 
-        // Start background heartbeat to keep connection alive (default: 25s interval)
-        // This prevents the server from closing the keep-alive connection
-        void start_heartbeat(long interval_seconds = 25) { http_.start_heartbeat(interval_seconds); }
+        // Start background heartbeat on both connections (default: 25s interval)
+        // This prevents the server from closing the keep-alive connections
+        void start_heartbeat(long interval_seconds = 25)
+        {
+            http_.start_heartbeat(interval_seconds);
+            order_http_.start_heartbeat(interval_seconds);
+        }
 
         // Stop background heartbeat
-        void stop_heartbeat() { http_.stop_heartbeat(); }
+        void stop_heartbeat()
+        {
+            http_.stop_heartbeat();
+            order_http_.stop_heartbeat();
+        }
 
         // Check if heartbeat is running
         bool is_heartbeat_running() const { return http_.is_heartbeat_running(); }
 
-        // Get connection statistics
+        // Read and market-data connection statistics
         HttpClient::ConnectionStats get_connection_stats() const { return http_.get_stats(); }
         RequestMetrics get_last_request_metrics() const { return http_.get_last_request_metrics(); }
+
+        // Order and cancellation connection statistics
+        HttpClient::ConnectionStats get_order_connection_stats() const
+        {
+            return order_http_.get_stats();
+        }
+        RequestMetrics get_last_order_request_metrics() const
+        {
+            return order_http_.get_last_request_metrics();
+        }
 
         const Environment &environment() const { return environment_; }
 
@@ -325,6 +376,7 @@ namespace polymarket
 
     private:
         HttpClient http_;
+        HttpClient order_http_;
         HttpClient data_http_;
         Environment environment_;
         std::string funder_address_;

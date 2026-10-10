@@ -124,7 +124,7 @@ namespace polymarket
                                                      serialized_type, post_only);
         const std::string body_str = body.dump();
         auto headers = get_l2_headers("POST", "/order", body_str);
-        auto response = http_.post("/order", body_str, headers);
+        auto response = order_http_.post("/order", body_str, headers);
         notify_rate_limit(response, RateLimitUpdate::Bucket::Order);
 
         if (!response.ok())
@@ -168,7 +168,7 @@ namespace polymarket
 
         const std::string body_str = body.dump();
         auto headers = get_l2_headers("POST", "/orders", body_str);
-        auto response = http_.post("/orders", body_str, headers);
+        auto response = order_http_.post("/orders", body_str, headers);
         notify_rate_limit(response, RateLimitUpdate::Bucket::Order);
 
         if (!response.ok())
@@ -242,7 +242,7 @@ namespace polymarket
         const std::string body_str = body.dump();
         auto headers = get_l2_headers("DELETE", "/order", body_str);
 
-        auto response = http_.del("/order", body_str, headers);
+        auto response = order_http_.del("/order", body_str, headers);
         notify_rate_limit(response, RateLimitUpdate::Bucket::Cancel);
         if (!response.ok())
         {
@@ -272,7 +272,7 @@ namespace polymarket
         const std::string body_str = body.dump();
         auto headers = get_l2_headers("DELETE", "/orders", body_str);
 
-        auto response = http_.del("/orders", body_str, headers);
+        auto response = order_http_.del("/orders", body_str, headers);
         notify_rate_limit(response, RateLimitUpdate::Bucket::Cancel);
         if (!response.ok()) return false;
         try
@@ -289,7 +289,7 @@ namespace polymarket
     bool ClobClient::cancel_all()
     {
         auto headers = get_l2_headers("DELETE", "/cancel-all", "");
-        auto response = http_.del("/cancel-all", "", headers);
+        auto response = order_http_.del("/cancel-all", "", headers);
         notify_rate_limit(response, RateLimitUpdate::Bucket::Cancel);
         return confirms_bulk_cancellation(response);
     }
@@ -302,7 +302,7 @@ namespace polymarket
         const std::string body_str = body.dump();
         auto headers = get_l2_headers("DELETE", "/cancel-market-orders", body_str);
 
-        auto response = http_.del("/cancel-market-orders", body_str, headers);
+        auto response = order_http_.del("/cancel-market-orders", body_str, headers);
         notify_rate_limit(response, RateLimitUpdate::Bucket::Cancel);
         return confirms_bulk_cancellation(response);
     }

@@ -92,19 +92,24 @@ namespace clob_test
         LocalServer server;
         ClobClient client(server.url(), 137);
         server.enqueue("1722510000");
+        server.enqueue("1722510000");
         const bool warmed = client.warm_connection();
+        server.enqueue("123x");
         server.enqueue("123x");
         const bool trailing = client.warm_connection();
         server.enqueue("-1");
+        server.enqueue("-1");
         const bool negative = client.warm_connection();
+        server.enqueue("18446744073709551616");
         server.enqueue("18446744073709551616");
         const bool overflowing = client.warm_connection();
         const auto requests = server.requests();
         return check(warmed, "valid server time must warm the CLOB connection") &&
                check(!trailing && !negative && !overflowing,
                      "server time must be a complete unsigned timestamp") &&
-               check(requests.size() == 4 && requests[0].target == "/time",
-                     "CLOB warm-up must issue only cheap time requests");
+               check(requests.size() == 8 && requests[0].target == "/time" &&
+                         requests[1].target == "/time",
+                     "CLOB warm-up must issue only cheap time requests on both connections");
     }
 
     bool test_order_result_schema_failures()

@@ -113,6 +113,28 @@ namespace
               "refreshed order must be signed on the finer grid");
     }
 
+    void test_orders_use_their_own_connection()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
+        server.enqueue(R"({"neg_risk":false})");
+        server.enqueue(accepted_order);
+        const auto placed = client.place_limit_order(limit_order(0.5));
+        server.enqueue(R"({"canceled":["order-1"],"not_canceled":{}})");
+        const auto cancelled = client.cancel_order_result("order-1");
+
+        const auto reads = client.get_connection_stats();
+        const auto orders = client.get_order_connection_stats();
+        const auto last_order = client.get_last_order_request_metrics();
+        check(placed.ok() && cancelled.ok(), "the order and its cancel must succeed");
+        check(reads.total_requests == 2 && orders.total_requests == 2,
+              "metadata reads and order writes must use separate connections");
+        check(last_order.method == "DELETE" && last_order.path == "/order" &&
+                  client.get_last_request_metrics().path.rfind("/neg-risk", 0) == 0,
+              "each connection must report its own last request");
+    }
+
     void test_explicit_tick_skips_the_lookup()
     {
         clob_test::LocalServer server;
@@ -233,6 +255,7 @@ int main()
     test_gtc_and_gtd_payloads();
     test_off_grid_price_refreshes_tick_once();
     test_explicit_tick_skips_the_lookup();
+    test_orders_use_their_own_connection();
     test_rejects_before_any_request();
     test_reports_server_rejection();
     test_preserves_metadata_errors_while_signing();

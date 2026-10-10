@@ -43,13 +43,15 @@ namespace clob_test
         const auto environment = local_environment(clob, data);
         ClobClient client(environment, private_key, ApiCredentials{"key", "c2VjcmV0", "pass"});
         clob.enqueue("1722510000");
+        clob.enqueue("1722510000");
         const bool warmed = client.warm_connection();
         data.enqueue("[]");
         const auto positions = client.get_positions(wallet);
         const auto clob_requests = clob.requests();
         const auto data_requests = data.requests();
 
-        return check(warmed && clob_requests.size() == 1 && clob_requests[0].target == "/time",
+        return check(warmed && clob_requests.size() == 2 && clob_requests[0].target == "/time" &&
+                         clob_requests[1].target == "/time",
                      "CLOB requests must use Environment.clob_url") &&
                check(positions.empty() && data_requests.size() == 1 &&
                          data_requests[0].target.rfind("/positions?", 0) == 0,
