@@ -141,6 +141,9 @@ namespace polymarket
         curl_easy_setopt(curl_, CURLOPT_FOLLOWLOCATION, 0L);
         curl_easy_setopt(curl_, CURLOPT_MAXREDIRS, 3L);
         curl_easy_setopt(curl_, CURLOPT_WRITEFUNCTION, write_callback);
+        // Advertise every encoding this libcurl can decode. Market and trade
+        // pages shrink several times on the wire; bodies arrive decoded.
+        curl_easy_setopt(curl_, CURLOPT_ACCEPT_ENCODING, "");
         apply_options();
 
         // HTTP/1.1 keep-alive

@@ -24,6 +24,7 @@ namespace
         {
             std::string method;
             std::string path;
+            std::string headers;
             std::string body;
         };
 
@@ -102,6 +103,12 @@ namespace
             response_body_ = std::move(body);
         }
 
+        void set_response_encoding(std::string encoding)
+        {
+            std::lock_guard<std::mutex> lock(requests_mutex_);
+            response_encoding_ = std::move(encoding);
+        }
+
     private:
         int fd_{-1};
         int port_{0};
@@ -115,6 +122,7 @@ namespace
         bool heartbeat_released_{true};
         std::atomic<bool> truncate_next_response_{false};
         std::string response_body_{R"({"ok":true})"};
+        std::string response_encoding_;
 
         static std::size_t content_length(const std::string &request)
         {
@@ -134,7 +142,10 @@ namespace
             const auto second_space = request.find(' ', first_space + 1);
             parsed.method = request.substr(0, first_space);
             parsed.path = request.substr(first_space + 1, second_space - first_space - 1);
+            const auto headers_start = request.find("\r\n");
             const auto body_start = request.find("\r\n\r\n");
+            if (headers_start != std::string::npos && body_start != std::string::npos)
+                parsed.headers = request.substr(headers_start + 2, body_start - headers_start);
             if (body_start != std::string::npos)
                 parsed.body = request.substr(body_start + 4);
             return parsed;
@@ -194,9 +205,12 @@ namespace
                     }
                 }
                 std::string body;
+                std::string encoding_header;
                 {
                     std::lock_guard<std::mutex> lock(requests_mutex_);
                     body = response_body_;
+                    if (!response_encoding_.empty())
+                        encoding_header = "Content-Encoding: " + response_encoding_ + "\r\n";
                 }
                 std::string response;
                 if (parsed.path == "/redirect")
@@ -209,8 +223,9 @@ namespace
                 {
                     const auto declared_size = body.size() +
                                                (truncate_next_response_.exchange(false) ? 1 : 0);
-                    response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " +
-                               std::to_string(declared_size) +
+                    response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" +
+                               encoding_header +
+                               "Content-Length: " + std::to_string(declared_size) +
                                "\r\nConnection: keep-alive\r\n\r\n" + body;
                 }
                 if (!peer_closed)

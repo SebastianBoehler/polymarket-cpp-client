@@ -64,6 +64,26 @@ int main()
         ok &= check(requests[2].body.empty(), "expected an empty DELETE not to reuse the prior POST body");
     }
 
+    if (curl_version_info(CURLVERSION_NOW)->features & CURL_VERSION_LIBZ)
+    {
+        ok &= check(!requests.empty() &&
+                        requests[0].headers.find("Accept-Encoding:") != std::string::npos &&
+                        requests[0].headers.find("gzip") != std::string::npos,
+                    "requests must advertise gzip so large pages arrive compressed");
+
+        // gzip of {"compressed":true} with a zero mtime.
+        static constexpr char gzip_body[] =
+            "\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\x03\xab\x56\x4a\xce\xcf\x2d\x28\x4a\x2d\x2e"
+            "\x4e\x4d\x51\xb2\x2a\x29\x2a\x4d\xad\x05\x00\xf1\xea\x39\x95\x13\x00\x00\x00";
+        server.set_response_body(std::string(gzip_body, sizeof(gzip_body) - 1));
+        server.set_response_encoding("gzip");
+        const auto compressed = client.get("/compressed");
+        server.set_response_encoding("");
+        server.set_response_body(R"({"ok":true})");
+        ok &= check(compressed.ok() && compressed.body == R"({"compressed":true})",
+                    "gzip responses must be decoded before reaching callers");
+    }
+
     const auto requests_before_redirect = server.requests().size();
     const auto redirect = client.get("/redirect", {{"POLY_API_KEY", "must-not-forward"}});
     ok &= check(redirect.status_code == 302, "authenticated redirects must fail closed");
