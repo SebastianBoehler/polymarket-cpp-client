@@ -191,8 +191,9 @@ namespace polymarket
         Result<std::optional<Trade>> get_trade_result(const std::string &trade_id);
 
         // Blocks until every fill in `order.trade_ids` is CONFIRMED or FAILED,
-        // polling get_trade_result. Covers only the fills matched when the
-        // order was posted, not later fills of a remainder resting on the book.
+        // polling get_trade_result. Confirmed fills must have a final hash.
+        // Covers only the fills matched when the order was posted, not later
+        // fills of a remainder resting on the book.
         // Fails with Timeout while fills are still settling (the order itself
         // is unaffected), TransactionFailed when every fill failed, or the
         // error of the first trade lookup that fails.
@@ -203,8 +204,9 @@ namespace polymarket
 
         // Same result, driven by fills a UserStream reports through `tracker`:
         // returns as soon as the stream shows every fill settled. Trades are
-        // looked up through REST only after the stream recovers from a gap,
-        // every `reconcile_interval` as a safety net, and once at the deadline.
+        // looked up through REST when a confirmation lacks its final hash,
+        // after the stream recovers from a gap, every `reconcile_interval` as
+        // a safety net, and once at the deadline.
         Result<OrderSettlement> wait_for_order_fill_settlement(
             const OrderResponse &order, const TradeStatusTracker &tracker,
             std::chrono::milliseconds timeout = std::chrono::seconds(30),
