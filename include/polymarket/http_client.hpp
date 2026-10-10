@@ -149,7 +149,8 @@ namespace polymarket
         void apply_options();
         void apply_route();
         void heartbeat_once();
-        HttpResponse perform(const std::string &method, const std::string &path, const std::string &url);
+        HttpResponse perform(const std::string &method, const std::string &path,
+                             const std::string &url, bool record_stats = true);
 
         static int heartbeat_progress(void *client, curl_off_t, curl_off_t,
                                       curl_off_t, curl_off_t);

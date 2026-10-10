@@ -159,8 +159,24 @@ int main()
     auto moved_client = move_result.get();
     const auto moved_response = moved_client->get("/after-move");
     ok &= check(moved_response.ok(), "moved client must retain a usable connection handle");
-    ok &= check(moved_client->get_stats().total_requests == 2,
-                "move must retain the in-flight heartbeat request statistics");
+    ok &= check(moved_client->get_stats().total_requests == 1,
+                "heartbeats must stay out of request statistics across a move");
+
+    HttpClient quiet_client(options);
+    quiet_client.set_base_url("http://127.0.0.1:" + std::to_string(server.port()));
+    const auto quiet_response = quiet_client.get("/quiet");
+    server.hold_heartbeat_response();
+    quiet_client.start_heartbeat(1);
+    ok &= check(server.wait_for_heartbeat(heartbeat_start_timeout),
+                "expected a heartbeat after the last foreground request");
+    server.release_heartbeat_response();
+    quiet_client.stop_heartbeat();
+    const auto quiet_stats = quiet_client.get_stats();
+    ok &= check(quiet_response.ok() && quiet_stats.total_requests == 1 &&
+                    quiet_stats.curl_errors == 0,
+                "heartbeats must not count as requests or errors");
+    ok &= check(quiet_client.get_last_request_metrics().path == "/quiet",
+                "heartbeats must not replace the last request metrics");
 
     http_global_cleanup();
     return ok ? 0 : 1;

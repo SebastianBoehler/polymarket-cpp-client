@@ -101,7 +101,7 @@ namespace polymarket
         curl_easy_setopt(curl_, CURLOPT_NOPROGRESS, 0L);
         curl_easy_setopt(curl_, CURLOPT_HTTPGET, 1L);
         curl_easy_setopt(curl_, CURLOPT_POST, 0L);
-        perform("HEARTBEAT", "/", base_url_ + "/");
+        perform("HEARTBEAT", "/", base_url_ + "/", false);
     }
 
     void HttpClient::stop_heartbeat()
