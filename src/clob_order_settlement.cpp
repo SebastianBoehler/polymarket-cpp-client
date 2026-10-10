@@ -1,13 +1,13 @@
 #include "polymarket/clob_client.hpp"
 #include "clob_client_internal.hpp"
 #include "poll_deadline.hpp"
+#include "polymarket/trade_status_tracker.hpp"
+#include "trade_status.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <chrono>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace polymarket
@@ -16,27 +16,14 @@ namespace polymarket
     {
         constexpr const char *trades_endpoint = "/data/trades";
 
-        std::string normalized_status(const Trade &trade)
-        {
-            constexpr std::string_view prefix = "TRADE_STATUS_";
-            std::string status = trade.status;
-            std::transform(status.begin(), status.end(), status.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-            if (status.starts_with(prefix)) status.erase(0, prefix.size());
-            return status;
-        }
-
-        // CONFIRMED is final on-chain; FAILED never will be. Earlier statuses
-        // (MATCHED, MINED, RETRYING) can still change their transaction hash.
         bool is_settled(const Trade &trade)
         {
-            const auto status = normalized_status(trade);
-            return status == "CONFIRMED" || status == "FAILED";
+            return detail::is_settled_trade_status(trade.status);
         }
 
         bool is_failed(const Trade &trade)
         {
-            return normalized_status(trade) == "FAILED";
+            return detail::is_failed_trade_status(trade.status);
         }
 
         void append_unique(std::vector<std::string> &values, const std::string &value)
@@ -57,6 +44,54 @@ namespace polymarket
                                   bool retryable = false)
         {
             return {code, message, trades_endpoint, 0, "", "", retryable};
+        }
+
+        std::vector<std::string> unique_trade_ids(const OrderResponse &order)
+        {
+            std::vector<std::string> trade_ids;
+            for (const auto &trade_id : order.trade_ids)
+                append_unique(trade_ids, trade_id);
+            return trade_ids;
+        }
+
+        OrderSettlement unfilled_settlement(const OrderResponse &order)
+        {
+            OrderSettlement settlement;
+            for (const auto &hash : order.transaction_hashes)
+                append_unique(settlement.transaction_hashes, hash);
+            return settlement;
+        }
+
+        std::vector<std::string> pending_ids(const std::vector<std::string> &trade_ids,
+                                             const std::vector<std::optional<Trade>> &settled)
+        {
+            std::vector<std::string> pending;
+            for (std::size_t index = 0; index < trade_ids.size(); ++index)
+                if (!settled[index]) pending.push_back(trade_ids[index]);
+            return pending;
+        }
+
+        Result<OrderSettlement> finish_settlement(const OrderResponse &order,
+                                                  const std::vector<std::string> &trade_ids,
+                                                  std::vector<std::optional<Trade>> &settled)
+        {
+            OrderSettlement settlement;
+            bool all_failed = true;
+            settlement.trades.reserve(settled.size());
+            for (auto &trade : settled)
+            {
+                if (!is_failed(*trade))
+                {
+                    all_failed = false;
+                    append_unique(settlement.transaction_hashes, trade->transaction_hash);
+                }
+                settlement.trades.push_back(std::move(*trade));
+            }
+            if (all_failed)
+                return Result<OrderSettlement>::failure(settlement_error(
+                    SdkErrorCode::TransactionFailed, "every fill of order " + order.order_id +
+                                                         " failed execution: " + join(trade_ids)));
+            return Result<OrderSettlement>::success(std::move(settlement));
         }
     } // namespace
 
@@ -117,18 +152,9 @@ namespace polymarket
                 SdkErrorCode::InvalidArgument,
                 "timeout must not be negative and poll_interval must be positive"));
 
-        std::vector<std::string> trade_ids;
-        for (const auto &trade_id : order.trade_ids)
-            append_unique(trade_ids, trade_id);
-
-        OrderSettlement settlement;
-        if (trade_ids.empty())
-        {
-            // Nothing matched on arrival, so there are no fills to poll.
-            for (const auto &hash : order.transaction_hashes)
-                append_unique(settlement.transaction_hashes, hash);
-            return Result<OrderSettlement>::success(std::move(settlement));
-        }
+        const auto trade_ids = unique_trade_ids(order);
+        // Nothing matched on arrival, so there are no fills to poll.
+        if (trade_ids.empty()) return Result<OrderSettlement>::success(unfilled_settlement(order));
 
         std::vector<std::optional<Trade>> settled(trade_ids.size());
         const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -152,21 +178,61 @@ namespace polymarket
                     "timed out waiting for trades to settle: " + join(pending), true));
         }
 
-        bool all_failed = true;
-        settlement.trades.reserve(settled.size());
-        for (auto &trade : settled)
-        {
-            if (!is_failed(*trade))
-            {
-                all_failed = false;
-                append_unique(settlement.transaction_hashes, trade->transaction_hash);
-            }
-            settlement.trades.push_back(std::move(*trade));
-        }
-        if (all_failed)
+        return finish_settlement(order, trade_ids, settled);
+    }
+
+    Result<OrderSettlement> ClobClient::wait_for_order_fill_settlement(
+        const OrderResponse &order, const TradeStatusTracker &tracker,
+        std::chrono::milliseconds timeout, std::chrono::milliseconds reconcile_interval)
+    {
+        if (timeout < std::chrono::milliseconds::zero() ||
+            reconcile_interval <= std::chrono::milliseconds::zero())
             return Result<OrderSettlement>::failure(settlement_error(
-                SdkErrorCode::TransactionFailed,
-                "every fill of order " + order.order_id + " failed execution: " + join(trade_ids)));
-        return Result<OrderSettlement>::success(std::move(settlement));
+                SdkErrorCode::InvalidArgument,
+                "timeout must not be negative and reconcile_interval must be positive"));
+
+        const auto trade_ids = unique_trade_ids(order);
+        if (trade_ids.empty()) return Result<OrderSettlement>::success(unfilled_settlement(order));
+
+        std::vector<std::optional<Trade>> settled(trade_ids.size());
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        auto next_reconcile = std::chrono::steady_clock::now() + reconcile_interval;
+        auto reconciled_recoveries = tracker.recoveries();
+        while (true)
+        {
+            const auto seen_version = tracker.version();
+            for (std::size_t index = 0; index < trade_ids.size(); ++index)
+            {
+                if (settled[index]) continue;
+                auto trade = tracker.latest(trade_ids[index]);
+                if (trade && is_settled(*trade)) settled[index] = std::move(trade);
+            }
+            auto pending = pending_ids(trade_ids, settled);
+            if (pending.empty()) break;
+
+            const auto now = std::chrono::steady_clock::now();
+            const auto recoveries = tracker.recoveries();
+            if (now >= next_reconcile || now >= deadline || recoveries != reconciled_recoveries)
+            {
+                reconciled_recoveries = recoveries;
+                for (std::size_t index = 0; index < trade_ids.size(); ++index)
+                {
+                    if (settled[index]) continue;
+                    auto trade = lookup_trade(trade_ids[index], deadline);
+                    if (!trade) return Result<OrderSettlement>::failure(trade.error());
+                    if (trade.value() && is_settled(*trade.value()))
+                        settled[index] = std::move(trade.value());
+                }
+                pending = pending_ids(trade_ids, settled);
+                if (pending.empty()) break;
+                if (std::chrono::steady_clock::now() >= deadline)
+                    return Result<OrderSettlement>::failure(settlement_error(
+                        SdkErrorCode::Timeout,
+                        "timed out waiting for trades to settle: " + join(pending), true));
+                next_reconcile = std::chrono::steady_clock::now() + reconcile_interval;
+            }
+            tracker.wait_for_change(seen_version, std::min(deadline, next_reconcile));
+        }
+        return finish_settlement(order, trade_ids, settled);
     }
 } // namespace polymarket

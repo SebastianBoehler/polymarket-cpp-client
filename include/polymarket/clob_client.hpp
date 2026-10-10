@@ -21,6 +21,7 @@
 
 namespace polymarket
 {
+    class TradeStatusTracker;
 
     // Comprehensive CLOB client for Polymarket
     class ClobClient
@@ -199,6 +200,15 @@ namespace polymarket
             const OrderResponse &order,
             std::chrono::milliseconds timeout = std::chrono::seconds(30),
             std::chrono::milliseconds poll_interval = std::chrono::milliseconds(250));
+
+        // Same result, driven by fills a UserStream reports through `tracker`:
+        // returns as soon as the stream shows every fill settled. Trades are
+        // looked up through REST only after the stream recovers from a gap,
+        // every `reconcile_interval` as a safety net, and once at the deadline.
+        Result<OrderSettlement> wait_for_order_fill_settlement(
+            const OrderResponse &order, const TradeStatusTracker &tracker,
+            std::chrono::milliseconds timeout = std::chrono::seconds(30),
+            std::chrono::milliseconds reconcile_interval = std::chrono::seconds(5));
 
         // Balance and allowance
         std::optional<BalanceAllowance> get_balance_allowance(

@@ -124,8 +124,30 @@ if (settlement)
 - `get_trade(id)` and `get_trade_result(id)` read one trade directly. They
   return an empty value while the trade is not visible yet.
 
-For push updates instead of polling, subscribe a `UserStream` and watch
-`UserTradeEvent::status`.
+### Settle from the user stream
+
+Polling adds up to one `poll_interval` of delay and one request per fill.
+With a `UserStream` running, feed a `TradeStatusTracker` from its callbacks
+and pass it to the wait instead:
+
+```cpp
+polymarket::TradeStatusTracker tracker;
+stream.on_trade([&](const polymarket::UserTradeEvent &trade) { tracker.record(trade); });
+stream.on_stream_recovered([&] { tracker.mark_recovered(); });
+
+auto settlement = client.wait_for_order_fill_settlement(placed.value(), tracker);
+```
+
+- The wait returns as soon as the stream reports every fill CONFIRMED or
+  FAILED, with the same `OrderSettlement` as the polling form.
+- Fills are looked up through REST only after `mark_recovered()`, every
+  `reconcile_interval` (5 seconds by default) as a safety net, and once at
+  the deadline.
+- The tracker keeps the latest status of its most recent `capacity` trades
+  (10000 by default). A late earlier-stage event never replaces CONFIRMED or
+  FAILED.
+- Keep the tracker alive until the stream is stopped, because the stream's
+  callbacks hold a reference to it.
 
 ## Errors
 
