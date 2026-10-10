@@ -115,6 +115,8 @@ if (settlement)
 - An order without fills returns at once with the order's own hashes.
 - `transaction_hashes` holds the unique hashes of fills that did not fail.
   `trades` holds every fill's final `Trade`, both in `trade_ids` order.
+- A confirmed fill without a transaction hash stays pending until its final
+  hash is available. Earlier MINED or order-response hashes are not reused.
 - The wait blocks the calling thread. It polls with a monotonic deadline,
   never sleeps past it, and polls once more at the deadline. A 429 whose
   Retry-After would end past the deadline is returned as `RateLimit` instead
@@ -138,9 +140,11 @@ stream.on_stream_recovered([&] { tracker.mark_recovered(); });
 auto settlement = client.wait_for_order_fill_settlement(placed.value(), tracker);
 ```
 
-- The wait returns as soon as the stream reports every fill CONFIRMED or
-  FAILED, with the same `OrderSettlement` as the polling form.
-- Fills are looked up through REST only after `mark_recovered()`, every
+- The wait returns as soon as the stream reports every fill CONFIRMED with
+  its final hash or FAILED, with the same `OrderSettlement` as the polling form.
+- A confirmation without a final hash triggers an immediate REST lookup.
+  If the hash is still missing, normal reconciliation continues until the deadline.
+- Fills are also looked up through REST after `mark_recovered()`, every
   `reconcile_interval` (5 seconds by default) as a safety net, and once at
   the deadline.
 - The tracker keeps the latest status of its most recent `capacity` trades

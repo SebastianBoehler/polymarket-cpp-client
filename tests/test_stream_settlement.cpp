@@ -1,4 +1,5 @@
 #include "../src/clob_client_test_fixture.hpp"
+#include "../src/user_stream_protocol.hpp"
 #include "check_support.hpp"
 #include "polymarket/trade_status_tracker.hpp"
 
@@ -8,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <variant>
 #include <vector>
 
 using namespace polymarket;
@@ -17,7 +19,7 @@ using namespace std::chrono_literals;
 namespace
 {
     std::string trade_page(const std::string &id, const std::string &status,
-                           const std::string &hash = "")
+                           const nlohmann::json &hash = "")
     {
         nlohmann::json trade = {
             {"id", id},
@@ -94,6 +96,78 @@ namespace
         const auto latest = tracker.latest("t1");
         check(latest && latest->status == "CONFIRMED" && latest->transaction_hash == "0x11",
               "a late earlier-stage event must not replace a final status");
+    }
+
+    void test_sparse_stream_confirmation_resolves_final_hash()
+    {
+        for (const auto &hash_fields :
+             {nlohmann::json::object(), nlohmann::json{{"transaction_hash", nullptr}},
+              nlohmann::json{{"transaction_hash", ""}}})
+        {
+            clob_test::LocalServer server;
+            auto client = clob_test::authenticated_client(server.url());
+            TradeStatusTracker tracker;
+            tracker.record(trade_event("t1", "MINED", "0xold"));
+            auto payload =
+                nlohmann::json::parse(trade_page("t1", "TRADE_STATUS_CONFIRMED")).at("data").at(0);
+            payload["event_type"] = "trade";
+            payload.erase("transaction_hash");
+            payload.update(hash_fields);
+            const auto events = detail::parse_user_events(payload.dump());
+            tracker.record(std::get<UserTradeEvent>(events.at(0)));
+            server.enqueue(trade_page("t1", "CONFIRMED", "0xfinal"));
+            auto order = matched_order({"t1"});
+            order.transaction_hashes = {"0xold"};
+            const auto started = std::chrono::steady_clock::now();
+            const auto settled = client.wait_for_order_fill_settlement(order, tracker, 5s, 10s);
+            check(settled &&
+                      settled.value().transaction_hashes == std::vector<std::string>{"0xfinal"} &&
+                      settled.value().trades.at(0).transaction_hash == "0xfinal",
+                  "sparse confirmations must resolve the final hash instead of reusing MINED");
+            check(server.requests().size() == 1 && std::chrono::steady_clock::now() - started < 2s,
+                  "a sparse confirmation must reconcile immediately, before the safety interval");
+        }
+    }
+
+    void test_rest_confirmation_without_hash_keeps_waiting()
+    {
+        for (const bool use_stream : {false, true})
+        {
+            clob_test::LocalServer server;
+            auto client = clob_test::authenticated_client(server.url());
+            TradeStatusTracker tracker;
+            tracker.record(trade_event("t1", "CONFIRMED"));
+            server.enqueue(trade_page("t1", "CONFIRMED", nullptr));
+            server.enqueue(trade_page("t1", "CONFIRMED", "0xfinal"));
+            const auto order = matched_order({"t1"});
+            const auto settled =
+                use_stream ? client.wait_for_order_fill_settlement(order, tracker, 5s, 20ms)
+                           : client.wait_for_order_fill_settlement(order, 5s, 20ms);
+            check(settled &&
+                      settled.value().transaction_hashes == std::vector<std::string>{"0xfinal"},
+                  "a confirmed REST trade without a hash must not complete either wait");
+            check(server.requests().size() == 2, "only pending hash details must be reconciled");
+        }
+    }
+
+    void test_missing_hash_timeout_and_lookup_error()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        TradeStatusTracker tracker;
+        tracker.record(trade_event("t1", "CONFIRMED"));
+        server.enqueue(trade_page("t1", "CONFIRMED", nullptr));
+        const auto order = matched_order({"t1"});
+        const auto timeout = client.wait_for_order_fill_settlement(order, tracker, 0ms, 10s);
+        check(!timeout && timeout.error().code == SdkErrorCode::Timeout &&
+                  timeout.error().retryable,
+              "missing final hashes must time out rather than return empty success");
+        server.enqueue(R"({"error":"unavailable"})", 500);
+        const auto failed = client.wait_for_order_fill_settlement(order, tracker, 5s, 10s);
+        check(!failed && failed.error().http_status == 500 &&
+                  failed.error().endpoint == "/data/trades",
+              "hash reconciliation must preserve the original REST error");
+        check(server.requests().size() == 2, "each incomplete confirmation must be checked once");
     }
 
     void test_recovery_reconciles_through_rest()
@@ -192,6 +266,9 @@ int main()
 {
     test_stream_confirmation_needs_no_rest();
     test_final_status_is_sticky();
+    test_sparse_stream_confirmation_resolves_final_hash();
+    test_rest_confirmation_without_hash_keeps_waiting();
+    test_missing_hash_timeout_and_lookup_error();
     test_recovery_reconciles_through_rest();
     test_safety_net_reconciles_without_events();
     test_timeout_keeps_final_check();

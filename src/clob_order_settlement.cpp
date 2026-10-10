@@ -16,9 +16,10 @@ namespace polymarket
     {
         constexpr const char *trades_endpoint = "/data/trades";
 
-        bool is_settled(const Trade &trade)
+        bool has_settlement_details(const Trade &trade)
         {
-            return detail::is_settled_trade_status(trade.status);
+            const auto status = detail::normalized_trade_status(trade.status);
+            return status == "FAILED" || (status == "CONFIRMED" && !trade.transaction_hash.empty());
         }
 
         bool is_failed(const Trade &trade)
@@ -166,7 +167,7 @@ namespace polymarket
                 if (settled[index]) continue;
                 auto trade = lookup_trade(trade_ids[index], deadline);
                 if (!trade) return Result<OrderSettlement>::failure(trade.error());
-                if (trade.value() && is_settled(*trade.value()))
+                if (trade.value() && has_settlement_details(*trade.value()))
                     settled[index] = std::move(trade.value());
                 else
                     pending.push_back(trade_ids[index]);
@@ -195,24 +196,34 @@ namespace polymarket
         if (trade_ids.empty()) return Result<OrderSettlement>::success(unfilled_settlement(order));
 
         std::vector<std::optional<Trade>> settled(trade_ids.size());
+        std::vector<bool> hash_lookup_requested(trade_ids.size(), false);
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         auto next_reconcile = std::chrono::steady_clock::now() + reconcile_interval;
         auto reconciled_recoveries = tracker.recoveries();
         while (true)
         {
             const auto seen_version = tracker.version();
+            bool needs_hash_lookup = false;
             for (std::size_t index = 0; index < trade_ids.size(); ++index)
             {
                 if (settled[index]) continue;
                 auto trade = tracker.latest(trade_ids[index]);
-                if (trade && is_settled(*trade)) settled[index] = std::move(trade);
+                if (trade && has_settlement_details(*trade))
+                    settled[index] = std::move(trade);
+                else if (trade && detail::is_settled_trade_status(trade->status) &&
+                         !hash_lookup_requested[index])
+                {
+                    hash_lookup_requested[index] = true;
+                    needs_hash_lookup = true;
+                }
             }
             auto pending = pending_ids(trade_ids, settled);
             if (pending.empty()) break;
 
             const auto now = std::chrono::steady_clock::now();
             const auto recoveries = tracker.recoveries();
-            if (now >= next_reconcile || now >= deadline || recoveries != reconciled_recoveries)
+            if (needs_hash_lookup || now >= next_reconcile || now >= deadline ||
+                recoveries != reconciled_recoveries)
             {
                 reconciled_recoveries = recoveries;
                 for (std::size_t index = 0; index < trade_ids.size(); ++index)
@@ -220,7 +231,7 @@ namespace polymarket
                     if (settled[index]) continue;
                     auto trade = lookup_trade(trade_ids[index], deadline);
                     if (!trade) return Result<OrderSettlement>::failure(trade.error());
-                    if (trade.value() && is_settled(*trade.value()))
+                    if (trade.value() && has_settlement_details(*trade.value()))
                         settled[index] = std::move(trade.value());
                 }
                 pending = pending_ids(trade_ids, settled);
