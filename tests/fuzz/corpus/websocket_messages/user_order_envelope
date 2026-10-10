@@ -1,0 +1,1 @@
+{"topic":"user","type":"order","payload":{"id":"o","owner":"k","market":"m","asset_id":"t","side":"SELL","original_size":"1","size_matched":"1","price":"0.5","type":"CANCELLATION"}}

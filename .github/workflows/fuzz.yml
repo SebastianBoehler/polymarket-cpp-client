@@ -1,0 +1,84 @@
+name: fuzz
+
+on:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds to run each fuzzer
+        default: "600"
+
+concurrency:
+  group: fuzz-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: libFuzzer ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [websocket_messages, rest_responses]
+    env:
+      FUZZ_TARGET: fuzz_${{ matrix.target }}
+      FUZZ_CORPUS: tests/fuzz/corpus/${{ matrix.target }}
+      FUZZ_SECONDS: ${{ inputs.seconds || (github.event_name == 'schedule' && '900') || '60' }}
+      UBSAN_OPTIONS: print_stacktrace=1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 libclang-rt-18-dev libcurl4-openssl-dev libssl-dev
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=OFF \
+            -DPOLYMARKET_CLIENT_BUILD_TESTS=OFF \
+            -DPOLYMARKET_CLIENT_BUILD_FUZZERS=ON
+
+      - name: Build
+        run: cmake --build build --parallel 2 --target "$FUZZ_TARGET"
+
+      - name: Replay samples
+        run: ctest --test-dir build --output-on-failure -R "^${FUZZ_TARGET}_corpus$"
+
+      - name: Fuzz
+        run: |
+          if [[ ! "$FUZZ_SECONDS" =~ ^[0-9]+$ ]]; then
+            echo "seconds must be a whole number" >&2
+            exit 1
+          fi
+          mkdir -p fuzz-run/corpus fuzz-run/artifacts
+          cp "$FUZZ_CORPUS"/* fuzz-run/corpus/
+          "./build/$FUZZ_TARGET" \
+            -max_total_time="$FUZZ_SECONDS" \
+            -max_len=4096 \
+            -timeout=10 \
+            -rss_limit_mb=2048 \
+            -print_final_stats=1 \
+            -artifact_prefix=fuzz-run/artifacts/ \
+            fuzz-run/corpus
+
+      - name: Upload failing inputs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.FUZZ_TARGET }}-failures
+          path: fuzz-run/artifacts/
+          if-no-files-found: ignore

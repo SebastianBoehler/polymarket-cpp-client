@@ -1,0 +1,1 @@
+{"event_type":"order","id":"0xorder","owner":"owner-key","market":"cond-1","asset_id":"yes","side":"buy","original_size":"10","size_matched":"0","price":"0.42","type":"PLACEMENT","status":"LIVE","order_type":"GTC","associate_trades":null,"outcome":"Yes","created_at":"1782753357","expiration":"0","timestamp":"1782753357257"}
