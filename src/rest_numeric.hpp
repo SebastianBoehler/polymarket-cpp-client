@@ -8,6 +8,11 @@
 #include <string>
 #include <system_error>
 
+#if !defined(__cpp_lib_to_chars) || __cpp_lib_to_chars < 201611L
+#include <locale>
+#include <sstream>
+#endif
+
 namespace polymarket::detail
 {
     using json = nlohmann::json;
@@ -18,12 +23,20 @@ namespace polymarket::detail
         if (value.is_string())
         {
             const auto &text = value.get_ref<const std::string &>();
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
             const char *begin = text.data();
             const char *const end = begin + text.size();
             // Accepts one optional leading '+' sign.
             if (end - begin > 1 && *begin == '+' && begin[1] != '+' && begin[1] != '-') ++begin;
             const auto [stop, error] = std::from_chars(begin, end, number);
-            if (error != std::errc() || stop != end)
+            const bool complete = error == std::errc() && stop == end;
+#else
+            std::istringstream stream(text);
+            stream.imbue(std::locale::classic());
+            stream >> std::noskipws >> number;
+            const bool complete = stream && stream.peek() == std::char_traits<char>::eof();
+#endif
+            if (!complete)
                 throw std::invalid_argument("number must be a complete decimal representation");
         }
         else if (value.is_number())
