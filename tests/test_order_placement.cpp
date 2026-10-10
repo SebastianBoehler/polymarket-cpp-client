@@ -91,7 +91,6 @@ namespace
 
         // The market moved to a 0.001 tick after the cached 0.01 was fetched.
         server.enqueue(R"({"minimum_tick_size":"0.001"})");
-        server.enqueue(R"({"neg_risk":false})");
         server.enqueue(accepted_order);
         const auto refreshed = client.place_limit_order(limit_order(0.965));
 
@@ -106,11 +105,10 @@ namespace
         check(targets(requests) ==
                   std::vector<std::string>{
                       "GET /tick-size?token_id=123", "GET /neg-risk?token_id=123", "POST /order",
-                      "GET /tick-size?token_id=123", "GET /neg-risk?token_id=123", "POST /order",
-                      "GET /tick-size?token_id=123"},
-              "off-grid prices must refetch metadata once and never post");
-        if (requests.size() != 7) return;
-        const auto body = nlohmann::json::parse(requests[5].body);
+                      "GET /tick-size?token_id=123", "POST /order", "GET /tick-size?token_id=123"},
+              "off-grid prices must refetch only the tick, once, and never post");
+        if (requests.size() != 6 || requests[4].method != "POST") return;
+        const auto body = nlohmann::json::parse(requests[4].body);
         check(body["order"]["makerAmount"] == "9650000",
               "refreshed order must be signed on the finer grid");
     }

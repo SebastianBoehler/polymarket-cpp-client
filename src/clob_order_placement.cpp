@@ -1,12 +1,14 @@
 #include "polymarket/clob_client.hpp"
 #include "order_execution.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace polymarket
 {
@@ -41,6 +43,13 @@ namespace polymarket
                 return false;
             }
         }
+
+        bool levels_on_tick_grid(const std::vector<PriceLevel> &levels,
+                                 const std::string &tick_size)
+        {
+            return std::all_of(levels.begin(), levels.end(), [&](const PriceLevel &level)
+                               { return on_tick_grid(level.price, tick_size); });
+        }
     } // namespace
 
     Result<OrderResponse> ClobClient::place_limit_order(const PlaceLimitOrderParams &params)
@@ -62,7 +71,7 @@ namespace polymarket
             const auto cached = tick_size_result(params.token_id);
             if (!cached) return Result<OrderResponse>::failure(cached.error());
             if (!on_tick_grid(params.price, cached.value().minimum_tick_size))
-                clear_market_metadata_cache(params.token_id);
+                evict_tick_size(params.token_id);
         }
 
         CreateOrderParams order;
@@ -118,7 +127,7 @@ namespace polymarket
         if (params.worst_price)
         {
             if (uses_market_tick && !on_tick_grid(*params.worst_price, tick_size))
-                clear_market_metadata_cache(params.token_id);
+                evict_tick_size(params.token_id);
             order.price = params.worst_price;
         }
         else
@@ -128,10 +137,12 @@ namespace polymarket
             auto estimate = polymarket::estimate_market_price(
                 book.value(), params.side, params.amount, tick_size, params.order_type);
             // Book levels on a finer grid than the cached tick mean the tick changed.
+            const auto &levels =
+                params.side == OrderSide::BUY ? book.value().asks : book.value().bids;
             if (!estimate && estimate.error().code == SdkErrorCode::InvalidArgument &&
-                uses_market_tick)
+                uses_market_tick && !levels_on_tick_grid(levels, tick_size))
             {
-                clear_market_metadata_cache(params.token_id);
+                evict_tick_size(params.token_id);
                 const auto refreshed = tick_size_result(params.token_id);
                 if (!refreshed) return Result<OrderResponse>::failure(refreshed.error());
                 tick_size = refreshed.value().minimum_tick_size;

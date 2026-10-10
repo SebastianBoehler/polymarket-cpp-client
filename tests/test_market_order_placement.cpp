@@ -142,6 +142,35 @@ namespace
               "a stale tick must be refetched once before signing");
     }
 
+    void test_amount_errors_keep_cached_metadata()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
+        server.enqueue(ask_book);
+        server.enqueue(R"({"neg_risk":false})");
+        server.enqueue(accepted_order);
+        const auto first = client.place_market_order(market_order(OrderSide::BUY, 2.0));
+
+        server.enqueue(ask_book);
+        const auto too_small = client.place_market_order(market_order(OrderSide::BUY, 0.001));
+
+        server.enqueue(ask_book);
+        server.enqueue(accepted_order);
+        const auto next = client.place_market_order(market_order(OrderSide::BUY, 2.0));
+        const auto requests = server.requests();
+
+        check(first.ok() && next.ok(), "orders around a rejected amount must be posted");
+        check(!too_small && too_small.error().code == SdkErrorCode::InvalidArgument,
+              "an amount below one price unit must be rejected");
+        check(targets(requests) ==
+                  std::vector<std::string>{"GET /tick-size?token_id=123", "GET /book?token_id=123",
+                                           "GET /neg-risk?token_id=123", "POST /order",
+                                           "GET /book?token_id=123", "GET /book?token_id=123",
+                                           "POST /order"},
+              "an amount error must not refetch the tick or neg-risk");
+    }
+
     void test_preserves_metadata_and_book_errors()
     {
         clob_test::LocalServer server;
@@ -243,6 +272,7 @@ int main()
     test_book_walk_prices_unbounded_orders();
     test_worst_price_skips_the_book();
     test_stale_tick_refreshes_once();
+    test_amount_errors_keep_cached_metadata();
     test_preserves_metadata_and_book_errors();
     test_preserves_metadata_errors_while_signing();
     test_rejects_before_any_request();

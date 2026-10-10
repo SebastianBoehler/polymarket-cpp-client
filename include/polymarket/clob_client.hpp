@@ -353,6 +353,7 @@ namespace polymarket
         std::map<std::string, MetadataCacheEntry<TickSizeInfo>> tick_size_cache_;
         std::map<std::string, MetadataCacheEntry<NegRiskInfo>> neg_risk_cache_;
         Result<TickSizeInfo> tick_size_result(const std::string &token_id);
+        void evict_tick_size(const std::string &token_id);
         Result<NegRiskInfo> neg_risk_result(const std::string &token_id);
         Result<Orderbook> order_book_result(const std::string &token_id);
 

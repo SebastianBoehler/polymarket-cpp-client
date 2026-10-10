@@ -192,6 +192,12 @@ namespace polymarket
         neg_risk_cache_.erase(token_id);
     }
 
+    void ClobClient::evict_tick_size(const std::string &token_id)
+    {
+        std::lock_guard<std::mutex> lock(metadata_cache_mutex_);
+        tick_size_cache_.erase(token_id);
+    }
+
     std::vector<ClobClient::PriceHistoryPoint> ClobClient::get_prices_history(
         const std::string &token_id,
         uint64_t start_ts,
