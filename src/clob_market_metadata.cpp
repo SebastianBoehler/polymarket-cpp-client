@@ -48,6 +48,14 @@ namespace polymarket
 
     std::optional<TickSizeInfo> ClobClient::get_tick_size(const std::string &token_id)
     {
+        auto result = tick_size_result(token_id);
+        if (!result) return std::nullopt;
+        return std::move(result.value());
+    }
+
+    Result<TickSizeInfo> ClobClient::tick_size_result(const std::string &token_id)
+    {
+        constexpr const char *endpoint = "/tick-size";
         const std::string in_flight_key = "tick:" + token_id;
         {
             std::unique_lock<std::mutex> lock(metadata_cache_mutex_);
@@ -57,7 +65,7 @@ namespace polymarket
                 if (cached != tick_size_cache_.end())
                 {
                     if (std::chrono::steady_clock::now() < cached->second.expires_at)
-                        return cached->second.value;
+                        return Result<TickSizeInfo>::success(cached->second.value);
                     tick_size_cache_.erase(cached);
                 }
                 if (metadata_cache_in_flight_.insert(in_flight_key).second)
@@ -73,32 +81,44 @@ namespace polymarket
             [&]
             { return http_.get("/tick-size?token_id=" + percent_encode_query_value(token_id)); });
         if (!response.ok())
-            return std::nullopt;
+            return Result<TickSizeInfo>::failure(make_sdk_error(response, endpoint));
 
         try
         {
             auto j = json::parse(response.body);
             if (!j.is_object() || !j.contains("minimum_tick_size") || j["minimum_tick_size"].is_null())
-                return std::nullopt;
+                return Result<TickSizeInfo>::failure(
+                    make_parse_error("missing minimum_tick_size", endpoint, response.body));
 
             TickSizeInfo info;
             info.minimum_tick_size = json_scalar_string(j["minimum_tick_size"]);
             (void)json_orderbook_price(j["minimum_tick_size"]);
             std::lock_guard<std::mutex> lock(metadata_cache_mutex_);
-            return tick_size_cache_
-                .insert_or_assign(token_id,
-                                  MetadataCacheEntry<TickSizeInfo>{std::move(info),
-                                                                   std::chrono::steady_clock::now() + METADATA_CACHE_TTL})
-                .first->second.value;
+            return Result<TickSizeInfo>::success(
+                tick_size_cache_
+                    .insert_or_assign(
+                        token_id,
+                        MetadataCacheEntry<TickSizeInfo>{
+                            std::move(info), std::chrono::steady_clock::now() + METADATA_CACHE_TTL})
+                    .first->second.value);
         }
-        catch (...)
+        catch (const std::exception &ex)
         {
-            return std::nullopt;
+            return Result<TickSizeInfo>::failure(
+                make_parse_error(ex.what(), endpoint, response.body));
         }
     }
 
     std::optional<NegRiskInfo> ClobClient::get_neg_risk(const std::string &token_id)
     {
+        auto result = neg_risk_result(token_id);
+        if (!result) return std::nullopt;
+        return result.value();
+    }
+
+    Result<NegRiskInfo> ClobClient::neg_risk_result(const std::string &token_id)
+    {
+        constexpr const char *endpoint = "/neg-risk";
         const std::string in_flight_key = "neg-risk:" + token_id;
         {
             std::unique_lock<std::mutex> lock(metadata_cache_mutex_);
@@ -108,7 +128,7 @@ namespace polymarket
                 if (cached != neg_risk_cache_.end())
                 {
                     if (std::chrono::steady_clock::now() < cached->second.expires_at)
-                        return cached->second.value;
+                        return Result<NegRiskInfo>::success(cached->second.value);
                     neg_risk_cache_.erase(cached);
                 }
                 if (metadata_cache_in_flight_.insert(in_flight_key).second)
@@ -123,27 +143,29 @@ namespace polymarket
         auto response = read(
             [&]
             { return http_.get("/neg-risk?token_id=" + percent_encode_query_value(token_id)); });
-        if (!response.ok())
-            return std::nullopt;
+        if (!response.ok()) return Result<NegRiskInfo>::failure(make_sdk_error(response, endpoint));
 
         try
         {
             auto j = json::parse(response.body);
             if (!j.is_object() || !j.contains("neg_risk") || !j["neg_risk"].is_boolean())
-                return std::nullopt;
+                return Result<NegRiskInfo>::failure(
+                    make_parse_error("missing boolean neg_risk", endpoint, response.body));
 
             NegRiskInfo info;
             info.neg_risk = j["neg_risk"].get<bool>();
             std::lock_guard<std::mutex> lock(metadata_cache_mutex_);
-            return neg_risk_cache_
-                .insert_or_assign(token_id,
-                                  MetadataCacheEntry<NegRiskInfo>{
-                                      info, std::chrono::steady_clock::time_point::max()})
-                .first->second.value;
+            return Result<NegRiskInfo>::success(
+                neg_risk_cache_
+                    .insert_or_assign(token_id,
+                                      MetadataCacheEntry<NegRiskInfo>{
+                                          info, std::chrono::steady_clock::time_point::max()})
+                    .first->second.value);
         }
-        catch (...)
+        catch (const std::exception &ex)
         {
-            return std::nullopt;
+            return Result<NegRiskInfo>::failure(
+                make_parse_error(ex.what(), endpoint, response.body));
         }
     }
 

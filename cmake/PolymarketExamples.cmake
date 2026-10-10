@@ -39,6 +39,9 @@ if(POLYMARKET_CLIENT_BUILD_EXAMPLES)
     add_executable(user_stream_example examples/user_stream_example.cpp)
     target_link_libraries(user_stream_example PRIVATE polymarket::client)
 
+    add_executable(order_flow_example examples/order_flow_example.cpp)
+    target_link_libraries(order_flow_example PRIVATE polymarket::client)
+
     add_executable(position_example examples/position_example.cpp)
     target_link_libraries(position_example PRIVATE polymarket::client)
 

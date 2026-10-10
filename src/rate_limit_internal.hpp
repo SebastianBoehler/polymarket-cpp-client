@@ -30,7 +30,9 @@ namespace polymarket::detail
     // the server-requested delay between attempts. attempt() must rebuild any
     // signed headers so each retry carries a fresh timestamp.
     template <typename Attempt>
-    HttpResponse retry_rate_limited(const std::optional<RateLimitRetry> &policy, Attempt &&attempt)
+    HttpResponse
+    retry_rate_limited(const std::optional<RateLimitRetry> &policy, Attempt &&attempt,
+                       std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt)
     {
         for (int retry = 0;; ++retry)
         {
@@ -38,6 +40,7 @@ namespace polymarket::detail
             if (response.status_code != 429 || !policy || retry >= policy->retries) return response;
             const auto delay = rate_limit_delay(response);
             if (delay > policy->max_delay) return response;
+            if (deadline && std::chrono::steady_clock::now() + delay > *deadline) return response;
             std::this_thread::sleep_for(delay);
         }
     }

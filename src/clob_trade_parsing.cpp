@@ -90,12 +90,10 @@ namespace polymarket::detail
         std::string transaction_hash(const json &trade)
         {
             const auto hash = trade.find("transaction_hash");
-            if (hash == trade.end())
-                return {};
+            if (hash == trade.end() || hash->is_null()) return {};
             if (!hash->is_string())
             {
-                throw std::invalid_argument(
-                    "trade transaction_hash must be a string when present");
+                throw std::invalid_argument("trade transaction_hash must be a string or null");
             }
             return hash->get<std::string>();
         }

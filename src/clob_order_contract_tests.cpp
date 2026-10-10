@@ -52,20 +52,36 @@ namespace clob_test
         const auto missing_tick = client.create_market_order_result(params, OrderType::FOK);
         const auto requests = server.requests();
 
-        return check(fok && fok.value().order.maker_amount == "1999998" && fok.value().order.taker_amount == "3333330", "FOK must use an exact executable worst-depth ratio") &&
-               check(fak && fak.value().order.maker_amount == "8999998" && fak.value().order.taker_amount == "12857140", "FAK must use an exact shallow-book limit ratio") &&
-               check(!missing_quote && missing_quote.error().code == SdkErrorCode::HttpTransport,
-                     "missing market quote must be a metadata transport failure") &&
-               check(!missing_neg_risk && missing_neg_risk.error().code == SdkErrorCode::HttpTransport,
-                     "missing neg-risk metadata must be a metadata transport failure") &&
-               check(!missing_tick && missing_tick.error().code == SdkErrorCode::HttpTransport,
-                     "missing tick metadata must be a metadata transport failure") &&
+        return check(fok && fok.value().order.maker_amount == "1999998" &&
+                         fok.value().order.taker_amount == "3333330",
+                     "FOK must use an exact executable worst-depth ratio") &&
+               check(fak && fak.value().order.maker_amount == "8999998" &&
+                         fak.value().order.taker_amount == "12857140",
+                     "FAK must use an exact shallow-book limit ratio") &&
+               check(!missing_quote && missing_quote.error().code == SdkErrorCode::ApiResponse &&
+                         missing_quote.error().http_status == 404 &&
+                         !missing_quote.error().retryable &&
+                         missing_quote.error().endpoint == "/book",
+                     "a missing market quote must keep the book 404") &&
+               check(!missing_neg_risk &&
+                         missing_neg_risk.error().code == SdkErrorCode::ApiResponse &&
+                         missing_neg_risk.error().http_status == 500 &&
+                         missing_neg_risk.error().retryable,
+                     "a neg-risk server error must keep its HTTP status") &&
+               check(!missing_tick && missing_tick.error().code == SdkErrorCode::ApiResponse &&
+                         missing_tick.error().http_status == 500 && missing_tick.error().retryable,
+                     "a tick size server error must keep its HTTP status") &&
                check(requests.size() == 6, "market-order metadata request count mismatch") &&
-               check(requests[0].target == "/tick-size?token_id=123" && requests[1].target == "/book?token_id=123", "FOK must fetch tick and full book") &&
-               check(requests[2].target == "/book?token_id=123", "FAK must reuse cached tick metadata") &&
+               check(requests[0].target == "/tick-size?token_id=123" &&
+                         requests[1].target == "/book?token_id=123",
+                     "FOK must fetch tick and full book") &&
+               check(requests[2].target == "/book?token_id=123",
+                     "FAK must reuse cached tick metadata") &&
                check(requests[3].target == "/book?token_id=123", "missing quote path mismatch") &&
-               check(requests[4].target == "/neg-risk?token_id=123", "neg-risk lookup path mismatch") &&
-               check(requests[5].target == "/tick-size?token_id=456", "tick failure should stop before signing");
+               check(requests[4].target == "/neg-risk?token_id=123",
+                     "neg-risk lookup path mismatch") &&
+               check(requests[5].target == "/tick-size?token_id=456",
+                     "tick failure should stop before signing");
     }
 
     bool test_limit_order_fail_closed_metadata()
@@ -109,21 +125,28 @@ namespace clob_test
                          resolved_tick.value().taker_amount == "8040000",
                      "empty tick must resolve to the market minimum (maker=" +
                          (resolved_tick ? resolved_tick.value().maker_amount : "error") + ")") &&
-               check(!too_small_tick && too_small_tick.error().code == SdkErrorCode::InvalidArgument,
+               check(!too_small_tick &&
+                         too_small_tick.error().code == SdkErrorCode::InvalidArgument,
                      "caller tick below the market minimum must be InvalidArgument") &&
-               check(!missing_tick && missing_tick.error().code == SdkErrorCode::HttpTransport &&
-                         !malformed_tick && malformed_tick.error().code == SdkErrorCode::HttpTransport,
-                     "missing or malformed tick metadata must be transport failures") &&
-               check(!missing_neg_risk && missing_neg_risk.error().code == SdkErrorCode::HttpTransport &&
-                         !malformed_neg_risk && malformed_neg_risk.error().code == SdkErrorCode::HttpTransport,
-                     "missing or malformed neg-risk metadata must be transport failures") &&
+               check(!missing_tick && missing_tick.error().code == SdkErrorCode::ApiResponse &&
+                         missing_tick.error().http_status == 500 && !malformed_tick &&
+                         malformed_tick.error().code == SdkErrorCode::Parse,
+                     "tick metadata failures must keep their HTTP or parse error") &&
+               check(!missing_neg_risk &&
+                         missing_neg_risk.error().code == SdkErrorCode::ApiResponse &&
+                         missing_neg_risk.error().http_status == 500 && !malformed_neg_risk &&
+                         malformed_neg_risk.error().code == SdkErrorCode::Parse &&
+                         malformed_neg_risk.error().endpoint == "/neg-risk",
+                     "neg-risk metadata failures must keep their HTTP or parse error") &&
                check(requests.size() == 7, "limit-order metadata request count mismatch") &&
                check(requests[0].target == "/tick-size?token_id=123" &&
                          requests[1].target == "/tick-size?token_id=missing-tick" &&
                          requests[2].target == "/tick-size?token_id=malformed-tick",
                      "limit orders must resolve uncached tick metadata before signing") &&
-               check(requests[3].target == "/tick-size?token_id=missing-neg" && requests[4].target == "/neg-risk?token_id=missing-neg" &&
-                         requests[5].target == "/tick-size?token_id=malformed-neg" && requests[6].target == "/neg-risk?token_id=malformed-neg",
+               check(requests[3].target == "/tick-size?token_id=missing-neg" &&
+                         requests[4].target == "/neg-risk?token_id=missing-neg" &&
+                         requests[5].target == "/tick-size?token_id=malformed-neg" &&
+                         requests[6].target == "/neg-risk?token_id=malformed-neg",
                      "limit orders must resolve neg-risk metadata after tick validation");
     }
 

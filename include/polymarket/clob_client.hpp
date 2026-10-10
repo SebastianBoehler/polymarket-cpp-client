@@ -3,6 +3,7 @@
 #include "polymarket/clob_types.hpp"
 #include "polymarket/environment.hpp"
 #include "polymarket/geoblock.hpp"
+#include "polymarket/market_price.hpp"
 #include "polymarket/types.hpp"
 #include "polymarket/http_client.hpp"
 #include "polymarket/order_signer.hpp"
@@ -101,6 +102,13 @@ namespace polymarket
         std::optional<NegRiskInfo> get_neg_risk(const std::string &token_id);
         void clear_market_metadata_cache(const std::string &token_id = "");
 
+        // Fetches the book and the market tick size, then simulates a market
+        // order of `amount` (collateral for BUY, shares for SELL). The estimated
+        // price is the one create_market_order would sign against the same book.
+        Result<MarketPriceEstimate> estimate_market_price(const std::string &token_id,
+                                                          OrderSide side, double amount,
+                                                          OrderType order_type = OrderType::FOK);
+
         // Prices history
         using PriceHistoryPoint = ::polymarket::PriceHistoryPoint;
         std::vector<PriceHistoryPoint> get_prices_history(const std::string &token_id,
@@ -152,6 +160,18 @@ namespace polymarket
         OrderResponse create_and_post_market_order(const CreateMarketOrderParams &params,
                                                    OrderType order_type = OrderType::FAK);
 
+        // Validates, signs and posts a limit order: GTC, or GTD when an
+        // expiration is set. When the tick size comes from the market, a price
+        // off the cached grid refreshes it once, since ticks change near 0 and 1.
+        // Nothing is posted if validation or signing fails.
+        Result<OrderResponse> place_limit_order(const PlaceLimitOrderParams &params);
+
+        // Validates, signs and posts a FAK or FOK market order. Without a
+        // worst_price it walks the book like estimate_market_price, so a FOK
+        // the book cannot fill fails with InsufficientLiquidity before signing.
+        // The market tick size is refreshed once if it rejects the price.
+        Result<OrderResponse> place_market_order(const PlaceMarketOrderParams &params);
+
         // Order management
         bool cancel_order(const std::string &order_id);
         Result<bool> cancel_order_result(const std::string &order_id);
@@ -165,6 +185,20 @@ namespace polymarket
         std::vector<OpenOrder> get_open_orders(const std::string &market = "");
         Result<std::vector<OpenOrder>> get_open_orders_result(const std::string &market = "");
         std::vector<Trade> get_trades(const std::string &next_cursor = "");
+        // Empty when the account has no trade with this ID (yet).
+        std::optional<Trade> get_trade(const std::string &trade_id);
+        Result<std::optional<Trade>> get_trade_result(const std::string &trade_id);
+
+        // Blocks until every fill in `order.trade_ids` is CONFIRMED or FAILED,
+        // polling get_trade_result. Covers only the fills matched when the
+        // order was posted, not later fills of a remainder resting on the book.
+        // Fails with Timeout while fills are still settling (the order itself
+        // is unaffected), TransactionFailed when every fill failed, or the
+        // error of the first trade lookup that fails.
+        Result<OrderSettlement> wait_for_order_fill_settlement(
+            const OrderResponse &order,
+            std::chrono::milliseconds timeout = std::chrono::seconds(30),
+            std::chrono::milliseconds poll_interval = std::chrono::milliseconds(250));
 
         // Balance and allowance
         std::optional<BalanceAllowance> get_balance_allowance(
@@ -318,6 +352,9 @@ namespace polymarket
         std::set<std::string> metadata_cache_in_flight_;
         std::map<std::string, MetadataCacheEntry<TickSizeInfo>> tick_size_cache_;
         std::map<std::string, MetadataCacheEntry<NegRiskInfo>> neg_risk_cache_;
+        Result<TickSizeInfo> tick_size_result(const std::string &token_id);
+        Result<NegRiskInfo> neg_risk_result(const std::string &token_id);
+        Result<Orderbook> order_book_result(const std::string &token_id);
 
         using RateLimitListener = std::function<void(const RateLimitUpdate &)>;
         mutable std::mutex rate_limit_mutex_;
@@ -327,7 +364,13 @@ namespace polymarket
         std::optional<RateLimitRetry> rate_limit_retry() const;
         // Runs a read request under the retry policy; attempt() must rebuild
         // signed headers. Defined in clob_client_internal.hpp.
-        template <typename Attempt> HttpResponse read(Attempt &&attempt) const;
+        template <typename Attempt>
+        HttpResponse
+        read(Attempt &&attempt,
+             std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt) const;
+        Result<std::optional<Trade>>
+        lookup_trade(const std::string &trade_id,
+                     std::optional<std::chrono::steady_clock::time_point> deadline);
 
         // Helper methods
         std::map<std::string, std::string> get_l2_headers(const std::string &method,
@@ -336,6 +379,8 @@ namespace polymarket
 
         std::string order_type_to_string(OrderType type);
         std::string order_side_to_string(OrderSide side);
+        Result<OrderResponse> post_signed_order(const SignedOrder &order, OrderType order_type,
+                                                bool post_only);
 
         // JSON parsing helpers
         std::vector<ClobMarket> parse_markets(const std::string &json);

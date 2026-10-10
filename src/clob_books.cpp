@@ -1,5 +1,6 @@
 #include "polymarket/clob_client.hpp"
 #include "clob_client_internal.hpp"
+#include "rest_orderbook_parsing.hpp"
 
 #include <nlohmann/json.hpp>
 #include <set>
@@ -13,13 +14,30 @@ namespace polymarket
 
     std::optional<Orderbook> ClobClient::get_order_book(const std::string &token_id)
     {
-        if (token_id.empty()) return std::nullopt;
+        auto result = order_book_result(token_id);
+        if (!result) return std::nullopt;
+        return std::move(result.value());
+    }
+
+    Result<Orderbook> ClobClient::order_book_result(const std::string &token_id)
+    {
+        constexpr const char *endpoint = "/book";
+        if (token_id.empty())
+            return Result<Orderbook>::failure({SdkErrorCode::InvalidArgument,
+                                               "token_id is required", endpoint, 0, "", "", false});
         auto response = read(
             [&] { return http_.get("/book?token_id=" + percent_encode_query_value(token_id)); });
-        if (!response.ok())
-            return std::nullopt;
+        if (!response.ok()) return Result<Orderbook>::failure(make_sdk_error(response, endpoint));
 
-        return parse_orderbook(response.body, token_id);
+        try
+        {
+            return Result<Orderbook>::success(
+                detail::parse_rest_orderbook_json(response.body, token_id));
+        }
+        catch (const std::exception &ex)
+        {
+            return Result<Orderbook>::failure(make_parse_error(ex.what(), endpoint, response.body));
+        }
     }
 
     std::map<std::string, Orderbook> ClobClient::get_order_books(const std::vector<std::string> &token_ids)

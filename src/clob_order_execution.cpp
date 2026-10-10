@@ -2,6 +2,8 @@
 #include "order_execution.hpp"
 #include "polymarket/order_signer.hpp"
 #include <stdexcept>
+#include <string>
+#include <utility>
 
 namespace polymarket
 {
@@ -9,10 +11,14 @@ namespace polymarket
     {
         constexpr const char *ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-        class MetadataResolutionError : public std::runtime_error
+        struct MetadataResolutionError : std::runtime_error
         {
-        public:
-            using std::runtime_error::runtime_error;
+            MetadataResolutionError(const std::string &context, SdkError cause)
+                : std::runtime_error(context + ": " + cause.message), error(std::move(cause))
+            {
+            }
+
+            SdkError error;
         };
 
         constexpr bool is_market_order_type(OrderType order_type)
@@ -41,21 +47,20 @@ namespace polymarket
             return scale;
         }
 
-        std::string resolve_tick_size(ClobClient &client,
-                                      const std::string &token_id,
+        std::string resolve_tick_size(const Result<TickSizeInfo> &tick_info,
                                       const std::string &requested_tick_size)
         {
-            const auto tick_info = client.get_tick_size(token_id);
-            if (!tick_info || tick_info->minimum_tick_size.empty())
+            if (!tick_info)
             {
-                throw MetadataResolutionError("could not resolve market tick size");
+                throw MetadataResolutionError("could not resolve market tick size",
+                                              tick_info.error());
             }
 
-            const auto minimum = detail::rounding_config_for_tick_size(
-                tick_info->minimum_tick_size);
+            const auto &market_tick_size = tick_info.value().minimum_tick_size;
+            const auto minimum = detail::rounding_config_for_tick_size(market_tick_size);
             if (requested_tick_size.empty())
             {
-                return tick_info->minimum_tick_size;
+                return market_tick_size;
             }
             const auto requested = detail::rounding_config_for_tick_size(
                 requested_tick_size);
@@ -69,21 +74,14 @@ namespace polymarket
             return requested_tick_size;
         }
 
-        bool resolve_neg_risk(ClobClient &client,
-                              const std::string &token_id,
-                              const std::optional<bool> &requested_neg_risk)
+        bool resolve_neg_risk(const Result<NegRiskInfo> &neg_risk_info)
         {
-            if (requested_neg_risk)
-            {
-                return *requested_neg_risk;
-            }
-
-            const auto neg_risk_info = client.get_neg_risk(token_id);
             if (!neg_risk_info)
             {
-                throw MetadataResolutionError("could not resolve neg-risk metadata");
+                throw MetadataResolutionError("could not resolve neg-risk metadata",
+                                              neg_risk_info.error());
             }
-            return neg_risk_info->neg_risk;
+            return neg_risk_info.value().neg_risk;
         }
     }
 
@@ -94,10 +92,12 @@ namespace polymarket
             throw std::runtime_error("Client not authenticated");
         }
 
-        const std::string tick_size = resolve_tick_size(*this, params.token_id, params.tick_size);
+        const std::string tick_size =
+            resolve_tick_size(tick_size_result(params.token_id), params.tick_size);
         const auto validated_price = detail::validate_order_price(
             params.price, tick_size);
-        const bool is_neg_risk = resolve_neg_risk(*this, params.token_id, params.neg_risk);
+        const bool is_neg_risk =
+            params.neg_risk ? *params.neg_risk : resolve_neg_risk(neg_risk_result(params.token_id));
 
         const auto context = build_execution_context(*this, *order_signer_, funder_address_, sig_type_);
         const auto amounts = detail::calculate_limit_order_amounts(
@@ -152,7 +152,7 @@ namespace polymarket
         }
         catch (const MetadataResolutionError &ex)
         {
-            return Result<SignedOrder>::failure({SdkErrorCode::HttpTransport, ex.what(), "/order", 0, "", "", true});
+            return Result<SignedOrder>::failure(ex.error);
         }
         catch (const std::exception &ex)
         {
@@ -175,7 +175,8 @@ namespace polymarket
             throw std::runtime_error("Client not authenticated");
         }
 
-        const std::string tick_size = resolve_tick_size(*this, params.token_id, params.tick_size);
+        const std::string tick_size =
+            resolve_tick_size(tick_size_result(params.token_id), params.tick_size);
         double price;
         if (params.price)
         {
@@ -183,17 +184,19 @@ namespace polymarket
         }
         else
         {
-            const auto book = get_order_book(params.token_id);
+            const auto book = order_book_result(params.token_id);
             if (!book)
             {
-                throw MetadataResolutionError("could not resolve executable market price");
+                throw MetadataResolutionError("could not resolve executable market price",
+                                              book.error());
             }
-            price = detail::calculate_market_price(
-                *book, params.side, params.amount, order_type, tick_size);
+            price = detail::calculate_market_price(book.value(), params.side, params.amount,
+                                                   order_type, tick_size);
         }
         const auto validated_price = detail::validate_order_price(price, tick_size);
 
-        const bool is_neg_risk = resolve_neg_risk(*this, params.token_id, params.neg_risk);
+        const bool is_neg_risk =
+            params.neg_risk ? *params.neg_risk : resolve_neg_risk(neg_risk_result(params.token_id));
 
         const auto context = build_execution_context(*this, *order_signer_, funder_address_, sig_type_);
         const auto amounts = detail::calculate_market_order_amounts(
@@ -260,7 +263,7 @@ namespace polymarket
         }
         catch (const MetadataResolutionError &ex)
         {
-            return Result<PreparedOrder>::failure({SdkErrorCode::HttpTransport, ex.what(), "/order", 0, "", "", true});
+            return Result<PreparedOrder>::failure(ex.error);
         }
         catch (const std::exception &ex)
         {

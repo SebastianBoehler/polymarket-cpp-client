@@ -64,6 +64,11 @@ namespace polymarket::detail
                                   double amount,
                                   OrderType order_type,
                                   const std::string &tick_size);
+    // Same walk as calculate_market_price, plus the simulated fill. Throws
+    // std::logic_error subclasses for invalid input and std::runtime_error
+    // for an empty side; never rejects a shallow book.
+    MarketPriceEstimate estimate_market_depth(const Orderbook &book, OrderSide side, double amount,
+                                              const std::string &tick_size);
     nlohmann::json signed_order_json(const SignedOrder &order);
     nlohmann::json order_payload_json(const SignedOrder &order,
                                       const std::string &owner,

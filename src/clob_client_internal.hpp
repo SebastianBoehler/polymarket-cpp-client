@@ -83,8 +83,11 @@ namespace polymarket::detail
 
 namespace polymarket
 {
-    template <typename Attempt> HttpResponse ClobClient::read(Attempt &&attempt) const
+    template <typename Attempt>
+    HttpResponse
+    ClobClient::read(Attempt &&attempt,
+                     std::optional<std::chrono::steady_clock::time_point> deadline) const
     {
-        return detail::retry_rate_limited(rate_limit_retry(), attempt);
+        return detail::retry_rate_limited(rate_limit_retry(), attempt, deadline);
     }
 } // namespace polymarket

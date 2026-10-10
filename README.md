@@ -61,14 +61,14 @@ int main()
 
     client.warm_connection(); // open TCP + TLS before the first order
 
-    CreateOrderParams order;
+    PlaceLimitOrderParams order;
     order.token_id = "<token id>";
     order.price = 0.42;
     order.size = 10;
     order.side = OrderSide::BUY;
 
-    const auto response = client.create_and_post_order(order); // GTC by default
-    std::cout << (response.success ? response.order_id : response.error_msg) << "\n";
+    const auto placed = client.place_limit_order(order); // GTC unless expiration is set
+    std::cout << (placed ? placed.value().order_id : placed.error().message) << "\n";
 }
 ```
 
@@ -80,13 +80,14 @@ Tick size and neg-risk metadata are resolved and cached for you. See
 | Area                   | What you get                                                                                                                                       |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Trading**            | CLOB V2 EIP-712 order signing (EOA, proxy, Safe, `POLY_1271` deposit wallets), limit and market orders, batch posting, cancels, tick-size rounding |
+| **Order flow**         | Book-walk fill estimates, one-call limit and market orders with post-only, GTD, and worst-price bounds, on-chain settlement waits                  |
 | **Market data**        | REST books, prices, midpoints, markets, trades; WebSocket orderbook streaming with reconnect, subscription replay, gap detection, backpressure     |
 | **User stream**        | Authenticated `UserStream` with typed order/trade events, gap callbacks, and REST reconciliation hooks                                             |
 | **On-chain positions** | `PositionClient` split/merge/redeem for CTF and Protocol V2, trading approvals, gasless Safe operations through the Polymarket relayer             |
 | **Polygon indexing**   | JSON-RPC HTTP catch-up + WebSocket subscriptions, persistent `EvmEventIndexer`, UMA and Conditional Tokens event decoders                          |
 | **Networking**         | HTTP/HTTPS/SOCKS proxies and VPN interface binding for REST **and** WebSockets, one process-wide route, fail-closed, geoblock eligibility check    |
 | **Low latency**        | Warm keep-alive connections, heartbeat, `TCP_NODELAY`, DNS caching, metadata caches, per-request metrics                                           |
-| **Errors**             | Opt-in `Result<T>` APIs with typed `SdkError` (transport, API, auth, rate limit, parse, signing) and request IDs                                   |
+| **Errors**             | Opt-in `Result<T>` APIs with typed `SdkError` (transport, API, auth, rate limit, parse, signing, liquidity, timeout) and request IDs               |
 | **Neg-risk markets**   | Automatic exchange and collateral-adapter selection                                                                                                |
 
 ## Requirements
@@ -195,6 +196,31 @@ std::cout << "avg latency: " << client.get_connection_stats().avg_latency_ms << 
 
 Order helpers round prices, sizes, and maker/taker amounts to the market's tick
 size. Leave `tick_size` empty to resolve it from the client's metadata cache.
+
+### Preview, place, and settle orders
+
+```cpp
+using namespace polymarket;
+
+// Walk the live book: worst price, average price, and shares for a $250 BUY.
+auto estimate = client.estimate_market_price(token_id, OrderSide::BUY, 250.0);
+if (!estimate) return; // InsufficientLiquidity when a FOK cannot fill
+
+PlaceMarketOrderParams order;
+order.token_id = token_id;
+order.amount = 250.0;
+order.worst_price = estimate.value().price; // never fill worse than the preview
+auto placed = client.place_market_order(order); // FAK by default
+if (!placed) return;
+
+// Matched fills are final only once their transaction confirms on-chain.
+auto settlement = client.wait_for_order_fill_settlement(placed.value());
+```
+
+`place_limit_order` posts GTC, or GTD when `expiration` is set, and supports
+`post_only`. `estimate_market_price` also takes a book you already hold, such as
+one from `OrderbookManager`, without a request. See
+[docs/order-flow.md](docs/order-flow.md).
 
 ### Select an environment
 
@@ -308,19 +334,20 @@ exchange; `PositionClient` picks the neg-risk collateral adapter the same way.
 
 Build with `-DPOLYMARKET_CLIENT_BUILD_EXAMPLES=ON` and run from `build/`.
 
-| Example                      | What it does                                                                         |
-| ---------------------------- | ------------------------------------------------------------------------------------ |
-| `rest_example`               | Public markets and books; balances and open orders with credentials                  |
-| `sign_example`               | Signs a dummy order (`PRIVATE_KEY`)                                                  |
-| `ws_example`                 | Streams market-channel orderbook messages                                            |
-| `user_stream_example`        | Streams your own order and trade events (`PRIVATE_KEY`)                              |
-| `position_example`           | Split, merge, or redeem from an EOA or Safe; dry run unless `--execute`              |
-| `approvals_example`          | Lists and grants missing trading approvals; dry run unless `--execute`               |
-| `uma_oracle_watch`           | Streams UMA adapter lifecycle events over Polygon JSON-RPC                           |
-| `condition_resolution_watch` | Streams Conditional Tokens resolution and redemption events                          |
-| `evm_event_indexer_example`  | Persistent HTTP catch-up + live WebSocket indexer with a cursor file                 |
-| `feed_latency_benchmark`     | Compares receive timing across the Polymarket market WS and a Polygon RPC WS         |
-| `polymarket_arb`             | Analysis-only scan of complementary YES/NO books (`--15m --symbol btc --fetch-only`) |
+| Example                      | What it does                                                                                 |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| `rest_example`               | Public markets and books; balances and open orders with credentials                          |
+| `sign_example`               | Signs a dummy order (`PRIVATE_KEY`)                                                          |
+| `ws_example`                 | Streams market-channel orderbook messages                                                    |
+| `user_stream_example`        | Streams your own order and trade events (`PRIVATE_KEY`)                                      |
+| `order_flow_example`         | Estimates, places, and settles a market or post-only limit order; dry run unless `--execute` |
+| `position_example`           | Split, merge, or redeem from an EOA or Safe; dry run unless `--execute`                      |
+| `approvals_example`          | Lists and grants missing trading approvals; dry run unless `--execute`                       |
+| `uma_oracle_watch`           | Streams UMA adapter lifecycle events over Polygon JSON-RPC                                   |
+| `condition_resolution_watch` | Streams Conditional Tokens resolution and redemption events                                  |
+| `evm_event_indexer_example`  | Persistent HTTP catch-up + live WebSocket indexer with a cursor file                         |
+| `feed_latency_benchmark`     | Compares receive timing across the Polymarket market WS and a Polygon RPC WS                 |
+| `polymarket_arb`             | Analysis-only scan of complementary YES/NO books (`--15m --symbol btc --fetch-only`)         |
 
 Examples that call Polymarket services, and `order_test`, read
 `POLYMARKET_ENV` (`production` by default, or `preproduction`).
@@ -346,6 +373,7 @@ Methodology and how to compare branches: [docs/benchmarks.md](docs/benchmarks.md
 
 | Guide                                                | Topic                                                  |
 | ---------------------------------------------------- | ------------------------------------------------------ |
+| [Order flow](docs/order-flow.md)                     | Fill estimates, one-call orders, settlement waits      |
 | [Networking](docs/networking.md)                     | Proxies, VPN interfaces, WebSocket routing, geoblock   |
 | [Position operations](docs/position-operations.md)   | Split, merge, redeem, approvals, Safe relayer          |
 | [Polygon indexing](docs/polygon-indexing.md)         | JSON-RPC watchers, persistent indexer, reorg handling  |

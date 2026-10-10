@@ -92,6 +92,15 @@ namespace polymarket
         std::optional<std::string> error_msg;
     };
 
+    // Final state of the fills an order matched when it was posted.
+    struct OrderSettlement
+    {
+        // Unique hashes of fills that did not fail, in trade_ids order.
+        std::vector<std::string> transaction_hashes;
+        // Each fill once CONFIRMED or FAILED, in trade_ids order.
+        std::vector<Trade> trades;
+    };
+
     // Balance/Allowance info
     struct BalanceAllowance
     {
@@ -162,6 +171,43 @@ namespace polymarket
         std::string tick_size;
         std::string metadata = "0x0000000000000000000000000000000000000000000000000000000000000000";
         std::string builder_code = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::optional<bool> neg_risk; // If set, skips API call to fetch neg_risk
+    };
+
+    // Limit order for ClobClient::place_limit_order.
+    struct PlaceLimitOrderParams
+    {
+        std::string token_id;
+        double price{0.0};
+        double size{0.0};
+        OrderSide side{OrderSide::BUY};
+        // Rejected instead of matched if it would cross the book on arrival.
+        bool post_only{false};
+        // Unix seconds. Set: posted as GTD, at least 180 s ahead to allow for
+        // latency and clock skew. Unset: posted as GTC.
+        std::optional<std::uint64_t> expiration;
+        std::string tick_size; // Empty uses the market minimum
+        std::string metadata = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::string builder_code =
+            "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::optional<bool> neg_risk; // If set, skips API call to fetch neg_risk
+    };
+
+    // Market order for ClobClient::place_market_order.
+    struct PlaceMarketOrderParams
+    {
+        std::string token_id;
+        OrderSide side{OrderSide::BUY};
+        double amount{0.0}; // Collateral to spend for BUY, shares to sell for SELL
+        // Most a BUY pays, or least a SELL accepts, per share. Set: the order
+        // is signed at this price without fetching the book. Unset: the price
+        // comes from walking the current book.
+        std::optional<double> worst_price;
+        OrderType order_type{OrderType::FAK}; // FAK or FOK
+        std::string tick_size;                // Empty uses the market minimum
+        std::string metadata = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        std::string builder_code =
+            "0x0000000000000000000000000000000000000000000000000000000000000000";
         std::optional<bool> neg_risk; // If set, skips API call to fetch neg_risk
     };
 
