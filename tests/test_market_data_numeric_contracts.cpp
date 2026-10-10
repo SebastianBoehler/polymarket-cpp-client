@@ -1,9 +1,13 @@
 #include "polymarket/clob_client.hpp"
 #include "clob_client_test_fixture.hpp"
 #include "polymarket/market_fetcher.hpp"
+#include "rest_numeric.hpp"
 
 #include <cmath>
 #include <iostream>
+#include <locale>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -33,7 +37,9 @@ namespace
         R"({"asset_id":"A","bids":[{"price":"0.4","size":"1tail"}],"asks":[]})",
         R"({"asset_id":"A","bids":[{"price":"0.4","size":"nan"}],"asks":[]})",
         R"({"asset_id":"A","bids":[{"price":"0.4","size":"inf"}],"asks":[]})",
-        R"({"asset_id":"A","bids":[{"price":"0.4","size":-1}],"asks":[]})"};
+        R"({"asset_id":"A","bids":[{"price":"0.4","size":-1}],"asks":[]})",
+        R"({"asset_id":"A","bids":[{"price":"0.4","size":"1"},{"price":"0.40","size":"2"}],"asks":[]})",
+        R"({"asset_id":"A","bids":[],"asks":[{"price":0.6,"size":"1"},{"price":"0.5","size":"1"},{"price":"0.60","size":"1"}]})"};
 
     bool test_clob_orderbook_numbers()
     {
@@ -173,15 +179,99 @@ namespace
     }
 }
 
+namespace
+{
+    std::optional<double> classic_stream_number(const std::string &text)
+    {
+        double number = 0.0;
+        std::istringstream stream(text);
+        stream.imbue(std::locale::classic());
+        stream >> std::noskipws >> number;
+        if (!stream || stream.peek() != std::char_traits<char>::eof() || !std::isfinite(number))
+            return std::nullopt;
+        return number;
+    }
+
+    std::optional<double> strict_number(const std::string &text)
+    {
+        try
+        {
+            return detail::strict_json_number(nlohmann::json(text));
+        }
+        catch (const std::invalid_argument &)
+        {
+            return std::nullopt;
+        }
+    }
+
+    bool test_numeric_strings_match_classic_stream_grammar()
+    {
+        const std::vector<std::string> inputs = {"0.5",
+                                                 "0.001",
+                                                 "0",
+                                                 "1",
+                                                 "100",
+                                                 "123.25",
+                                                 "1e-3",
+                                                 "1E2",
+                                                 "2.5e+1",
+                                                 ".5",
+                                                 "5.",
+                                                 "+0.5",
+                                                 "+.5",
+                                                 "-0.5",
+                                                 "-.5",
+                                                 "00.10",
+                                                 "0.1000000000000000055511151231257827",
+                                                 "",
+                                                 " ",
+                                                 " 0.5",
+                                                 "0.5 ",
+                                                 "+",
+                                                 "-",
+                                                 ".",
+                                                 "+-1",
+                                                 "-+1",
+                                                 "++1",
+                                                 "1e",
+                                                 "1e+",
+                                                 "e5",
+                                                 "0x10",
+                                                 "0x1p3",
+                                                 "1,5",
+                                                 "1.2.3",
+                                                 "nan",
+                                                 "NaN",
+                                                 "inf",
+                                                 "-inf",
+                                                 "infinity",
+                                                 "1e400",
+                                                 "-1e400",
+                                                 "0.5\n",
+                                                 "\t1"};
+        bool ok = true;
+        for (const auto &text : inputs)
+        {
+            const auto expected = classic_stream_number(text);
+            const auto actual = strict_number(text);
+            if (expected != actual)
+            {
+                std::cerr << "numeric string '" << text << "' parsed differently\n";
+                ok = false;
+            }
+        }
+        return check(ok, "numeric strings must keep the classic stream grammar");
+    }
+} // namespace
+
 int main()
 {
     http_global_init();
     const bool ok = test_clob_orderbook_numbers() &&
                     test_clob_batch_orderbook_identity_is_atomic() &&
-                    test_market_fetcher_orderbook_numbers() &&
-                    test_scalar_market_data_numbers() &&
-                    test_batch_market_data_is_atomic() &&
-                    test_tick_size_numbers();
+                    test_market_fetcher_orderbook_numbers() && test_scalar_market_data_numbers() &&
+                    test_batch_market_data_is_atomic() && test_tick_size_numbers() &&
+                    test_numeric_strings_match_classic_stream_grammar();
     http_global_cleanup();
     return ok ? 0 : 1;
 }

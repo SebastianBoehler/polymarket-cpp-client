@@ -120,6 +120,23 @@ int main()
         return 1;
     }
 
+    const auto snapshot_array = detail::parse_typed_message(
+        R"([{"event_type":"book","asset_id":"token-2","bids":[],"asks":[]}])");
+    bool array_threw = false;
+    try
+    {
+        (void)detail::parse_typed_message(R"([{"event_type":"book")");
+    }
+    catch (...)
+    {
+        array_threw = true;
+    }
+    if (!expect_true("snapshot arrays are not typed messages", !snapshot_array.has_value()) ||
+        !expect_true("malformed arrays still throw for caller metrics", array_threw))
+    {
+        return 1;
+    }
+
     if (!expect_true("unlimited reconnects never reach limit",
                      !detail::reconnect_limit_reached(100, 0)) ||
         !expect_true("retry before configured limit is allowed",

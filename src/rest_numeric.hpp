@@ -2,11 +2,11 @@
 
 #include <nlohmann/json.hpp>
 
+#include <charconv>
 #include <cmath>
-#include <locale>
-#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 
 namespace polymarket::detail
 {
@@ -18,10 +18,12 @@ namespace polymarket::detail
         if (value.is_string())
         {
             const auto &text = value.get_ref<const std::string &>();
-            std::istringstream stream(text);
-            stream.imbue(std::locale::classic());
-            stream >> std::noskipws >> number;
-            if (!stream || stream.peek() != std::char_traits<char>::eof())
+            const char *begin = text.data();
+            const char *const end = begin + text.size();
+            // Accepts one optional leading '+' sign.
+            if (end - begin > 1 && *begin == '+' && begin[1] != '+' && begin[1] != '-') ++begin;
+            const auto [stop, error] = std::from_chars(begin, end, number);
+            if (error != std::errc() || stop != end)
                 throw std::invalid_argument("number must be a complete decimal representation");
         }
         else if (value.is_number())
