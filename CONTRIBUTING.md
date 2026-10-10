@@ -97,7 +97,9 @@ ctest --test-dir build-fuzz -L fuzz
 
 The `ctest` step replays the checked-in samples. Fuzzing writes new inputs into
 the corpus directory, so pass a scratch copy unless an input is worth keeping.
-Rerun a crash by passing its `crash-*` file to the fuzzer.
+Rerun a crash by passing its `crash-*` file to the fuzzer. The `fuzz` workflow
+runs each fuzzer for one minute on pull requests and 15 minutes nightly, and
+uploads failing inputs as a workflow artifact.
 
 A successful fake-server test proves the local request and response contract.
 It does not prove a transaction succeeded on mainnet. Report the distinction.
