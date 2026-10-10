@@ -1,0 +1,1 @@
+{"asset_id":"yes","market":"cond-1","bids":[{"price":"0.40","size":"9"},{"price":"0.39","size":"3"}],"asks":[{"price":"0.45","size":"100"}],"tick_size":"0.01","min_order_size":"5","neg_risk":false,"hash":"0xabc","timestamp":"1782753357257"}

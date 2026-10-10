@@ -1,0 +1,1 @@
+{"event_type":"price_change","market":"condition-1","price_changes":[{"asset_id":"yes","price":"0.45","size":"0","side":"SELL","hash":"a"},{"asset_id":"yes","price":"0.44","size":"12","side":"SELL","hash":"b"},{"asset_id":"yes","price":"0.40","size":"9","side":"BUY","hash":"c"}],"timestamp":"1782753358257"}

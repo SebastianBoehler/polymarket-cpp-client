@@ -1,0 +1,1 @@
+{"next_cursor":"LTE=","data":[{"condition_id":"current","neg_risk":true,"active":true,"closed":false,"end_date_iso":"2099-01-01T00:00:00Z","tokens":[{"token_id":"yes","outcome":"Yes"},{"token_id":"no","outcome":"No"}]}]}

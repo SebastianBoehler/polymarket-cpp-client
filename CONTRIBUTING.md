@@ -83,6 +83,22 @@ shared plugin, and checks subproject configuration. Match the full CI matrix
 before releasing: Linux and macOS, Debug and Release. The workflow files define
 the authoritative build options and live-test policy.
 
+Parsers for REST responses and WebSocket messages have libFuzzer targets in
+`tests/fuzz/`. They need Clang and a separate build directory:
+
+```bash
+cmake -S . -B build-fuzz -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPOLYMARKET_CLIENT_BUILD_FUZZERS=ON \
+  -DPOLYMARKET_CLIENT_BUILD_TESTS=OFF -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=OFF
+cmake --build build-fuzz --parallel 2 --target fuzz_websocket_messages fuzz_rest_responses
+ctest --test-dir build-fuzz -L fuzz
+./build-fuzz/fuzz_websocket_messages -max_total_time=60 tests/fuzz/corpus/websocket_messages
+```
+
+The `ctest` step replays the checked-in samples. Fuzzing writes new inputs into
+the corpus directory, so pass a scratch copy unless an input is worth keeping.
+Rerun a crash by passing its `crash-*` file to the fuzzer.
+
 A successful fake-server test proves the local request and response contract.
 It does not prove a transaction succeeded on mainnet. Report the distinction.
 
