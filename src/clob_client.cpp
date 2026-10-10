@@ -55,21 +55,24 @@ namespace polymarket
         throw std::invalid_argument("unsupported signature type");
     }
 
-    static void configure_transports(HttpClient &clob, HttpClient &data,
+    static void configure_transports(HttpClient &clob, HttpClient &orders, HttpClient &data,
                                      const Environment &environment,
                                      const std::optional<HttpClientOptions> &options)
     {
         if (options)
         {
             clob.configure(*options);
+            orders.configure(*options);
             data.configure(*options);
         }
         else
         {
             clob.set_timeout_ms(10000);
+            orders.set_timeout_ms(10000);
             data.set_timeout_ms(10000);
         }
         clob.set_base_url(environment.clob_url);
+        orders.set_base_url(environment.clob_url);
         data.set_base_url(environment.data_url);
     }
 
@@ -100,7 +103,7 @@ namespace polymarket
           funder_address_(private_key ? validated_funder(sig_type, funder_address) : std::string()),
           sig_type_(private_key ? sig_type : SignatureType::EOA)
     {
-        configure_transports(http_, data_http_, environment_, http_options);
+        configure_transports(http_, order_http_, data_http_, environment_, http_options);
         if (!private_key) return;
         order_signer_ = std::make_unique<OrderSigner>(
             *private_key, static_cast<int>(environment_.contracts.chain_id));
@@ -193,7 +196,9 @@ namespace polymarket
 
     bool ClobClient::warm_connection()
     {
-        return get_server_time().has_value();
+        const bool reads_warm = get_server_time().has_value();
+        const bool orders_warm = order_http_.get("/time").ok();
+        return reads_warm && orders_warm;
     }
 
     std::string ClobClient::get_address() const

@@ -1,10 +1,14 @@
 #include "polymarket/clob_client.hpp"
 #include "clob_client_test_fixture.hpp"
 #include "polymarket/market_fetcher.hpp"
+#include "rest_numeric.hpp"
 
+#include <clocale>
 #include <cmath>
 #include <iostream>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace polymarket;
@@ -33,7 +37,9 @@ namespace
         R"({"asset_id":"A","bids":[{"price":"0.4","size":"1tail"}],"asks":[]})",
         R"({"asset_id":"A","bids":[{"price":"0.4","size":"nan"}],"asks":[]})",
         R"({"asset_id":"A","bids":[{"price":"0.4","size":"inf"}],"asks":[]})",
-        R"({"asset_id":"A","bids":[{"price":"0.4","size":-1}],"asks":[]})"};
+        R"({"asset_id":"A","bids":[{"price":"0.4","size":-1}],"asks":[]})",
+        R"({"asset_id":"A","bids":[{"price":"0.4","size":"1"},{"price":"0.40","size":"2"}],"asks":[]})",
+        R"({"asset_id":"A","bids":[],"asks":[{"price":0.6,"size":"1"},{"price":"0.5","size":"1"},{"price":"0.60","size":"1"}]})"};
 
     bool test_clob_orderbook_numbers()
     {
@@ -62,11 +68,17 @@ namespace
     {
         clob_test::LocalServer server;
         ClobClient client(server.url(), 137);
-        for (const auto *body : {
-                 R"([{"asset_id":"A","bids":[],"asks":[]}])",
-                 R"([{"asset_id":"A","bids":[],"asks":[]},{"asset_id":"A","bids":[],"asks":[]}])",
-                 R"([{"asset_id":"A","bids":[],"asks":[]},{"asset_id":"C","bids":[],"asks":[]}])",
-                 R"([{"asset_id":"A","bids":[],"asks":[]},{"asset_id":"B","bids":[]}])"})
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
+        server.enqueue(R"({"neg_risk":false})");
+        (void)client.get_tick_size("A");
+        (void)client.get_neg_risk("A");
+        constexpr const char *seeding_a =
+            R"({"asset_id":"A","tick_size":"0.001","neg_risk":true,"bids":[],"asks":[]})";
+        for (const std::string &body :
+             {std::string("[") + seeding_a + "]",
+              std::string("[") + seeding_a + "," + seeding_a + "]",
+              std::string("[") + seeding_a + R"(,{"asset_id":"C","bids":[],"asks":[]}])",
+              std::string("[") + seeding_a + R"(,{"asset_id":"B","bids":[]}])"})
         {
             server.enqueue(body);
             if (!check(client.get_order_books({"A", "B"}).empty(),
@@ -75,7 +87,12 @@ namespace
                 return false;
             }
         }
-        return true;
+        const auto requests_before = server.requests().size();
+        const auto tick = client.get_tick_size("A");
+        const auto neg_risk = client.get_neg_risk("A");
+        return check(tick && tick->minimum_tick_size == "0.01" && neg_risk && !neg_risk->neg_risk &&
+                         server.requests().size() == requests_before,
+                     "rejected batch books must leave the tick and neg-risk caches unchanged");
     }
 
     bool test_market_fetcher_orderbook_numbers()
@@ -173,15 +190,84 @@ namespace
     }
 }
 
+namespace
+{
+    std::optional<double> strict_number(const std::string &text)
+    {
+        try
+        {
+            return detail::strict_json_number(nlohmann::json(text));
+        }
+        catch (const std::invalid_argument &)
+        {
+            return std::nullopt;
+        }
+    }
+
+    bool test_numeric_strings_use_the_decimal_grammar()
+    {
+        const std::vector<std::pair<std::string, double>> accepted = {
+            {"0.5", 0.5},
+            {"0.001", 0.001},
+            {"0", 0.0},
+            {"1", 1.0},
+            {"100", 100.0},
+            {"123.25", 123.25},
+            {"1e-3", 0.001},
+            {"1E2", 100.0},
+            {"2.5e+1", 25.0},
+            {".5", 0.5},
+            {"5.", 5.0},
+            {"+0.5", 0.5},
+            {"+.5", 0.5},
+            {"-0.5", -0.5},
+            {"-.5", -0.5},
+            {"00.10", 0.1},
+            {"0.1000000000000000055511151231257827", 0.1}};
+        const std::vector<std::string> rejected = {
+            "",    " ",   " 0.5", "0.5 ",     "+",     "-",      ".",     "+-1",   "-+1",
+            "++1", "1e",  "1e+",  "e5",       "0x10",  "0x1p3",  "1,5",   "1.2.3", "nan",
+            "NaN", "inf", "-inf", "infinity", "1e400", "-1e400", "0.5\n", "\t1"};
+        bool ok = true;
+        for (const auto &[text, value] : accepted)
+        {
+            if (strict_number(text) != value)
+            {
+                std::cerr << "decimal string '" << text << "' was not read as " << value << "\n";
+                ok = false;
+            }
+        }
+        for (const auto &text : rejected)
+        {
+            if (strict_number(text))
+            {
+                std::cerr << "non-decimal string '" << text << "' was accepted\n";
+                ok = false;
+            }
+        }
+
+        for (const auto *name : {"de_DE.UTF-8", "de_DE.utf8", "fr_FR.UTF-8"})
+        {
+            if (!std::setlocale(LC_NUMERIC, name)) continue;
+            const bool comma_locale_reads_dots =
+                strict_number("0.25") == 0.25 && !strict_number("0,25");
+            std::setlocale(LC_NUMERIC, "C");
+            ok &= check(comma_locale_reads_dots,
+                        "decimal strings must use '.' regardless of the C locale");
+            break;
+        }
+        return check(ok, "numeric strings must follow the decimal grammar");
+    }
+} // namespace
+
 int main()
 {
     http_global_init();
     const bool ok = test_clob_orderbook_numbers() &&
                     test_clob_batch_orderbook_identity_is_atomic() &&
-                    test_market_fetcher_orderbook_numbers() &&
-                    test_scalar_market_data_numbers() &&
-                    test_batch_market_data_is_atomic() &&
-                    test_tick_size_numbers();
+                    test_market_fetcher_orderbook_numbers() && test_scalar_market_data_numbers() &&
+                    test_batch_market_data_is_atomic() && test_tick_size_numbers() &&
+                    test_numeric_strings_use_the_decimal_grammar();
     http_global_cleanup();
     return ok ? 0 : 1;
 }

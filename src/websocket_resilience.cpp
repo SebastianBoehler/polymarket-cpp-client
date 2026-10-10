@@ -1,6 +1,8 @@
 #include "websocket_resilience.hpp"
 #include <nlohmann/json.hpp>
 
+#include <stdexcept>
+
 using json = nlohmann::json;
 
 namespace polymarket::detail
@@ -86,6 +88,13 @@ namespace polymarket::detail
 
     std::optional<TypedWebSocketMessage> parse_typed_message(const std::string &message)
     {
+        const auto first = message.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos || message[first] != '{')
+        {
+            if (!json::accept(message))
+                throw std::invalid_argument("WebSocket message is not valid JSON");
+            return std::nullopt;
+        }
         auto parsed = json::parse(message);
         if (!parsed.is_object())
         {

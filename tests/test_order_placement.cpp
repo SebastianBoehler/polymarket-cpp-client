@@ -91,7 +91,6 @@ namespace
 
         // The market moved to a 0.001 tick after the cached 0.01 was fetched.
         server.enqueue(R"({"minimum_tick_size":"0.001"})");
-        server.enqueue(R"({"neg_risk":false})");
         server.enqueue(accepted_order);
         const auto refreshed = client.place_limit_order(limit_order(0.965));
 
@@ -106,13 +105,85 @@ namespace
         check(targets(requests) ==
                   std::vector<std::string>{
                       "GET /tick-size?token_id=123", "GET /neg-risk?token_id=123", "POST /order",
-                      "GET /tick-size?token_id=123", "GET /neg-risk?token_id=123", "POST /order",
-                      "GET /tick-size?token_id=123"},
-              "off-grid prices must refetch metadata once and never post");
-        if (requests.size() != 7) return;
-        const auto body = nlohmann::json::parse(requests[5].body);
+                      "GET /tick-size?token_id=123", "POST /order", "GET /tick-size?token_id=123"},
+              "off-grid prices must refetch only the tick, once, and never post");
+        if (requests.size() != 6 || requests[4].method != "POST") return;
+        const auto body = nlohmann::json::parse(requests[4].body);
         check(body["order"]["makerAmount"] == "9650000",
               "refreshed order must be signed on the finer grid");
+    }
+
+    void test_unsupported_book_tick_is_not_cached()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        server.enqueue(R"({"asset_id":"123","tick_size":"0.03","bids":[],"asks":[]})");
+        const auto book = client.get_order_book("123");
+
+        CreateOrderParams params;
+        params.token_id = "123";
+        params.price = 0.51;
+        params.size = 10.0;
+        params.side = OrderSide::BUY;
+        params.neg_risk = false;
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
+        const auto resolved = client.create_order_result(params);
+        params.tick_size = "0.01";
+        const auto explicit_tick = client.create_order_result(params);
+        const auto requests = server.requests();
+
+        check(book.has_value() && resolved.ok() && explicit_tick.ok(),
+              "an unsupported book tick must not block valid orders");
+        check(targets(requests) ==
+                  std::vector<std::string>{"GET /book?token_id=123", "GET /tick-size?token_id=123"},
+              "an unsupported book tick must not be cached");
+    }
+
+    void test_orders_use_their_own_connection()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
+        server.enqueue(R"({"neg_risk":false})");
+        server.enqueue(accepted_order);
+        const auto placed = client.place_limit_order(limit_order(0.5));
+        server.enqueue(R"({"canceled":["order-1"],"not_canceled":{}})");
+        const auto cancelled = client.cancel_order_result("order-1");
+
+        const auto reads = client.get_connection_stats();
+        const auto orders = client.get_order_connection_stats();
+        const auto last_order = client.get_last_order_request_metrics();
+        check(placed.ok() && cancelled.ok(), "the order and its cancel must succeed");
+        check(reads.total_requests == 2 && orders.total_requests == 2,
+              "metadata reads and order writes must use separate connections");
+        check(last_order.method == "DELETE" && last_order.path == "/order" &&
+                  client.get_last_request_metrics().path.rfind("/neg-risk", 0) == 0,
+              "each connection must report its own last request");
+    }
+
+    void test_explicit_tick_skips_the_lookup()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        auto params = limit_order(0.5);
+        params.tick_size = "0.01";
+        params.neg_risk = false;
+        server.enqueue(accepted_order);
+        const auto cold = client.place_limit_order(params);
+
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
+        (void)client.get_tick_size("123");
+        params.tick_size = "0.001";
+        params.price = 0.965;
+        const auto finer = client.place_limit_order(params);
+        const auto requests = server.requests();
+
+        check(cold.ok(), "a caller tick with nothing cached must be posted without a lookup");
+        check(!finer && finer.error().code == SdkErrorCode::InvalidArgument,
+              "a caller tick finer than the cached minimum must be rejected");
+        check(targets(requests) ==
+                  std::vector<std::string>{"POST /order", "GET /tick-size?token_id=123"},
+              "a caller tick must not trigger a tick lookup");
     }
 
     void test_preserves_metadata_errors_while_signing()
@@ -134,10 +205,6 @@ namespace
                     (void)client.place_limit_order(params);
                     params.price = 0.965;
                     warmup_posts = 1;
-                }
-                else if (branch == MetadataBranch::ExplicitTick)
-                {
-                    params.tick_size = "0.01";
                 }
                 else
                 {
@@ -213,6 +280,9 @@ int main()
 {
     test_gtc_and_gtd_payloads();
     test_off_grid_price_refreshes_tick_once();
+    test_explicit_tick_skips_the_lookup();
+    test_orders_use_their_own_connection();
+    test_unsupported_book_tick_is_not_cached();
     test_rejects_before_any_request();
     test_reports_server_rejection();
     test_preserves_metadata_errors_while_signing();

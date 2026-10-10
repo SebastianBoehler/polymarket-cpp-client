@@ -163,6 +163,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_order_settlement PRIVATE polymarket::client)
     add_test(NAME test_order_settlement COMMAND test_order_settlement)
 
+    add_executable(test_stream_settlement tests/test_stream_settlement.cpp)
+    target_link_libraries(test_stream_settlement PRIVATE polymarket::client)
+    add_test(NAME test_stream_settlement COMMAND test_stream_settlement)
+
     add_executable(test_order_type_serialization tests/test_order_type_serialization.cpp)
     target_link_libraries(test_order_type_serialization PRIVATE polymarket::client)
     add_test(NAME test_order_type_serialization COMMAND test_order_type_serialization)

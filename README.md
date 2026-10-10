@@ -191,8 +191,13 @@ client.warm_connection();
 client.start_heartbeat(25);
 
 auto response = client.create_and_post_order(params);
-std::cout << "avg latency: " << client.get_connection_stats().avg_latency_ms << " ms\n";
+std::cout << "avg order latency: " << client.get_order_connection_stats().avg_latency_ms
+          << " ms\n";
 ```
+
+Orders and cancellations use their own connection, so they never wait behind
+book or market-data reads. `get_order_connection_stats()` reports that
+connection; `get_connection_stats()` reports reads.
 
 Order helpers round prices, sizes, and maker/taker amounts to the market's tick
 size. Leave `tick_size` empty to resolve it from the client's metadata cache.

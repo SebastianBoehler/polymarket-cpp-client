@@ -32,7 +32,6 @@ namespace clob_test
         CreateMarketOrderParams params{"123", 2.0, OrderSide::BUY, std::nullopt, "0.01"};
         params.neg_risk = true;
         const std::string book = R"({"asset_id":"123","bids":[],"asks":[{"price":"0.70","size":"1"},{"price":"0.60","size":"3"},{"price":"0.50","size":"2"}]})";
-        server.enqueue(R"({"minimum_tick_size":"0.01"})");
         server.enqueue(book);
         const auto fok = client.create_market_order_result(params, OrderType::FOK);
         params.amount = 9.0;
@@ -47,6 +46,7 @@ namespace clob_test
         server.enqueue(R"({"error":"no metadata"})", 500);
         const auto missing_neg_risk = client.create_market_order_result(params, OrderType::FOK);
         params.token_id = "456";
+        params.tick_size.clear();
         params.neg_risk = false;
         server.enqueue(R"({"error":"no tick"})", 500);
         const auto missing_tick = client.create_market_order_result(params, OrderType::FOK);
@@ -71,16 +71,15 @@ namespace clob_test
                check(!missing_tick && missing_tick.error().code == SdkErrorCode::ApiResponse &&
                          missing_tick.error().http_status == 500 && missing_tick.error().retryable,
                      "a tick size server error must keep its HTTP status") &&
-               check(requests.size() == 6, "market-order metadata request count mismatch") &&
-               check(requests[0].target == "/tick-size?token_id=123" &&
-                         requests[1].target == "/book?token_id=123",
-                     "FOK must fetch tick and full book") &&
-               check(requests[2].target == "/book?token_id=123",
-                     "FAK must reuse cached tick metadata") &&
-               check(requests[3].target == "/book?token_id=123", "missing quote path mismatch") &&
-               check(requests[4].target == "/neg-risk?token_id=123",
+               check(requests.size() == 5, "market-order metadata request count mismatch") &&
+               check(requests[0].target == "/book?token_id=123",
+                     "FOK with a caller tick must fetch only the full book") &&
+               check(requests[1].target == "/book?token_id=123",
+                     "FAK with a caller tick must fetch only the full book") &&
+               check(requests[2].target == "/book?token_id=123", "missing quote path mismatch") &&
+               check(requests[3].target == "/neg-risk?token_id=123",
                      "neg-risk lookup path mismatch") &&
-               check(requests[5].target == "/tick-size?token_id=456",
+               check(requests[4].target == "/tick-size?token_id=456",
                      "tick failure should stop before signing");
     }
 
@@ -112,11 +111,9 @@ namespace clob_test
         params.tick_size = "0.01";
         params.price = 0.50;
         params.neg_risk.reset();
-        server.enqueue(R"({"minimum_tick_size":"0.01"})");
         server.enqueue(R"({"error":"no metadata"})", 500);
         const auto missing_neg_risk = client.create_order_result(params);
         params.token_id = "malformed-neg";
-        server.enqueue(R"({"minimum_tick_size":"0.01"})");
         server.enqueue(R"({})");
         const auto malformed_neg_risk = client.create_order_result(params);
         const auto requests = server.requests();
@@ -138,16 +135,14 @@ namespace clob_test
                          malformed_neg_risk.error().code == SdkErrorCode::Parse &&
                          malformed_neg_risk.error().endpoint == "/neg-risk",
                      "neg-risk metadata failures must keep their HTTP or parse error") &&
-               check(requests.size() == 7, "limit-order metadata request count mismatch") &&
+               check(requests.size() == 5, "limit-order metadata request count mismatch") &&
                check(requests[0].target == "/tick-size?token_id=123" &&
                          requests[1].target == "/tick-size?token_id=missing-tick" &&
                          requests[2].target == "/tick-size?token_id=malformed-tick",
                      "limit orders must resolve uncached tick metadata before signing") &&
-               check(requests[3].target == "/tick-size?token_id=missing-neg" &&
-                         requests[4].target == "/neg-risk?token_id=missing-neg" &&
-                         requests[5].target == "/tick-size?token_id=malformed-neg" &&
-                         requests[6].target == "/neg-risk?token_id=malformed-neg",
-                     "limit orders must resolve neg-risk metadata after tick validation");
+               check(requests[3].target == "/neg-risk?token_id=missing-neg" &&
+                         requests[4].target == "/neg-risk?token_id=malformed-neg",
+                     "limit orders with a caller tick must resolve only neg-risk metadata");
     }
 
     bool test_metadata_cache_avoids_repeated_round_trips()

@@ -72,10 +72,10 @@ namespace polymarket
         if (auto error = validate_estimate_request(side, amount, order_type))
             return Result<MarketPriceEstimate>::failure(std::move(*error));
 
-        const auto tick_info = tick_size_result(token_id);
-        if (!tick_info) return Result<MarketPriceEstimate>::failure(tick_info.error());
         const auto book = order_book_result(token_id);
         if (!book) return Result<MarketPriceEstimate>::failure(book.error());
+        const auto tick_info = tick_size_result(token_id);
+        if (!tick_info) return Result<MarketPriceEstimate>::failure(tick_info.error());
         return polymarket::estimate_market_price(book.value(), side, amount,
                                                  tick_info.value().minimum_tick_size, order_type);
     }

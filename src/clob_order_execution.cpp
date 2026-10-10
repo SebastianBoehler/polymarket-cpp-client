@@ -1,6 +1,7 @@
 #include "polymarket/clob_client.hpp"
 #include "order_execution.hpp"
 #include "polymarket/order_signer.hpp"
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -47,23 +48,29 @@ namespace polymarket
             return scale;
         }
 
-        std::string resolve_tick_size(const Result<TickSizeInfo> &tick_info,
-                                      const std::string &requested_tick_size)
+        std::string resolve_market_tick_size(const Result<TickSizeInfo> &tick_info)
         {
             if (!tick_info)
             {
                 throw MetadataResolutionError("could not resolve market tick size",
                                               tick_info.error());
             }
-
             const auto &market_tick_size = tick_info.value().minimum_tick_size;
-            const auto minimum = detail::rounding_config_for_tick_size(market_tick_size);
-            if (requested_tick_size.empty())
-            {
-                return market_tick_size;
-            }
+            (void)detail::rounding_config_for_tick_size(market_tick_size);
+            return market_tick_size;
+        }
+
+        std::string resolve_requested_tick_size(const std::string &requested_tick_size,
+                                                const std::optional<TickSizeInfo> &market_tick)
+        {
             const auto requested = detail::rounding_config_for_tick_size(
                 requested_tick_size);
+            if (!market_tick)
+            {
+                return requested_tick_size;
+            }
+            const auto minimum =
+                detail::rounding_config_for_tick_size(market_tick->minimum_tick_size);
             const auto minimum_scale = price_scale(minimum);
             const auto requested_scale = price_scale(requested);
             if (requested.tick_units * minimum_scale <
@@ -93,7 +100,9 @@ namespace polymarket
         }
 
         const std::string tick_size =
-            resolve_tick_size(tick_size_result(params.token_id), params.tick_size);
+            params.tick_size.empty()
+                ? resolve_market_tick_size(tick_size_result(params.token_id))
+                : resolve_requested_tick_size(params.tick_size, cached_tick_size(params.token_id));
         const auto validated_price = detail::validate_order_price(
             params.price, tick_size);
         const bool is_neg_risk =
@@ -175,24 +184,25 @@ namespace polymarket
             throw std::runtime_error("Client not authenticated");
         }
 
-        const std::string tick_size =
-            resolve_tick_size(tick_size_result(params.token_id), params.tick_size);
-        double price;
-        if (params.price)
+        std::optional<Orderbook> book;
+        if (!params.price)
         {
-            price = *params.price;
-        }
-        else
-        {
-            const auto book = order_book_result(params.token_id);
-            if (!book)
+            auto fetched = order_book_result(params.token_id);
+            if (!fetched)
             {
                 throw MetadataResolutionError("could not resolve executable market price",
-                                              book.error());
+                                              fetched.error());
             }
-            price = detail::calculate_market_price(book.value(), params.side, params.amount,
-                                                   order_type, tick_size);
+            book = std::move(fetched.value());
         }
+        const std::string tick_size =
+            params.tick_size.empty()
+                ? resolve_market_tick_size(tick_size_result(params.token_id))
+                : resolve_requested_tick_size(params.tick_size, cached_tick_size(params.token_id));
+        const double price = params.price
+                                 ? *params.price
+                                 : detail::calculate_market_price(*book, params.side, params.amount,
+                                                                  order_type, tick_size);
         const auto validated_price = detail::validate_order_price(price, tick_size);
 
         const bool is_neg_risk =

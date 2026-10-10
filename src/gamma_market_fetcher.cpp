@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <ctime>
 #include <iterator>
-#include <memory>
 
 namespace polymarket
 {
@@ -49,24 +48,14 @@ namespace polymarket
         {
             return {};
         }
-        constexpr std::size_t max_workers = 8;
-        const auto worker_count = std::min(max_workers, requests.size());
-        std::vector<std::unique_ptr<HttpClient>> clients;
-        clients.reserve(worker_count);
-        for (std::size_t index = 0; index < worker_count; ++index)
-        {
-            auto client = std::make_unique<HttpClient>();
-            client->set_base_url(config_.gamma_api_url);
-            client->set_timeout_ms(config_.http_timeout_ms);
-            clients.push_back(std::move(client));
-        }
+        const auto worker_count = std::min(gamma_http_.size(), requests.size());
 
         std::vector<std::optional<MarketState>> results(requests.size());
         detail::run_bounded_tasks(requests.size(), worker_count,
             [&](std::size_t index, std::size_t worker)
             {
                 const auto &[slug, ticker] = requests[index];
-                const auto response = clients[worker]->get("/events?slug=" + slug);
+                const auto response = gamma_http_[worker].get("/events?slug=" + slug);
                 if (response.ok())
                 {
                     results[index] = parse_gamma_event(response.body, ticker);

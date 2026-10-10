@@ -8,11 +8,17 @@ the order in one call, and wait until its fills settle on-chain. They match
 
 | Method                                                                                   | Network                                      | Result                |
 | ---------------------------------------------------------------------------------------- | -------------------------------------------- | --------------------- |
-| `estimate_market_price(token_id, side, amount, order_type = FOK)`                        | tick size + book                             | `MarketPriceEstimate` |
+| `estimate_market_price(token_id, side, amount, order_type = FOK)`                        | book + tick size                             | `MarketPriceEstimate` |
 | `estimate_market_price(book, side, amount, tick_size, order_type = FOK)` (free function) | none                                         | `MarketPriceEstimate` |
 | `place_limit_order(PlaceLimitOrderParams)`                                               | metadata + `POST /order`                     | `OrderResponse`       |
 | `place_market_order(PlaceMarketOrderParams)`                                             | metadata, book unless bounded, `POST /order` | `OrderResponse`       |
 | `wait_for_order_fill_settlement(order, timeout = 30s, poll_interval = 250ms)`            | polls `/data/trades?id=`                     | `OrderSettlement`     |
+
+Book responses from `get_order_book`, `get_order_books` and these helpers also
+cache the market's tick size and neg-risk flag, so an order placed after a book
+fetch skips both metadata lookups. A caller-supplied `tick_size` is used
+without a lookup; it is checked against the market minimum only when that
+minimum is already cached, and the server rejects orders on a finer grid.
 
 `create_order`, `create_market_order`, `post_order` and the `create_and_post_*`
 methods are unchanged. Use them when you need a `SignedOrder` before posting,
@@ -118,8 +124,30 @@ if (settlement)
 - `get_trade(id)` and `get_trade_result(id)` read one trade directly. They
   return an empty value while the trade is not visible yet.
 
-For push updates instead of polling, subscribe a `UserStream` and watch
-`UserTradeEvent::status`.
+### Settle from the user stream
+
+Polling adds up to one `poll_interval` of delay and one request per fill.
+With a `UserStream` running, feed a `TradeStatusTracker` from its callbacks
+and pass it to the wait instead:
+
+```cpp
+polymarket::TradeStatusTracker tracker;
+stream.on_trade([&](const polymarket::UserTradeEvent &trade) { tracker.record(trade); });
+stream.on_stream_recovered([&] { tracker.mark_recovered(); });
+
+auto settlement = client.wait_for_order_fill_settlement(placed.value(), tracker);
+```
+
+- The wait returns as soon as the stream reports every fill CONFIRMED or
+  FAILED, with the same `OrderSettlement` as the polling form.
+- Fills are looked up through REST only after `mark_recovered()`, every
+  `reconcile_interval` (5 seconds by default) as a safety net, and once at
+  the deadline.
+- The tracker keeps the latest status of its most recent `capacity` trades
+  (10000 by default). A late earlier-stage event never replaces CONFIRMED or
+  FAILED.
+- Keep the tracker alive until the stream is stopped, because the stream's
+  callbacks hold a reference to it.
 
 ## Errors
 

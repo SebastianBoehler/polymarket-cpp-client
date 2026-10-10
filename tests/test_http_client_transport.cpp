@@ -64,6 +64,26 @@ int main()
         ok &= check(requests[2].body.empty(), "expected an empty DELETE not to reuse the prior POST body");
     }
 
+    if (curl_version_info(CURLVERSION_NOW)->features & CURL_VERSION_LIBZ)
+    {
+        ok &= check(!requests.empty() &&
+                        requests[0].headers.find("Accept-Encoding:") != std::string::npos &&
+                        requests[0].headers.find("gzip") != std::string::npos,
+                    "requests must advertise gzip so large pages arrive compressed");
+
+        // gzip of {"compressed":true} with a zero mtime.
+        static constexpr char gzip_body[] =
+            "\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\x03\xab\x56\x4a\xce\xcf\x2d\x28\x4a\x2d\x2e"
+            "\x4e\x4d\x51\xb2\x2a\x29\x2a\x4d\xad\x05\x00\xf1\xea\x39\x95\x13\x00\x00\x00";
+        server.set_response_body(std::string(gzip_body, sizeof(gzip_body) - 1));
+        server.set_response_encoding("gzip");
+        const auto compressed = client.get("/compressed");
+        server.set_response_encoding("");
+        server.set_response_body(R"({"ok":true})");
+        ok &= check(compressed.ok() && compressed.body == R"({"compressed":true})",
+                    "gzip responses must be decoded before reaching callers");
+    }
+
     const auto requests_before_redirect = server.requests().size();
     const auto redirect = client.get("/redirect", {{"POLY_API_KEY", "must-not-forward"}});
     ok &= check(redirect.status_code == 302, "authenticated redirects must fail closed");
@@ -139,8 +159,24 @@ int main()
     auto moved_client = move_result.get();
     const auto moved_response = moved_client->get("/after-move");
     ok &= check(moved_response.ok(), "moved client must retain a usable connection handle");
-    ok &= check(moved_client->get_stats().total_requests == 2,
-                "move must retain the in-flight heartbeat request statistics");
+    ok &= check(moved_client->get_stats().total_requests == 1,
+                "heartbeats must stay out of request statistics across a move");
+
+    HttpClient quiet_client(options);
+    quiet_client.set_base_url("http://127.0.0.1:" + std::to_string(server.port()));
+    const auto quiet_response = quiet_client.get("/quiet");
+    server.hold_heartbeat_response();
+    quiet_client.start_heartbeat(1);
+    ok &= check(server.wait_for_heartbeat(heartbeat_start_timeout),
+                "expected a heartbeat after the last foreground request");
+    server.release_heartbeat_response();
+    quiet_client.stop_heartbeat();
+    const auto quiet_stats = quiet_client.get_stats();
+    ok &= check(quiet_response.ok() && quiet_stats.total_requests == 1 &&
+                    quiet_stats.curl_errors == 0,
+                "heartbeats must not count as requests or errors");
+    ok &= check(quiet_client.get_last_request_metrics().path == "/quiet",
+                "heartbeats must not replace the last request metrics");
 
     http_global_cleanup();
     return ok ? 0 : 1;

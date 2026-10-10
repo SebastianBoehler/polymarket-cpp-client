@@ -141,6 +141,7 @@ namespace polymarket
         curl_easy_setopt(curl_, CURLOPT_FOLLOWLOCATION, 0L);
         curl_easy_setopt(curl_, CURLOPT_MAXREDIRS, 3L);
         curl_easy_setopt(curl_, CURLOPT_WRITEFUNCTION, write_callback);
+        curl_easy_setopt(curl_, CURLOPT_ACCEPT_ENCODING, "");
         apply_options();
 
         // HTTP/1.1 keep-alive

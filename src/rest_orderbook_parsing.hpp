@@ -5,9 +5,10 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
-#include <unordered_set>
+#include <vector>
 
 namespace polymarket::detail
 {
@@ -16,26 +17,28 @@ namespace polymarket::detail
     {
         if (!values.is_array())
             throw std::invalid_argument("orderbook levels must be an array");
-        levels.reserve(values.size());
-        std::unordered_set<double> prices;
+        const auto first = levels.size();
+        levels.reserve(first + values.size());
         for (const auto &value : values)
         {
             if (!value.is_object())
                 throw std::invalid_argument("orderbook level must be an object");
-            PriceLevel level{json_orderbook_price(value.at("price")),
-                             json_nonnegative_number(value.at("size"))};
-            if (!prices.insert(level.price).second)
-                throw std::invalid_argument(
-                    "orderbook contains a duplicate price level");
-            levels.push_back(level);
+            levels.push_back({json_orderbook_price(value.at("price")),
+                              json_nonnegative_number(value.at("size"))});
         }
+        std::vector<double> prices;
+        prices.reserve(levels.size() - first);
+        for (auto level = levels.begin() + static_cast<std::ptrdiff_t>(first);
+             level != levels.end(); ++level)
+            prices.push_back(level->price);
+        std::sort(prices.begin(), prices.end());
+        if (std::adjacent_find(prices.begin(), prices.end()) != prices.end())
+            throw std::invalid_argument("orderbook contains a duplicate price level");
     }
 
-    inline Orderbook parse_rest_orderbook_json(
-        const std::string &json_text,
-        const std::string &expected_asset_id = {})
+    inline Orderbook parse_rest_orderbook(const json &parsed,
+                                          const std::string &expected_asset_id = {})
     {
-        const auto parsed = json::parse(json_text);
         if (!parsed.is_object())
             throw std::invalid_argument("orderbook must be an object");
         if (!parsed.contains("asset_id") || !parsed["asset_id"].is_string())
@@ -54,5 +57,11 @@ namespace polymarket::detail
         append_rest_levels(book.bids, parsed["bids"]);
         append_rest_levels(book.asks, parsed["asks"]);
         return book;
+    }
+
+    inline Orderbook parse_rest_orderbook_json(const std::string &json_text,
+                                               const std::string &expected_asset_id = {})
+    {
+        return parse_rest_orderbook(json::parse(json_text), expected_asset_id);
     }
 }

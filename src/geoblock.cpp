@@ -20,6 +20,11 @@ namespace polymarket
     {
         HttpClient http(options);
         http.set_base_url(base_url);
+        return check_geoblock(http);
+    }
+
+    Result<GeoblockStatus> check_geoblock(HttpClient &http)
+    {
         const auto response = http.get(geoblock_path);
         if (!response.ok())
             return Result<GeoblockStatus>::failure(make_sdk_error(response, geoblock_path));

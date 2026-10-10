@@ -78,7 +78,8 @@ namespace polymarket
         return total_size;
     }
 
-    HttpResponse HttpClient::perform(const std::string &method, const std::string &path, const std::string &url)
+    HttpResponse HttpClient::perform(const std::string &method, const std::string &path,
+                                     const std::string &url, bool record_stats)
     {
         HttpResponse response{0, "", "", 0.0, {}};
         const auto start = std::chrono::high_resolution_clock::now();
@@ -97,6 +98,7 @@ namespace polymarket
         curl_easy_getinfo(curl_, CURLINFO_NUM_CONNECTS, &num_connects);
         curl_easy_getinfo(curl_, CURLINFO_RESPONSE_CODE, &response.status_code);
         response.error = result == CURLE_OK ? "" : curl_easy_strerror(result);
+        if (!record_stats) return response;
 
         std::lock_guard<std::mutex> lock(stats_mutex_);
         ++total_requests_;

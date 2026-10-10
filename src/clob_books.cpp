@@ -1,5 +1,6 @@
 #include "polymarket/clob_client.hpp"
 #include "clob_client_internal.hpp"
+#include "order_execution.hpp"
 #include "rest_orderbook_parsing.hpp"
 
 #include <nlohmann/json.hpp>
@@ -11,6 +12,32 @@ using json = nlohmann::json;
 namespace polymarket
 {
     using namespace detail;
+
+    namespace
+    {
+        std::optional<std::string> book_tick_size(const json &book)
+        {
+            const auto found = book.find("tick_size");
+            if (found == book.end() || found->is_null()) return std::nullopt;
+            try
+            {
+                auto tick_size = json_scalar_string(*found);
+                (void)rounding_config_for_tick_size(tick_size);
+                return tick_size;
+            }
+            catch (const std::exception &)
+            {
+                return std::nullopt;
+            }
+        }
+
+        std::optional<bool> book_neg_risk(const json &book)
+        {
+            const auto found = book.find("neg_risk");
+            if (found == book.end() || !found->is_boolean()) return std::nullopt;
+            return found->get<bool>();
+        }
+    } // namespace
 
     std::optional<Orderbook> ClobClient::get_order_book(const std::string &token_id)
     {
@@ -31,8 +58,10 @@ namespace polymarket
 
         try
         {
-            return Result<Orderbook>::success(
-                detail::parse_rest_orderbook_json(response.body, token_id));
+            const auto parsed = json::parse(response.body);
+            auto book = detail::parse_rest_orderbook(parsed, token_id);
+            remember_market_metadata(token_id, book_tick_size(parsed), book_neg_risk(parsed));
+            return Result<Orderbook>::success(std::move(book));
         }
         catch (const std::exception &ex)
         {
@@ -61,14 +90,25 @@ namespace polymarket
             auto j = json::parse(response.body);
             if (!j.is_array() || j.size() != remaining.size())
                 return {};
+            struct BookMetadata
+            {
+                std::string asset_id;
+                std::optional<std::string> tick_size;
+                std::optional<bool> neg_risk;
+            };
+            std::vector<BookMetadata> metadata;
+            metadata.reserve(j.size());
             for (const auto &item : j)
             {
                 auto book = parse_orderbook(item.dump());
                 if (!book || remaining.erase(book->asset_id) != 1)
                     return {};
+                metadata.push_back({book->asset_id, book_tick_size(item), book_neg_risk(item)});
                 result.emplace(book->asset_id, std::move(*book));
             }
             if (!remaining.empty()) return {};
+            for (const auto &entry : metadata)
+                remember_market_metadata(entry.asset_id, entry.tick_size, entry.neg_risk);
         }
         catch (...)
         {

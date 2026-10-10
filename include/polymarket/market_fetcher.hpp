@@ -52,6 +52,7 @@ namespace polymarket
     private:
         Config config_;
         HttpClient http_;
+        std::vector<HttpClient> gamma_http_;
 
         // Timestamp generation for crypto markets
         std::vector<uint64_t> get_15m_timestamps(int count);

@@ -3,6 +3,7 @@
 #include "network_proxy_fixture.hpp"
 #include "websocket_test_server.hpp"
 
+#include "polymarket/clob_client.hpp"
 #include "polymarket/geoblock.hpp"
 #include "polymarket/http_client.hpp"
 #include "polymarket/network.hpp"
@@ -246,6 +247,30 @@ namespace
                "disconnect waited for the stalled proxy connect timeout");
     }
 
+    void orders_follow_the_client_route()
+    {
+        LocalHttpServer server;
+        LocalProxy proxy;
+        polymarket::HttpClientOptions options;
+        options.proxy_url = proxy.http_url();
+        const polymarket::ApiCredentials credentials{"test-key", "c2VjcmV0", "test-passphrase"};
+        polymarket::ClobClient client(
+            "http://127.0.0.1:" + std::to_string(server.port()), 137,
+            "0x0000000000000000000000000000000000000000000000000000000000000001", credentials,
+            polymarket::SignatureType::EOA, "", options);
+
+        server.set_response_body(R"({"canceled":["order-1"],"not_canceled":{}})");
+        const auto routed = client.cancel_order_result("order-1");
+        expect(routed.ok() && proxy.targets().size() == 1,
+               "order writes bypassed the configured proxy");
+
+        client.set_proxy("http://127.0.0.1:1");
+        const auto requests_before = server.requests().size();
+        const auto failed = client.cancel_order_result("order-1");
+        expect(!failed.ok() && server.requests().size() == requests_before,
+               "order writes must fail closed after the proxy changes");
+    }
+
     void geoblock_check_uses_route()
     {
         LocalHttpServer server;
@@ -274,6 +299,20 @@ namespace
         const auto malformed = polymarket::check_geoblock(options, base_url);
         expect(!malformed.ok() && malformed.error().code == polymarket::SdkErrorCode::Parse,
                "geoblock response without a verdict must fail closed");
+
+        polymarket::HttpClient http(options);
+        http.set_base_url(base_url);
+        server.set_response_body(R"({"blocked":false,"country":"DE"})");
+        const auto proxy_targets_before = proxy.targets().size();
+        const auto first = polymarket::check_geoblock(http);
+        const auto second = polymarket::check_geoblock(http);
+        expect(first.ok() && second.ok() && !second.value().blocked &&
+                   second.value().country == "DE",
+               "geoblock checks on a shared client were not parsed");
+        expect(http.get_stats().total_requests == 2,
+               "geoblock checks must run on the caller's client");
+        expect(proxy.targets().size() > proxy_targets_before,
+               "geoblock checks on a shared client bypassed its proxy");
     }
 } // namespace
 
@@ -286,5 +325,6 @@ int main()
     interface_binding_routes_websocket();
     disconnect_interrupts_stalled_proxy();
     geoblock_check_uses_route();
+    orders_follow_the_client_route();
     return check_support::finish("test_network_routing");
 }
