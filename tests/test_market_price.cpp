@@ -172,10 +172,11 @@ namespace
     {
         clob_test::LocalServer server;
         ClobClient client(server.url(), 137);
-        server.enqueue(R"({"minimum_tick_size":"0.1"})");
         server.enqueue(
             R"({"asset_id":"123","bids":[],"asks":[{"price":"0.7","size":"1"},{"price":"0.6","size":"3"},{"price":"0.5","size":"2"}]})");
+        server.enqueue(R"({"minimum_tick_size":"0.1"})");
         const auto estimate = client.estimate_market_price("123", OrderSide::BUY, 2.0);
+        server.enqueue(R"({"asset_id":"456","bids":[],"asks":[{"price":"0.5","size":"2"}]})");
         server.enqueue(R"({"error":"no tick"})", 500);
         const auto missing_tick = client.estimate_market_price("456", OrderSide::BUY, 2.0);
         const auto rejected =
@@ -194,21 +195,22 @@ namespace
               "client must reject limit order types");
         check(!bad_side && bad_side.error().code == SdkErrorCode::InvalidArgument,
               "client must reject an unknown side");
-        check(requests.size() == 3 && requests[0].target == "/tick-size?token_id=123" &&
-                  requests[1].target == "/book?token_id=123" &&
-                  requests[2].target == "/tick-size?token_id=456",
-              "client must fetch tick then book, stop on tick failure, and validate before I/O");
+        check(requests.size() == 4 && requests[0].target == "/book?token_id=123" &&
+                  requests[1].target == "/tick-size?token_id=123" &&
+                  requests[2].target == "/book?token_id=456" &&
+                  requests[3].target == "/tick-size?token_id=456",
+              "client must fetch book then tick, stop on tick failure, and validate before I/O");
     }
 
     void test_client_preserves_book_errors()
     {
         clob_test::LocalServer server;
         ClobClient client(server.url(), 137);
-        server.enqueue(R"({"minimum_tick_size":"0.1"})");
         server.enqueue(R"({"error":"No orderbook exists for the requested token id"})", 404);
         const auto missing = client.estimate_market_price("123", OrderSide::BUY, 2.0);
         server.enqueue(R"({"asset_id":"123","bids":[)");
         const auto malformed = client.estimate_market_price("123", OrderSide::BUY, 2.0);
+        server.enqueue(R"({"asset_id":"456","bids":[],"asks":[{"price":"0.5","size":"2"}]})");
         server.enqueue(R"({"minimum_tick_size":null})");
         const auto no_tick = client.estimate_market_price("456", OrderSide::BUY, 2.0);
 

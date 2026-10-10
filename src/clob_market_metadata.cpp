@@ -192,10 +192,38 @@ namespace polymarket
         neg_risk_cache_.erase(token_id);
     }
 
+    std::optional<TickSizeInfo> ClobClient::cached_tick_size(const std::string &token_id) const
+    {
+        std::lock_guard<std::mutex> lock(metadata_cache_mutex_);
+        const auto cached = tick_size_cache_.find(token_id);
+        if (cached == tick_size_cache_.end() ||
+            std::chrono::steady_clock::now() >= cached->second.expires_at)
+            return std::nullopt;
+        return cached->second.value;
+    }
+
     void ClobClient::evict_tick_size(const std::string &token_id)
     {
         std::lock_guard<std::mutex> lock(metadata_cache_mutex_);
         tick_size_cache_.erase(token_id);
+    }
+
+    void ClobClient::remember_market_metadata(const std::string &token_id,
+                                              const std::optional<std::string> &tick_size,
+                                              std::optional<bool> neg_risk)
+    {
+        if (!tick_size && !neg_risk) return;
+        std::lock_guard<std::mutex> lock(metadata_cache_mutex_);
+        if (tick_size)
+            tick_size_cache_.insert_or_assign(
+                token_id, MetadataCacheEntry<TickSizeInfo>{TickSizeInfo{*tick_size},
+                                                           std::chrono::steady_clock::now() +
+                                                               METADATA_CACHE_TTL});
+        if (neg_risk)
+            neg_risk_cache_.insert_or_assign(
+                token_id,
+                MetadataCacheEntry<NegRiskInfo>{NegRiskInfo{*neg_risk},
+                                                std::chrono::steady_clock::time_point::max()});
     }
 
     std::vector<ClobClient::PriceHistoryPoint> ClobClient::get_prices_history(

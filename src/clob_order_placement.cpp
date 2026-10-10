@@ -106,6 +106,14 @@ namespace polymarket
                                    *params.worst_price <= 0.0 || *params.worst_price >= 1.0))
             return invalid_order("worst price must be between 0 and 1");
 
+        std::optional<Orderbook> book;
+        if (!params.worst_price)
+        {
+            auto fetched = order_book_result(params.token_id);
+            if (!fetched) return Result<OrderResponse>::failure(fetched.error());
+            book = std::move(fetched.value());
+        }
+
         const bool uses_market_tick = params.tick_size.empty();
         std::string tick_size = params.tick_size;
         if (uses_market_tick)
@@ -132,13 +140,10 @@ namespace polymarket
         }
         else
         {
-            const auto book = order_book_result(params.token_id);
-            if (!book) return Result<OrderResponse>::failure(book.error());
-            auto estimate = polymarket::estimate_market_price(
-                book.value(), params.side, params.amount, tick_size, params.order_type);
+            auto estimate = polymarket::estimate_market_price(*book, params.side, params.amount,
+                                                              tick_size, params.order_type);
             // Book levels on a finer grid than the cached tick mean the tick changed.
-            const auto &levels =
-                params.side == OrderSide::BUY ? book.value().asks : book.value().bids;
+            const auto &levels = params.side == OrderSide::BUY ? book->asks : book->bids;
             if (!estimate && estimate.error().code == SdkErrorCode::InvalidArgument &&
                 uses_market_tick && !levels_on_tick_grid(levels, tick_size))
             {
@@ -146,8 +151,8 @@ namespace polymarket
                 const auto refreshed = tick_size_result(params.token_id);
                 if (!refreshed) return Result<OrderResponse>::failure(refreshed.error());
                 tick_size = refreshed.value().minimum_tick_size;
-                estimate = polymarket::estimate_market_price(
-                    book.value(), params.side, params.amount, tick_size, params.order_type);
+                estimate = polymarket::estimate_market_price(*book, params.side, params.amount,
+                                                             tick_size, params.order_type);
             }
             if (!estimate) return Result<OrderResponse>::failure(estimate.error());
             order.price = estimate.value().price;

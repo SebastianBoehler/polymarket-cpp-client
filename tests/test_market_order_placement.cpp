@@ -45,8 +45,8 @@ namespace
     {
         clob_test::LocalServer server;
         auto client = clob_test::authenticated_client(server.url());
-        server.enqueue(R"({"minimum_tick_size":"0.01"})");
         server.enqueue(ask_book);
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
         server.enqueue(R"({"neg_risk":false})");
         server.enqueue(accepted_order);
         const auto placed = client.place_market_order(market_order(OrderSide::BUY, 2.0));
@@ -61,10 +61,10 @@ namespace
         check(!shallow && shallow.error().code == SdkErrorCode::InsufficientLiquidity,
               "a FOK the book cannot fill must fail before signing");
         check(targets(requests) ==
-                  std::vector<std::string>{"GET /tick-size?token_id=123", "GET /book?token_id=123",
+                  std::vector<std::string>{"GET /book?token_id=123", "GET /tick-size?token_id=123",
                                            "GET /neg-risk?token_id=123", "POST /order",
                                            "GET /book?token_id=123"},
-              "unbounded orders must fetch tick and book, and never post a shallow FOK");
+              "unbounded orders must fetch book and tick, and never post a shallow FOK");
         if (requests.size() != 5) return;
         const auto body = order_body(requests[3]);
         // Signed at the 0.60 level: the same ratio create_market_order produces.
@@ -122,8 +122,8 @@ namespace
         const auto refreshed_bound = client.place_market_order(bounded);
 
         // The book already rests on a 0.0001 grid the fetched 0.01 tick cannot represent.
-        server.enqueue(R"({"minimum_tick_size":"0.01"})");
         server.enqueue(R"({"asset_id":"456","bids":[],"asks":[{"price":"0.9655","size":"10"}]})");
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
         server.enqueue(R"({"minimum_tick_size":"0.0001"})");
         auto unbounded = market_order(OrderSide::BUY, 1.0);
         unbounded.token_id = "456";
@@ -137,7 +137,7 @@ namespace
         check(targets(requests) ==
                   std::vector<std::string>{"GET /tick-size?token_id=123",
                                            "GET /tick-size?token_id=123", "POST /order",
-                                           "GET /tick-size?token_id=456", "GET /book?token_id=456",
+                                           "GET /book?token_id=456", "GET /tick-size?token_id=456",
                                            "GET /tick-size?token_id=456", "POST /order"},
               "a stale tick must be refetched once before signing");
     }
@@ -146,8 +146,8 @@ namespace
     {
         clob_test::LocalServer server;
         auto client = clob_test::authenticated_client(server.url());
-        server.enqueue(R"({"minimum_tick_size":"0.01"})");
         server.enqueue(ask_book);
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
         server.enqueue(R"({"neg_risk":false})");
         server.enqueue(accepted_order);
         const auto first = client.place_market_order(market_order(OrderSide::BUY, 2.0));
@@ -164,24 +164,52 @@ namespace
         check(!too_small && too_small.error().code == SdkErrorCode::InvalidArgument,
               "an amount below one price unit must be rejected");
         check(targets(requests) ==
-                  std::vector<std::string>{"GET /tick-size?token_id=123", "GET /book?token_id=123",
+                  std::vector<std::string>{"GET /book?token_id=123", "GET /tick-size?token_id=123",
                                            "GET /neg-risk?token_id=123", "POST /order",
                                            "GET /book?token_id=123", "GET /book?token_id=123",
                                            "POST /order"},
               "an amount error must not refetch the tick or neg-risk");
     }
 
+    void test_book_metadata_seeds_the_caches()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        server.enqueue(
+            R"({"asset_id":"123","tick_size":"0.01","neg_risk":false,"bids":[],"asks":[{"price":"0.50","size":"10"}]})");
+        server.enqueue(accepted_order);
+        const auto market = client.place_market_order(market_order(OrderSide::BUY, 2.0));
+
+        server.enqueue(
+            R"([{"asset_id":"456","tick_size":"0.001","neg_risk":true,"bids":[],"asks":[]}])");
+        const auto books = client.get_order_books({"456"});
+        PlaceLimitOrderParams limit;
+        limit.token_id = "456";
+        limit.price = 0.965;
+        limit.size = 10.0;
+        limit.side = OrderSide::BUY;
+        server.enqueue(accepted_order);
+        const auto placed_limit = client.place_limit_order(limit);
+        const auto requests = server.requests();
+
+        check(market.ok() && books.size() == 1 && placed_limit.ok(),
+              "orders priced from seeded metadata must be posted");
+        check(targets(requests) == std::vector<std::string>{"GET /book?token_id=123", "POST /order",
+                                                            "POST /books", "POST /order"},
+              "book replies must seed tick and neg-risk so orders skip both lookups");
+    }
+
     void test_preserves_metadata_and_book_errors()
     {
         clob_test::LocalServer server;
         auto client = clob_test::authenticated_client(server.url());
-        server.enqueue(R"({"minimum_tick_size":"0.01"})");
         server.enqueue(R"({"error":"No orderbook exists for the requested token id"})", 404);
         const auto missing_book = client.place_market_order(market_order(OrderSide::BUY, 2.0));
         server.enqueue("not json");
         const auto malformed_book = client.place_market_order(market_order(OrderSide::BUY, 2.0));
         auto other = market_order(OrderSide::BUY, 2.0);
         other.token_id = "456";
+        server.enqueue(R"({"asset_id":"456","bids":[],"asks":[{"price":"0.5","size":"2"}]})");
         server.enqueue("not json");
         const auto malformed_tick = client.place_market_order(other);
 
@@ -218,10 +246,6 @@ namespace
                     (void)client.place_market_order(params);
                     params.worst_price = 0.965;
                     warmup_posts = 1;
-                }
-                else if (branch == MetadataBranch::ExplicitTick)
-                {
-                    params.tick_size = "0.01";
                 }
                 else
                 {
@@ -273,6 +297,7 @@ int main()
     test_worst_price_skips_the_book();
     test_stale_tick_refreshes_once();
     test_amount_errors_keep_cached_metadata();
+    test_book_metadata_seeds_the_caches();
     test_preserves_metadata_and_book_errors();
     test_preserves_metadata_errors_while_signing();
     test_rejects_before_any_request();

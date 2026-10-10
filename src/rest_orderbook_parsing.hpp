@@ -31,11 +31,9 @@ namespace polymarket::detail
         }
     }
 
-    inline Orderbook parse_rest_orderbook_json(
-        const std::string &json_text,
-        const std::string &expected_asset_id = {})
+    inline Orderbook parse_rest_orderbook(const json &parsed,
+                                          const std::string &expected_asset_id = {})
     {
-        const auto parsed = json::parse(json_text);
         if (!parsed.is_object())
             throw std::invalid_argument("orderbook must be an object");
         if (!parsed.contains("asset_id") || !parsed["asset_id"].is_string())
@@ -54,5 +52,11 @@ namespace polymarket::detail
         append_rest_levels(book.bids, parsed["bids"]);
         append_rest_levels(book.asks, parsed["asks"]);
         return book;
+    }
+
+    inline Orderbook parse_rest_orderbook_json(const std::string &json_text,
+                                               const std::string &expected_asset_id = {})
+    {
+        return parse_rest_orderbook(json::parse(json_text), expected_asset_id);
     }
 }

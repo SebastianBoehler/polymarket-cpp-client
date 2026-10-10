@@ -12,6 +12,31 @@ namespace polymarket
 {
     using namespace detail;
 
+    namespace
+    {
+        std::optional<std::string> book_tick_size(const json &book)
+        {
+            const auto found = book.find("tick_size");
+            if (found == book.end() || found->is_null()) return std::nullopt;
+            try
+            {
+                (void)json_orderbook_price(*found);
+                return json_scalar_string(*found);
+            }
+            catch (const std::exception &)
+            {
+                return std::nullopt;
+            }
+        }
+
+        std::optional<bool> book_neg_risk(const json &book)
+        {
+            const auto found = book.find("neg_risk");
+            if (found == book.end() || !found->is_boolean()) return std::nullopt;
+            return found->get<bool>();
+        }
+    } // namespace
+
     std::optional<Orderbook> ClobClient::get_order_book(const std::string &token_id)
     {
         auto result = order_book_result(token_id);
@@ -31,8 +56,10 @@ namespace polymarket
 
         try
         {
-            return Result<Orderbook>::success(
-                detail::parse_rest_orderbook_json(response.body, token_id));
+            const auto parsed = json::parse(response.body);
+            auto book = detail::parse_rest_orderbook(parsed, token_id);
+            remember_market_metadata(token_id, book_tick_size(parsed), book_neg_risk(parsed));
+            return Result<Orderbook>::success(std::move(book));
         }
         catch (const std::exception &ex)
         {
@@ -66,6 +93,7 @@ namespace polymarket
                 auto book = parse_orderbook(item.dump());
                 if (!book || remaining.erase(book->asset_id) != 1)
                     return {};
+                remember_market_metadata(book->asset_id, book_tick_size(item), book_neg_risk(item));
                 result.emplace(book->asset_id, std::move(*book));
             }
             if (!remaining.empty()) return {};

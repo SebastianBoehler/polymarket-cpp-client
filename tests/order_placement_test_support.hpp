@@ -13,7 +13,6 @@ namespace order_placement_test
     enum class MetadataBranch : std::uint8_t
     {
         TickRefresh,
-        ExplicitTick,
         NegRisk
     };
 
@@ -24,8 +23,8 @@ namespace order_placement_test
         const char *name;
     };
 
-    inline const std::vector<MetadataBranch> metadata_branches = {
-        MetadataBranch::TickRefresh, MetadataBranch::ExplicitTick, MetadataBranch::NegRisk};
+    inline const std::vector<MetadataBranch> metadata_branches = {MetadataBranch::TickRefresh,
+                                                                  MetadataBranch::NegRisk};
     inline const std::vector<MetadataFailure> metadata_failures = {
         {404, R"({"error":"market not found"})", "404"}, {200, "not json", "malformed 200"}};
 
@@ -35,8 +34,6 @@ namespace order_placement_test
         {
         case MetadataBranch::TickRefresh:
             return "tick refresh";
-        case MetadataBranch::ExplicitTick:
-            return "explicit tick";
         case MetadataBranch::NegRisk:
             return "neg-risk";
         }

@@ -113,6 +113,31 @@ namespace
               "refreshed order must be signed on the finer grid");
     }
 
+    void test_explicit_tick_skips_the_lookup()
+    {
+        clob_test::LocalServer server;
+        auto client = clob_test::authenticated_client(server.url());
+        auto params = limit_order(0.5);
+        params.tick_size = "0.01";
+        params.neg_risk = false;
+        server.enqueue(accepted_order);
+        const auto cold = client.place_limit_order(params);
+
+        server.enqueue(R"({"minimum_tick_size":"0.01"})");
+        (void)client.get_tick_size("123");
+        params.tick_size = "0.001";
+        params.price = 0.965;
+        const auto finer = client.place_limit_order(params);
+        const auto requests = server.requests();
+
+        check(cold.ok(), "a caller tick with nothing cached must be posted without a lookup");
+        check(!finer && finer.error().code == SdkErrorCode::InvalidArgument,
+              "a caller tick finer than the cached minimum must be rejected");
+        check(targets(requests) ==
+                  std::vector<std::string>{"POST /order", "GET /tick-size?token_id=123"},
+              "a caller tick must not trigger a tick lookup");
+    }
+
     void test_preserves_metadata_errors_while_signing()
     {
         using namespace order_placement_test;
@@ -132,10 +157,6 @@ namespace
                     (void)client.place_limit_order(params);
                     params.price = 0.965;
                     warmup_posts = 1;
-                }
-                else if (branch == MetadataBranch::ExplicitTick)
-                {
-                    params.tick_size = "0.01";
                 }
                 else
                 {
@@ -211,6 +232,7 @@ int main()
 {
     test_gtc_and_gtd_payloads();
     test_off_grid_price_refreshes_tick_once();
+    test_explicit_tick_skips_the_lookup();
     test_rejects_before_any_request();
     test_reports_server_rejection();
     test_preserves_metadata_errors_while_signing();
