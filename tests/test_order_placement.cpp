@@ -1,5 +1,6 @@
 #include "../src/clob_client_test_fixture.hpp"
 #include "check_support.hpp"
+#include "order_placement_test_support.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -114,6 +115,46 @@ namespace
               "refreshed order must be signed on the finer grid");
     }
 
+    void test_preserves_metadata_errors_while_signing()
+    {
+        using namespace order_placement_test;
+        for (const auto branch : metadata_branches)
+            for (const auto &failure : metadata_failures)
+            {
+                clob_test::LocalServer server;
+                auto client = clob_test::authenticated_client(server.url());
+                auto params = limit_order(0.5);
+                params.neg_risk = false;
+                int warmup_posts = 0;
+                if (branch == MetadataBranch::TickRefresh)
+                {
+                    // Caches 0.01, so 0.965 forces a refetch inside order creation.
+                    server.enqueue(R"({"minimum_tick_size":"0.01"})");
+                    server.enqueue(accepted_order);
+                    (void)client.place_limit_order(params);
+                    params.price = 0.965;
+                    warmup_posts = 1;
+                }
+                else if (branch == MetadataBranch::ExplicitTick)
+                {
+                    params.tick_size = "0.01";
+                }
+                else
+                {
+                    server.enqueue(R"({"minimum_tick_size":"0.01"})");
+                    params.neg_risk.reset();
+                }
+                server.enqueue(failure.body, failure.status);
+                const auto placed = client.place_limit_order(params);
+
+                check_preserved_error(placed, branch, failure, "place_limit_order");
+                int posts = 0;
+                for (const auto &request : server.requests())
+                    posts += request.target == "/order";
+                check(posts == warmup_posts, "a failed metadata lookup must not post the order");
+            }
+    }
+
     void test_rejects_before_any_request()
     {
         clob_test::LocalServer server;
@@ -174,5 +215,6 @@ int main()
     test_off_grid_price_refreshes_tick_once();
     test_rejects_before_any_request();
     test_reports_server_rejection();
+    test_preserves_metadata_errors_while_signing();
     return check_support::finish("test_order_placement");
 }

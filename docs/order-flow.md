@@ -127,9 +127,9 @@ For push updates instead of polling, subscribe a `UserStream` and watch
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `InvalidArgument`       | Bad input, such as a price outside (0, 1), a resting type for a market order, an early GTD expiration, or a price off the tick grid |
 | `InsufficientLiquidity` | FOK the book cannot fill, or an empty book side                                                                                     |
-| `HttpTransport`         | Tick size or book request did not complete (retryable)                                                                              |
-| `Parse`                 | Tick size or book response was malformed                                                                                            |
-| `ApiResponse`           | The server rejected the order (the message is its `errorMsg`) or a tick size or book lookup (retryable for 5xx)                     |
+| `HttpTransport`         | Tick size, neg-risk, or book request did not complete (retryable)                                                                   |
+| `Parse`                 | Tick size, neg-risk, or book response was malformed                                                                                 |
+| `ApiResponse`           | The server rejected the order (the message is its `errorMsg`) or a metadata or book lookup (retryable for 5xx)                      |
 | `Timeout`               | Fills still settling at the deadline (retryable; the order is unaffected)                                                           |
 | `RateLimit`             | A trade lookup got HTTP 429 and its Retry-After does not fit in the remaining wait (retryable)                                      |
 | `TransactionFailed`     | Every fill of the order failed                                                                                                      |
