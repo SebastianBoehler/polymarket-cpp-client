@@ -103,6 +103,7 @@ jobs:
             -DCMAKE_CXX_COMPILER="$llvm_prefix/bin/clang++" \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DCMAKE_OSX_SYSROOT="$(xcrun --show-sdk-path)" \
             -DBUILD_SHARED_LIBS=ON \
             -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=OFF \
             -DPOLYMARKET_CLIENT_BUILD_TESTS=OFF \
