@@ -69,22 +69,28 @@ namespace
                              websocket_test::LocalWebSocketServer &server)
     {
         manager.subscribe(test_market());
-        return manager.connect() && server.send_to_clients(arb_stream_message);
+        // The client can finish its handshake before the server reports Open.
+        return manager.connect() && server.wait_for_connections(1, 1s) &&
+               server.send_to_clients(arb_stream_message);
     }
 
     bool update_owner_reset()
     {
         websocket_test::LocalWebSocketServer server;
         auto owner = std::make_shared<Owner>();
+        const std::weak_ptr<Owner> weak_owner = owner;
         auto counts = std::make_shared<Counts>();
         owner->manager = std::make_unique<OrderbookManager>(local_config(server));
         auto *manager = owner->manager.get();
         manager->on_orderbook_update(
-            [owner, counts](const std::string &, const Orderbook &)
+            [weak_owner, counts](const std::string &, const Orderbook &)
             {
                 counts->updates++;
-                owner->manager.reset();
-                counts->resets++;
+                if (auto callback_owner = weak_owner.lock())
+                {
+                    callback_owner->manager.reset();
+                    counts->resets++;
+                }
             });
         manager->on_arb_opportunity(
             [counts](const LiveMarketState &, double) { counts->legacy++; });
@@ -113,40 +119,49 @@ namespace
     {
         websocket_test::LocalWebSocketServer server;
         auto owner = std::make_shared<Owner>();
+        const std::weak_ptr<Owner> weak_owner = owner;
         auto counts = std::make_shared<Counts>();
         owner->manager = std::make_unique<OrderbookManager>(local_config(server));
         auto *manager = owner->manager.get();
         manager->on_orderbook_update(
             [counts](const std::string &, const Orderbook &) { counts->updates++; });
         manager->on_arb_opportunity(
-            [owner, counts, reset_at](const LiveMarketState &, double)
+            [weak_owner, counts, reset_at](const LiveMarketState &, double)
             {
                 counts->legacy++;
                 if (reset_at == ArbReset::Legacy)
                 {
-                    owner->manager.reset();
-                    counts->resets++;
+                    if (auto callback_owner = weak_owner.lock())
+                    {
+                        callback_owner->manager.reset();
+                        counts->resets++;
+                    }
                 }
             });
         manager->on_arb_opportunity_snapshot(
-            [owner, counts, reset_at](const MarketState &, double)
+            [weak_owner, counts, reset_at](const MarketState &, double)
             {
                 counts->snapshots++;
                 if (reset_at == ArbReset::Snapshot)
                 {
-                    owner->manager.reset();
-                    counts->resets++;
+                    if (auto callback_owner = weak_owner.lock())
+                    {
+                        callback_owner->manager.reset();
+                        counts->resets++;
+                    }
                 }
             });
         manager->on_arb_opportunity_with_permit(
-            [owner, counts, reset_at](const MarketState &, double,
-                                      StreamGenerationPermit)
+            [weak_owner, counts, reset_at](const MarketState &, double, StreamGenerationPermit)
             {
                 counts->permits++;
                 if (reset_at == ArbReset::Permit)
                 {
-                    owner->manager.reset();
-                    counts->resets++;
+                    if (auto callback_owner = weak_owner.lock())
+                    {
+                        callback_owner->manager.reset();
+                        counts->resets++;
+                    }
                 }
             });
 
@@ -206,7 +221,8 @@ namespace
                 completed.set_value();
             });
         manager.subscribe(test_market());
-        if (!manager.connect() || !server.send_to_clients(
+        if (!manager.connect() || !server.wait_for_connections(1, 1s) ||
+            !server.send_to_clients(
                 R"({"event_type":"book","asset_id":"yes","bids":[],"asks":[{"price":"0.45","size":"100"}]})"))
             return false;
         auto entered_future = entered.get_future();
