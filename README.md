@@ -36,6 +36,12 @@ Part of a collection of C++20 clients for prediction markets:
 
 Explore the other clients for market data, order signing, and trading on each platform.
 
+For market collection, strategy hypotheses, and paper projections, see
+[polymarket-research-lab](https://github.com/SebastianBoehler/polymarket-research-lab).
+The lab uses this SDK and keeps experimental research separate from the reusable
+client. Its execution experiments have their own compatibility and validation
+requirements.
+
 ## Quick start
 
 ```cpp
