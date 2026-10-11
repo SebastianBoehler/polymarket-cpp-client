@@ -9,7 +9,7 @@ if(POLYMARKET_CLIENT_BUILD_FUZZERS)
         -fno-omit-frame-pointer)
     target_compile_options(polymarket_client PRIVATE
         -fsanitize=fuzzer-no-link ${POLYMARKET_FUZZ_SANITIZERS})
-    target_link_options(polymarket_client INTERFACE
+    target_link_options(polymarket_client PUBLIC
         $<BUILD_INTERFACE:-fsanitize=address,undefined>)
     enable_testing()
 elseif(NOT POLYMARKET_CLIENT_BUILD_TESTS)

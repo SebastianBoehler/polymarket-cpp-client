@@ -82,3 +82,34 @@ jobs:
           name: ${{ env.FUZZ_TARGET }}-failures
           path: fuzz-run/artifacts/
           if-no-files-found: ignore
+
+  shared-library:
+    name: macos-15 shared library with fuzzers
+    runs-on: macos-15
+    env:
+      UBSAN_OPTIONS: print_stacktrace=1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure
+        run: |
+          llvm_prefix="$(brew --prefix llvm@18)"
+          cmake -S . -B build \
+            -DCMAKE_C_COMPILER="$llvm_prefix/bin/clang" \
+            -DCMAKE_CXX_COMPILER="$llvm_prefix/bin/clang++" \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DBUILD_SHARED_LIBS=ON \
+            -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=OFF \
+            -DPOLYMARKET_CLIENT_BUILD_TESTS=OFF \
+            -DPOLYMARKET_CLIENT_BUILD_FUZZERS=ON
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Replay samples
+        run: ctest --test-dir build --output-on-failure -L fuzz
