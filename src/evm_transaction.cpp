@@ -41,12 +41,15 @@ namespace polymarket
             if (to.size() != 20)
                 throw std::invalid_argument("transaction to must be a 20-byte address");
 
-            return {encode_uint_field(tx.nonce, "nonce"),
-                    encode_uint_field(tx.gas_price, "gas_price"),
-                    encode_uint_field(tx.gas_limit, "gas_limit"),
-                    detail::rlp_encode_bytes(to),
-                    encode_uint_field(tx.value, "value"),
-                    detail::rlp_encode_bytes(parse_hex_field(tx.data, "data"))};
+            std::vector<std::vector<uint8_t>> fields;
+            fields.reserve(9);
+            fields.push_back(encode_uint_field(tx.nonce, "nonce"));
+            fields.push_back(encode_uint_field(tx.gas_price, "gas_price"));
+            fields.push_back(encode_uint_field(tx.gas_limit, "gas_limit"));
+            fields.push_back(detail::rlp_encode_bytes(to));
+            fields.push_back(encode_uint_field(tx.value, "value"));
+            fields.push_back(detail::rlp_encode_bytes(parse_hex_field(tx.data, "data")));
+            return fields;
         }
     } // namespace
 

@@ -78,3 +78,39 @@ jobs:
         run: |
           ./build/rest_example
           POLYMARKET_RUN_LIVE_SMOKE=1 ctest --test-dir build --output-on-failure --build-config ${{ matrix.build_type }} -L live
+
+  sanitizers:
+    name: ubuntu-22.04 AddressSanitizer + UBSan
+    runs-on: ubuntu-22.04
+    env:
+      SANITIZER_FLAGS: -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
+      ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1
+      UBSAN_OPTIONS: print_stacktrace=1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DPOLYMARKET_CLIENT_BUILD_EXAMPLES=OFF \
+            -DPOLYMARKET_CLIENT_BUILD_TESTS=ON \
+            "-DCMAKE_C_FLAGS=$SANITIZER_FLAGS" \
+            "-DCMAKE_CXX_FLAGS=$SANITIZER_FLAGS" \
+            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined" \
+            "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined"
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -LE live -E '^test_package_consumer$'

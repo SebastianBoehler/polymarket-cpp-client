@@ -26,6 +26,7 @@ endif()
 option(POLYMARKET_CLIENT_BUILD_EXAMPLES "Build example/test executables" ${POLYMARKET_CLIENT_TOP_LEVEL_DEFAULT})
 option(POLYMARKET_CLIENT_BUILD_TESTS "Build test executables" ${POLYMARKET_CLIENT_TOP_LEVEL_DEFAULT})
 option(POLYMARKET_CLIENT_BUILD_BENCHMARKS "Build local benchmark executables" OFF)
+option(POLYMARKET_CLIENT_BUILD_FUZZERS "Build libFuzzer targets (requires Clang)" OFF)
 unset(POLYMARKET_CLIENT_TOP_LEVEL_DEFAULT)
 
 include(CMakePackageConfigHelpers)
@@ -219,6 +220,7 @@ target_link_libraries(polymarket_client
 include(cmake/PolymarketExamples.cmake)
 include(cmake/PolymarketTests.cmake)
 include(cmake/PolymarketBenchmarks.cmake)
+include(cmake/PolymarketFuzz.cmake)
 
 # Install library, headers, and dependency targets into a single export set
 install(TARGETS
