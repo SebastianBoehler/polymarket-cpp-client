@@ -1,11 +1,11 @@
 #include "polymarket/market_fetcher.hpp"
+#include "polymarket/pagination.hpp"
 #include "rate_limit_internal.hpp"
 #include "query_encoding.hpp"
 #include "rest_orderbook_parsing.hpp"
 #include <nlohmann/json.hpp>
 
 #include <iostream>
-#include <unordered_set>
 
 using json = nlohmann::json;
 
@@ -41,67 +41,64 @@ namespace polymarket
     std::vector<ClobMarket> MarketFetcher::fetch_market_pages(
         std::size_t limit, bool neg_risk_only)
     {
-        constexpr std::size_t max_pages = 1000;
+        constexpr const char *initial_cursor = "MA==";
         const std::string endpoint = neg_risk_only ? "/sampling-markets" : "/markets";
         const uint64_t current_time_ms = now_sec() * 1000;
+        auto paginator = Paginator<ClobMarket>::cursor(
+            endpoint,
+            [&](const PageRequest &request) -> Result<Page<ClobMarket>>
+            {
+                const std::string path =
+                    request.cursor == initial_cursor
+                        ? endpoint
+                        : endpoint +
+                              "?next_cursor=" + detail::percent_encode_query_value(request.cursor);
+                const auto response = detail::retry_rate_limited(config_.rate_limit_retry,
+                                                                 [&] { return http_.get(path); });
+                if (!response.ok())
+                {
+                    std::cerr << "Failed to fetch markets: " << response.status_code << " - "
+                              << response.error << '\n';
+                    return Result<Page<ClobMarket>>::failure(make_sdk_error(response, endpoint));
+                }
+                Page<ClobMarket> page;
+                try
+                {
+                    page.items = parse_markets_response(response.body);
+                    const auto parsed = json::parse(response.body);
+                    if (parsed.is_object() && parsed.contains("next_cursor") &&
+                        !parsed["next_cursor"].is_null())
+                        page.next_cursor = parsed["next_cursor"].get<std::string>();
+                }
+                catch (const std::exception &error)
+                {
+                    std::cerr << "Market response parse error: " << error.what() << '\n';
+                    page.next_cursor.clear();
+                }
+                return Result<Page<ClobMarket>>::success(std::move(page));
+            },
+            initial_cursor, "LTE=");
+
         std::vector<ClobMarket> markets;
-        std::string next_cursor;
-        std::unordered_set<std::string> seen_cursors;
-        for (std::size_t page_number = 0;
-             page_number < max_pages && markets.size() < limit;
-             ++page_number)
+        while (markets.size() < limit)
         {
-            if (!seen_cursors.insert(next_cursor).second)
-                break;
-            const std::string path = next_cursor.empty()
-                                         ? endpoint
-                                         : endpoint + "?next_cursor=" +
-                                               detail::percent_encode_query_value(next_cursor);
-            const auto response = detail::retry_rate_limited(config_.rate_limit_retry,
-                                                             [&] { return http_.get(path); });
-            if (!response.ok())
+            auto page = paginator.next_page();
+            if (!page.ok() || !page.value()) break;
+            for (auto &market : *page.value())
             {
-                std::cerr << "Failed to fetch markets: " << response.status_code
-                          << " - " << response.error << '\n';
-                break;
-            }
-            try
-            {
-                auto page = parse_markets_response(response.body);
-                for (auto &market : page)
+                const bool valid_neg_risk =
+                    market.neg_risk && market.active && !market.closed &&
+                    !market.condition_id.empty() && !market.token_yes().empty() &&
+                    !market.token_no().empty() && market.end_time_ms > current_time_ms;
+                if (neg_risk_only && !valid_neg_risk)
                 {
-                    const bool valid_neg_risk = market.neg_risk && market.active &&
-                                                !market.closed && !market.condition_id.empty() &&
-                                                !market.token_yes().empty() &&
-                                                !market.token_no().empty() &&
-                                                market.end_time_ms > current_time_ms;
-                    if (neg_risk_only && !valid_neg_risk)
-                    {
-                        continue;
-                    }
-                    if (markets.size() == limit)
-                    {
-                        break;
-                    }
-                    markets.push_back(std::move(market));
+                    continue;
                 }
-                const auto parsed = json::parse(response.body);
-                if (!parsed.is_object() || !parsed.contains("next_cursor") ||
-                    parsed["next_cursor"].is_null())
+                if (markets.size() == limit)
                 {
                     break;
                 }
-                const auto cursor = parsed["next_cursor"].get<std::string>();
-                if (cursor.empty() || cursor == next_cursor || cursor == "LTE=")
-                {
-                    break;
-                }
-                next_cursor = cursor;
-            }
-            catch (const std::exception &error)
-            {
-                std::cerr << "Market response parse error: " << error.what() << '\n';
-                break;
+                markets.push_back(std::move(market));
             }
         }
         return markets;

@@ -95,10 +95,14 @@ namespace
         check(first.ok() && first.value() && *first.value() == std::vector<int>({1}),
               "first page must load");
         auto second = paginator.next_page();
-        check(!second.ok() && second.error().code == SdkErrorCode::Parse,
-              "cursor cycle must fail as parse");
-        expect_equal("cycle endpoint", second.error().endpoint, "/items");
+        check(second.ok() && second.value() && *second.value() == std::vector<int>({2}),
+              "page that repeats a cursor must still be returned");
         check(paginator.error().has_value() && paginator.done(), "cycle must set error()");
+        auto third = paginator.next_page();
+        check(!third.ok() && third.error().code == SdkErrorCode::Parse,
+              "call after a cursor cycle must fail as parse");
+        expect_equal("cycle endpoint", third.error().endpoint, "/items");
+        check(fetch.requests.size() == 2, "cursor cycle must not fetch again");
     }
 
     void test_cursor_page_cap_fails()

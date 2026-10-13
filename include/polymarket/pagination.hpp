@@ -84,7 +84,8 @@ namespace polymarket
     };
 
     // Pulls pages lazily through `fetch`. Cursor pagination ends at an empty or
-    // end cursor and fails on a cycle or after max_pages. Offset pagination ends
+    // end cursor and fails after max_pages or on a cycle; the page whose next
+    // cursor repeats is still returned and the call after it fails. Offset pagination ends
     // on a short page and stops with truncated() set once the next offset would
     // pass `max_offset`; items inserted between requests can shift across pages.
     // After a failure every call reports the same error. Not thread-safe; any
@@ -242,7 +243,7 @@ namespace polymarket
             }
             catch (const detail::OpaqueCursorPaginationError &ex)
             {
-                return fail(make_parse_error(ex.what(), endpoint_));
+                error_ = make_parse_error(ex.what(), endpoint_);
             }
             return PageResult::success(std::move(page.value().items));
         }
