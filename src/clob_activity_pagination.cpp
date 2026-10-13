@@ -1,6 +1,6 @@
 #include "polymarket/clob_client.hpp"
 #include "clob_client_internal.hpp"
-#include "opaque_cursor_pagination.hpp"
+#include "polymarket/pagination.hpp"
 
 #include <nlohmann/json.hpp>
 
