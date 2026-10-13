@@ -187,11 +187,16 @@ namespace polymarket
 
             friend bool operator==(const ItemIterator &it, std::default_sentinel_t)
             {
-                return it.paginator_ == nullptr ||
-                       it.paginator_->buffer_index_ >= it.paginator_->buffer_.size();
+                return it.at_end();
             }
 
           private:
+            bool at_end() const
+            {
+                return paginator_ == nullptr ||
+                       paginator_->buffer_index_ >= paginator_->buffer_.size();
+            }
+
             Paginator *paginator_{nullptr};
         };
 
