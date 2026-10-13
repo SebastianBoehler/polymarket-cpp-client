@@ -40,4 +40,31 @@ namespace polymarket
             position_address(*this, user_address), detail::PositionFilter::mergeable,
             [this](const std::string &path) { return read([&] { return data_http_.get(path); }); });
     }
+
+    Paginator<ClobClient::Position> ClobClient::positions_pager(const std::string &user_address,
+                                                                size_t start_offset)
+    {
+        return detail::position_paginator(
+            position_address(*this, user_address), detail::PositionFilter::all,
+            [this](const std::string &path) { return read([&] { return data_http_.get(path); }); },
+            start_offset);
+    }
+
+    Paginator<ClobClient::Position>
+    ClobClient::redeemable_positions_pager(const std::string &user_address, size_t start_offset)
+    {
+        return detail::position_paginator(
+            position_address(*this, user_address), detail::PositionFilter::redeemable,
+            [this](const std::string &path) { return read([&] { return data_http_.get(path); }); },
+            start_offset);
+    }
+
+    Paginator<ClobClient::Position>
+    ClobClient::mergeable_positions_pager(const std::string &user_address, size_t start_offset)
+    {
+        return detail::position_paginator(
+            position_address(*this, user_address), detail::PositionFilter::mergeable,
+            [this](const std::string &path) { return read([&] { return data_http_.get(path); }); },
+            start_offset);
+    }
 }

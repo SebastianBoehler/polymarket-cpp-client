@@ -5,7 +5,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <iterator>
 #include <limits>
 #include <stdexcept>
 
@@ -123,36 +122,61 @@ namespace polymarket::detail
         }
     }
 
+    Paginator<Position> position_paginator(const std::string &address, PositionFilter filter,
+                                           PositionFetch fetch, size_t start_offset)
+    {
+        constexpr const char *endpoint = "/positions";
+        if (address.empty())
+        {
+            SdkError error;
+            error.code = SdkErrorCode::InvalidArgument;
+            error.message = "positions require a user address";
+            error.endpoint = endpoint;
+            return Paginator<Position>::offset(
+                endpoint,
+                [error](const PageRequest &) { return Result<Page<Position>>::failure(error); },
+                PAGE_LIMIT, MAX_OFFSET, start_offset);
+        }
+        if (!fetch) throw std::invalid_argument("position fetch must be set");
+        std::string prefix = std::string(endpoint) +
+                             "?user=" + percent_encode_query_value(address) + filter_query(filter) +
+                             "&limit=500&offset=";
+        return Paginator<Position>::offset(
+            endpoint,
+            [prefix = std::move(prefix),
+             fetch = std::move(fetch)](const PageRequest &request) -> Result<Page<Position>>
+            {
+                const auto response = fetch(prefix + std::to_string(request.offset));
+                if (!response.ok())
+                    return Result<Page<Position>>::failure(make_sdk_error(response, endpoint));
+                try
+                {
+                    return Result<Page<Position>>::success(
+                        Page<Position>{parse_page(response.body), ""});
+                }
+                catch (const std::exception &ex)
+                {
+                    return Result<Page<Position>>::failure(
+                        make_parse_error(ex.what(), endpoint, response.body));
+                }
+            },
+            PAGE_LIMIT, MAX_OFFSET, start_offset);
+    }
+
     std::vector<Position> fetch_position_pages(const std::string &address,
                                                PositionFilter filter,
                                                const PositionFetch &fetch)
     {
         if (address.empty() || !fetch)
             return {};
-        std::vector<Position> result;
         try
         {
-            const std::string prefix = "/positions?user=" +
-                                       percent_encode_query_value(address) +
-                                       filter_query(filter) + "&limit=500&offset=";
-            for (size_t offset = 0; offset <= MAX_OFFSET; offset += PAGE_LIMIT)
-            {
-                const auto response = fetch(prefix + std::to_string(offset));
-                if (!response.ok())
-                    return {};
-                auto page = parse_page(response.body);
-                const bool terminal = page.size() < PAGE_LIMIT;
-                result.reserve(result.size() + page.size());
-                result.insert(result.end(), std::make_move_iterator(page.begin()),
-                              std::make_move_iterator(page.end()));
-                if (terminal)
-                    break;
-            }
+            auto positions = position_paginator(address, filter, fetch).collect();
+            return positions ? std::move(positions.value()) : std::vector<Position>{};
         }
         catch (...)
         {
             return {};
         }
-        return result;
     }
 }
