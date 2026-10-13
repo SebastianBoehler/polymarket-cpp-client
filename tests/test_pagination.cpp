@@ -202,6 +202,38 @@ namespace
               "resume token must point past the last fetched page");
     }
 
+    void test_offset_resume_after_cap_does_not_refetch()
+    {
+        ScriptedFetch fetch{{page({1, 2}), page({3, 4})}};
+        auto paginator = IntPaginator::offset("/items", fetch.fn(), 2, 2);
+        (void)paginator.collect();
+        const auto token = paginator.resume_token();
+        check(token.offset == 4, "resume token after the offset cap must point past the last page");
+
+        ScriptedFetch resumed_fetch;
+        auto resumed =
+            IntPaginator::offset("/items", resumed_fetch.fn(), token.limit, 2, token.offset);
+        check(drain(resumed).empty() && resumed_fetch.requests.empty() && resumed.truncated(),
+              "resuming past the offset cap must not fetch the final page again");
+    }
+
+    void test_offset_resume_after_short_page_does_not_refetch()
+    {
+        ScriptedFetch fetch{{page({1, 2}), page({3})}};
+        auto paginator = IntPaginator::offset("/items", fetch.fn(), 2, 10'000);
+        (void)paginator.collect();
+        const auto token = paginator.resume_token();
+        check(token.offset == 3,
+              "resume token after a short page must point at the next unseen item");
+
+        ScriptedFetch resumed_fetch{{page({})}};
+        auto resumed =
+            IntPaginator::offset("/items", resumed_fetch.fn(), token.limit, 10'000, token.offset);
+        check(drain(resumed).empty() && resumed_fetch.requests.size() == 1 &&
+                  resumed_fetch.requests[0].offset == 3,
+              "resuming after a short page must not return items already seen");
+    }
+
     void test_resume_tokens()
     {
         ScriptedFetch cursor_fetch{{page({1}, "B"), page({2}, "LTE=")}};
@@ -256,6 +288,8 @@ int main()
     test_collect_reports_failure();
     test_collect_max_items();
     test_resume_tokens();
+    test_offset_resume_after_cap_does_not_refetch();
+    test_offset_resume_after_short_page_does_not_refetch();
     test_range_skips_empty_pages_and_resumes_after_break();
     return check_support::finish("test_pagination");
 }

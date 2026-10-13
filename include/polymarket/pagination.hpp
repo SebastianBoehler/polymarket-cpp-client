@@ -68,7 +68,9 @@ namespace polymarket
     } // namespace detail
 
     // The next page to request. Cursor pagination fills `cursor`; offset
-    // pagination fills `offset` and `limit`. Pass it back to resume later.
+    // pagination fills `offset` and `limit`. Pass it back to resume later; an
+    // exhausted cursor holds the end cursor, and an offset past the cap
+    // resumes as truncated without fetching.
     struct PageRequest
     {
         std::string cursor;
@@ -264,12 +266,15 @@ namespace polymarket
                                                  " items, more than limit " +
                                                  std::to_string(limit_),
                                              endpoint_));
-            if (items.size() < limit_)
+            const bool short_page = items.size() < limit_;
+            const bool at_offset_cap = !short_page && max_offset_ - offset_ < limit_;
+            offset_ = items.size() > std::numeric_limits<size_t>::max() - offset_
+                          ? std::numeric_limits<size_t>::max()
+                          : offset_ + items.size();
+            if (short_page)
                 done_ = true;
-            else if (max_offset_ - offset_ < limit_)
+            else if (at_offset_cap)
                 done_ = truncated_ = true;
-            else
-                offset_ += limit_;
             return PageResult::success(std::move(items));
         }
 
