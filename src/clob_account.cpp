@@ -135,21 +135,28 @@ namespace polymarket
 
     Result<std::vector<OpenOrder>> ClobClient::get_open_orders_result(const std::string &market)
     {
+        return open_orders_pager(market).collect();
+    }
+
+    Paginator<OpenOrder> ClobClient::open_orders_pager(const std::string &market,
+                                                       const std::string &start_cursor)
+    {
         constexpr const char *endpoint = "/data/orders";
-        if (!order_signer_ || !api_creds_)
-        {
-            return Result<std::vector<OpenOrder>>::failure(make_auth_error("Client not authenticated", endpoint));
-        }
-
-        auto paginator = Paginator<OpenOrder>::cursor(
+        std::string prefix = endpoint;
+        prefix += market.empty() ? "?" : "?market=" + percent_encode_query_value(market) + "&";
+        prefix += "next_cursor=";
+        return Paginator<OpenOrder>::cursor(
             endpoint,
-            [&](const PageRequest &request) -> Result<Page<OpenOrder>>
+            [this,
+             prefix = std::move(prefix)](const PageRequest &request) -> Result<Page<OpenOrder>>
             {
-                std::string path = endpoint;
-                path +=
-                    market.empty() ? "?" : "?market=" + percent_encode_query_value(market) + "&";
-                path += "next_cursor=" + percent_encode_query_value(request.cursor);
+                if (!order_signer_ || !api_creds_)
+                {
+                    return Result<Page<OpenOrder>>::failure(
+                        make_auth_error("Client not authenticated", endpoint));
+                }
 
+                const std::string path = prefix + percent_encode_query_value(request.cursor);
                 auto response =
                     read([&] { return http_.get(path, get_l2_headers("GET", endpoint, "")); });
 
@@ -170,17 +177,27 @@ namespace polymarket
                         make_parse_error(ex.what(), endpoint, response.body));
                 }
             },
-            INITIAL_CURSOR, END_CURSOR);
-        return paginator.collect();
+            start_cursor.empty() ? INITIAL_CURSOR : start_cursor, END_CURSOR);
     }
 
     std::vector<Trade> ClobClient::get_trades(const std::string &next_cursor)
     {
+        if (!order_signer_ || !api_creds_) throw std::runtime_error("Client not authenticated");
+        auto trades = trades_pager(next_cursor).collect();
+        return trades ? std::move(trades.value()) : std::vector<Trade>{};
+    }
+
+    Paginator<Trade> ClobClient::trades_pager(const std::string &start_cursor)
+    {
         constexpr const char *endpoint = "/data/trades";
-        auto paginator = Paginator<Trade>::cursor(
+        return Paginator<Trade>::cursor(
             endpoint,
-            [&](const PageRequest &request) -> Result<Page<Trade>>
+            [this](const PageRequest &request) -> Result<Page<Trade>>
             {
+                if (!order_signer_ || !api_creds_)
+                    return Result<Page<Trade>>::failure(
+                        make_auth_error("Client not authenticated", endpoint));
+
                 const std::string path = std::string(endpoint) + "?next_cursor=" +
                                          percent_encode_query_value(request.cursor);
                 auto response =
@@ -201,9 +218,7 @@ namespace polymarket
                         make_parse_error(ex.what(), endpoint, response.body));
                 }
             },
-            next_cursor.empty() ? INITIAL_CURSOR : next_cursor, END_CURSOR);
-        auto trades = paginator.collect();
-        return trades ? std::move(trades.value()) : std::vector<Trade>{};
+            start_cursor.empty() ? INITIAL_CURSOR : start_cursor, END_CURSOR);
     }
 
     std::optional<BalanceAllowance> ClobClient::get_balance_allowance(

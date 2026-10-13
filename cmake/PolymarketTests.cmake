@@ -179,6 +179,10 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_pagination PRIVATE polymarket::client)
     add_test(NAME test_pagination COMMAND test_pagination)
 
+    add_executable(test_clob_pagers tests/test_clob_pagers.cpp)
+    target_link_libraries(test_clob_pagers PRIVATE polymarket::client)
+    add_test(NAME test_clob_pagers COMMAND test_clob_pagers)
+
     add_executable(test_sdk_error tests/test_sdk_error.cpp)
     target_link_libraries(test_sdk_error PRIVATE polymarket::client)
     add_test(NAME test_sdk_error COMMAND test_sdk_error)

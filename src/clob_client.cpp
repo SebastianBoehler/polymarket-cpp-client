@@ -95,6 +95,34 @@ namespace polymarket
         }
     }
 
+    template <typename Fetch>
+    static Paginator<ClobMarket> market_paginator(Fetch fetch, const std::string &endpoint,
+                                                  const std::string &start_cursor)
+    {
+        std::string prefix = endpoint + "?next_cursor=";
+        return Paginator<ClobMarket>::cursor(
+            endpoint,
+            [fetch = std::move(fetch), endpoint,
+             prefix = std::move(prefix)](const PageRequest &request) -> Result<Page<ClobMarket>>
+            {
+                const auto response = fetch(prefix + percent_encode_query_value(request.cursor));
+                if (!response.ok())
+                    return Result<Page<ClobMarket>>::failure(make_sdk_error(response, endpoint));
+                try
+                {
+                    auto page = detail::parse_clob_market_page_json(response.body);
+                    return Result<Page<ClobMarket>>::success(
+                        Page<ClobMarket>{std::move(page.data), std::move(page.next_cursor)});
+                }
+                catch (const std::exception &ex)
+                {
+                    return Result<Page<ClobMarket>>::failure(
+                        make_parse_error(ex.what(), endpoint, response.body));
+                }
+            },
+            start_cursor.empty() ? detail::INITIAL_CURSOR : start_cursor, detail::END_CURSOR);
+    }
+
     ClobClient::ClobClient(Environment environment, const std::string *private_key,
                            const ApiCredentials *creds, SignatureType sig_type,
                            const std::string &funder_address,
@@ -317,5 +345,34 @@ namespace polymarket
         return fetch_market_page([this](const std::string &path)
                                  { return read([&] { return http_.get(path); }); },
                                  "/sampling-simplified-markets", next_cursor);
+    }
+
+    Paginator<ClobMarket> ClobClient::markets_pager(const std::string &start_cursor)
+    {
+        return market_paginator([this](const std::string &path)
+                                { return read([&] { return http_.get(path); }); }, "/markets",
+                                start_cursor);
+    }
+
+    Paginator<ClobMarket> ClobClient::sampling_markets_pager(const std::string &start_cursor)
+    {
+        return market_paginator([this](const std::string &path)
+                                { return read([&] { return http_.get(path); }); },
+                                "/sampling-markets", start_cursor);
+    }
+
+    Paginator<ClobMarket> ClobClient::simplified_markets_pager(const std::string &start_cursor)
+    {
+        return market_paginator([this](const std::string &path)
+                                { return read([&] { return http_.get(path); }); },
+                                "/simplified-markets", start_cursor);
+    }
+
+    Paginator<ClobMarket>
+    ClobClient::sampling_simplified_markets_pager(const std::string &start_cursor)
+    {
+        return market_paginator([this](const std::string &path)
+                                { return read([&] { return http_.get(path); }); },
+                                "/sampling-simplified-markets", start_cursor);
     }
 }

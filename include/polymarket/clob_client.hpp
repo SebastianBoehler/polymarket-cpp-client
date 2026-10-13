@@ -7,6 +7,7 @@
 #include "polymarket/types.hpp"
 #include "polymarket/http_client.hpp"
 #include "polymarket/order_signer.hpp"
+#include "polymarket/pagination.hpp"
 #include "polymarket/sdk_error.hpp"
 #include <string>
 #include <vector>
@@ -79,6 +80,14 @@ namespace polymarket
         ClobMarketPage get_sampling_markets(const std::string &next_cursor = "");
         ClobMarketPage get_simplified_markets(const std::string &next_cursor = "");
         ClobMarketPage get_sampling_simplified_markets(const std::string &next_cursor = "");
+
+        // Pagers fetch lazily, starting at `start_cursor` (or the first page),
+        // and can resume from resume_token(). This client must outlive them.
+        Paginator<ClobMarket> markets_pager(const std::string &start_cursor = "");
+        Paginator<ClobMarket> sampling_markets_pager(const std::string &start_cursor = "");
+        Paginator<ClobMarket> simplified_markets_pager(const std::string &start_cursor = "");
+        Paginator<ClobMarket>
+        sampling_simplified_markets_pager(const std::string &start_cursor = "");
 
         // Orderbook
         std::optional<Orderbook> get_order_book(const std::string &token_id);
@@ -186,6 +195,10 @@ namespace polymarket
         std::vector<OpenOrder> get_open_orders(const std::string &market = "");
         Result<std::vector<OpenOrder>> get_open_orders_result(const std::string &market = "");
         std::vector<Trade> get_trades(const std::string &next_cursor = "");
+        // Lazy pagers; fail with Auth on the first page when not authenticated.
+        Paginator<OpenOrder> open_orders_pager(const std::string &market = "",
+                                               const std::string &start_cursor = "");
+        Paginator<Trade> trades_pager(const std::string &start_cursor = "");
         // Empty when the account has no trade with this ID (yet).
         std::optional<Trade> get_trade(const std::string &trade_id);
         Result<std::optional<Trade>> get_trade_result(const std::string &trade_id);
@@ -385,8 +398,16 @@ namespace polymarket
 
         // Get positions that can be merged (user holds both Yes and No outcomes)
         std::vector<Position> get_mergeable_positions(const std::string &user_address = "");
+        // Offset pagers over the same queries; truncated() is set at the Data
+        // API offset cap. Fail with InvalidArgument when no address resolves.
+        Paginator<Position> positions_pager(const std::string &user_address = "",
+                                            size_t start_offset = 0);
+        Paginator<Position> redeemable_positions_pager(const std::string &user_address = "",
+                                                       size_t start_offset = 0);
+        Paginator<Position> mergeable_positions_pager(const std::string &user_address = "",
+                                                      size_t start_offset = 0);
 
-    private:
+      private:
         HttpClient http_;
         HttpClient order_http_;
         HttpClient data_http_;
