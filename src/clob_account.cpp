@@ -141,86 +141,69 @@ namespace polymarket
             return Result<std::vector<OpenOrder>>::failure(make_auth_error("Client not authenticated", endpoint));
         }
 
-        std::vector<OpenOrder> orders;
-        OpaqueCursorPagination pagination(INITIAL_CURSOR, END_CURSOR);
-        while (true)
-        {
-            try
+        auto paginator = Paginator<OpenOrder>::cursor(
+            endpoint,
+            [&](const PageRequest &request) -> Result<Page<OpenOrder>>
             {
-                if (!pagination.begin_page())
-                    break;
-            }
-            catch (const OpaqueCursorPaginationError &ex)
-            {
-                return Result<std::vector<OpenOrder>>::failure(make_parse_error(ex.what(), endpoint));
-            }
+                std::string path = endpoint;
+                path +=
+                    market.empty() ? "?" : "?market=" + percent_encode_query_value(market) + "&";
+                path += "next_cursor=" + percent_encode_query_value(request.cursor);
 
-            std::string path = endpoint;
-            path += market.empty() ? "?" : "?market=" + percent_encode_query_value(market) + "&";
-            path += "next_cursor=" + percent_encode_query_value(pagination.cursor());
+                auto response =
+                    read([&] { return http_.get(path, get_l2_headers("GET", endpoint, "")); });
 
-            auto response =
-                read([&] { return http_.get(path, get_l2_headers("GET", endpoint, "")); });
+                if (!response.ok())
+                {
+                    return Result<Page<OpenOrder>>::failure(make_sdk_error(response, endpoint));
+                }
 
-            if (!response.ok())
-            {
-                return Result<std::vector<OpenOrder>>::failure(make_sdk_error(response, endpoint));
-            }
-
-            try
-            {
-                auto page = detail::parse_open_order_page_json(response.body);
-                orders.insert(orders.end(), page.orders.begin(), page.orders.end());
-                pagination.advance(std::move(page.next_cursor));
-            }
-            catch (const std::exception &ex)
-            {
-                return Result<std::vector<OpenOrder>>::failure(make_parse_error(ex.what(), endpoint, response.body));
-            }
-        }
-
-        return Result<std::vector<OpenOrder>>::success(std::move(orders));
+                try
+                {
+                    auto page = detail::parse_open_order_page_json(response.body);
+                    return Result<Page<OpenOrder>>::success(
+                        Page<OpenOrder>{std::move(page.orders), std::move(page.next_cursor)});
+                }
+                catch (const std::exception &ex)
+                {
+                    return Result<Page<OpenOrder>>::failure(
+                        make_parse_error(ex.what(), endpoint, response.body));
+                }
+            },
+            INITIAL_CURSOR, END_CURSOR);
+        return paginator.collect();
     }
 
     std::vector<Trade> ClobClient::get_trades(const std::string &next_cursor)
     {
         constexpr const char *endpoint = "/data/trades";
-        std::vector<Trade> trades;
-        OpaqueCursorPagination pagination(next_cursor.empty() ? INITIAL_CURSOR : next_cursor,
-                                          END_CURSOR);
-        while (true)
-        {
-            try
+        auto paginator = Paginator<Trade>::cursor(
+            endpoint,
+            [&](const PageRequest &request) -> Result<Page<Trade>>
             {
-                if (!pagination.begin_page())
-                    break;
-            }
-            catch (const OpaqueCursorPaginationError &)
-            {
-                return {};
-            }
+                const std::string path = std::string(endpoint) + "?next_cursor=" +
+                                         percent_encode_query_value(request.cursor);
+                auto response =
+                    read([&] { return http_.get(path, get_l2_headers("GET", endpoint, "")); });
 
-            const std::string path = std::string(endpoint) +
-                                     "?next_cursor=" + percent_encode_query_value(pagination.cursor());
-            auto response =
-                read([&] { return http_.get(path, get_l2_headers("GET", endpoint, "")); });
+                if (!response.ok())
+                    return Result<Page<Trade>>::failure(make_sdk_error(response, endpoint));
 
-            if (!response.ok())
-                return {};
-
-            try
-            {
-                auto page = detail::parse_trade_page_json(response.body);
-                trades.insert(trades.end(), page.trades.begin(), page.trades.end());
-                pagination.advance(std::move(page.next_cursor));
-            }
-            catch (...)
-            {
-                return {};
-            }
-        }
-
-        return trades;
+                try
+                {
+                    auto page = detail::parse_trade_page_json(response.body);
+                    return Result<Page<Trade>>::success(
+                        Page<Trade>{std::move(page.trades), std::move(page.next_cursor)});
+                }
+                catch (const std::exception &ex)
+                {
+                    return Result<Page<Trade>>::failure(
+                        make_parse_error(ex.what(), endpoint, response.body));
+                }
+            },
+            next_cursor.empty() ? INITIAL_CURSOR : next_cursor, END_CURSOR);
+        auto trades = paginator.collect();
+        return trades ? std::move(trades.value()) : std::vector<Trade>{};
     }
 
     std::optional<BalanceAllowance> ClobClient::get_balance_allowance(

@@ -1,11 +1,11 @@
 #include "clob_positions_internal.hpp"
 
+#include "polymarket/pagination.hpp"
 #include "query_encoding.hpp"
 #include <nlohmann/json.hpp>
 
 #include <cmath>
 #include <cstdint>
-#include <iterator>
 #include <limits>
 #include <stdexcept>
 
@@ -129,30 +129,37 @@ namespace polymarket::detail
     {
         if (address.empty() || !fetch)
             return {};
-        std::vector<Position> result;
+        constexpr const char *endpoint = "/positions";
         try
         {
-            const std::string prefix = "/positions?user=" +
-                                       percent_encode_query_value(address) +
+            const std::string prefix = std::string(endpoint) +
+                                       "?user=" + percent_encode_query_value(address) +
                                        filter_query(filter) + "&limit=500&offset=";
-            for (size_t offset = 0; offset <= MAX_OFFSET; offset += PAGE_LIMIT)
-            {
-                const auto response = fetch(prefix + std::to_string(offset));
-                if (!response.ok())
-                    return {};
-                auto page = parse_page(response.body);
-                const bool terminal = page.size() < PAGE_LIMIT;
-                result.reserve(result.size() + page.size());
-                result.insert(result.end(), std::make_move_iterator(page.begin()),
-                              std::make_move_iterator(page.end()));
-                if (terminal)
-                    break;
-            }
+            auto paginator = Paginator<Position>::offset(
+                endpoint,
+                [&](const PageRequest &request) -> Result<Page<Position>>
+                {
+                    const auto response = fetch(prefix + std::to_string(request.offset));
+                    if (!response.ok())
+                        return Result<Page<Position>>::failure(make_sdk_error(response, endpoint));
+                    try
+                    {
+                        return Result<Page<Position>>::success(
+                            Page<Position>{parse_page(response.body), ""});
+                    }
+                    catch (const std::exception &ex)
+                    {
+                        return Result<Page<Position>>::failure(
+                            make_parse_error(ex.what(), endpoint, response.body));
+                    }
+                },
+                PAGE_LIMIT, MAX_OFFSET);
+            auto positions = paginator.collect();
+            return positions ? std::move(positions.value()) : std::vector<Position>{};
         }
         catch (...)
         {
             return {};
         }
-        return result;
     }
 }
