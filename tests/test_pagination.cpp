@@ -1,4 +1,5 @@
 #include "check_support.hpp"
+#include "pagination_test_support.hpp"
 #include "polymarket/pagination.hpp"
 #include <cstddef>
 #include <iterator>
@@ -12,55 +13,17 @@ namespace
 {
     using check_support::check;
     using check_support::expect_equal;
+    using pagination_test::drain;
+    using pagination_test::http_failure;
+    using pagination_test::IntPaginator;
+    using pagination_test::page;
+    using pagination_test::ScriptedFetch;
     using polymarket::Page;
     using polymarket::PageRequest;
     using polymarket::Paginator;
     using polymarket::Result;
     using polymarket::SdkError;
     using polymarket::SdkErrorCode;
-
-    using IntPaginator = Paginator<int>;
-    static_assert(std::input_iterator<IntPaginator::ItemIterator>);
-    static_assert(std::ranges::input_range<IntPaginator::ItemRange>);
-
-    struct ScriptedFetch
-    {
-        std::vector<Result<Page<int>>> pages;
-        std::vector<PageRequest> requests;
-        size_t next{0};
-
-        IntPaginator::Fetch fn()
-        {
-            return [this](const PageRequest &request)
-            {
-                requests.push_back(request);
-                if (next >= pages.size()) throw std::logic_error("unexpected page request");
-                return pages[next++];
-            };
-        }
-    };
-
-    Result<Page<int>> page(std::vector<int> items, std::string next_cursor = "")
-    {
-        return Result<Page<int>>::success(Page<int>{std::move(items), std::move(next_cursor)});
-    }
-
-    Result<Page<int>> http_failure()
-    {
-        SdkError error;
-        error.code = SdkErrorCode::HttpTransport;
-        error.message = "connection reset";
-        error.endpoint = "/items";
-        return Result<Page<int>>::failure(error);
-    }
-
-    std::vector<int> drain(IntPaginator &paginator)
-    {
-        std::vector<int> items;
-        for (int item : paginator.items())
-            items.push_back(item);
-        return items;
-    }
 
     void test_cursor_follows_until_end_cursor()
     {
