@@ -1,4 +1,5 @@
 #include "clob_client_internal.hpp"
+#include "gamma_parsing.hpp"
 #include "polymarket/market_fetcher.hpp"
 #include "rest_orderbook_parsing.hpp"
 
@@ -11,7 +12,7 @@
 #include <string>
 #include <vector>
 
-// Feeds one raw REST response body to every CLOB response parser. Rejected
+// Feeds one raw REST response body to every CLOB and Gamma response parser. Rejected
 // input must raise std::exception; an accepted order book must hold valid
 // levels with no repeated price on either side.
 namespace
@@ -69,5 +70,23 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
     parse_or_reject([&] { (void)detail::parse_trade_page_json(body); });
     parse_or_reject([&] { (void)detail::parse_clob_markets_json(body); });
     parse_or_reject([&] { (void)detail::parse_clob_market_page_json(body); });
+    parse_or_reject(
+        [&]
+        {
+            if (detail::parse_gamma_market_response(body).id.empty()) std::abort();
+        });
+    parse_or_reject(
+        [&]
+        {
+            const auto event = detail::parse_gamma_event_response(body);
+            if (event.id.empty()) std::abort();
+            for (const auto &market : event.markets)
+            {
+                if (market.id.empty()) std::abort();
+            }
+        });
+    parse_or_reject([&] { (void)detail::parse_gamma_market_keyset_page(body); });
+    parse_or_reject([&] { (void)detail::parse_gamma_event_keyset_page(body); });
+    parse_or_reject([&] { (void)detail::parse_gamma_tag_references(body); });
     return 0;
 }
