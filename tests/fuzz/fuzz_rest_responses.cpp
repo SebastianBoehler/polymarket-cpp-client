@@ -99,5 +99,19 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
     parse_or_reject([&] { (void)detail::parse_gamma_sports(body); });
     parse_or_reject([&] { (void)detail::parse_gamma_sports_market_types(body); });
     parse_or_reject([&] { (void)detail::parse_gamma_teams(body); });
+    parse_or_reject([&] { (void)detail::parse_gamma_comments(body); });
+    parse_or_reject([&] { (void)detail::parse_gamma_comment_keyset_page(body); });
+    parse_or_reject(
+        [&]
+        {
+            const auto page = detail::parse_gamma_comment_root_page(body);
+            if (!page.counted || *page.counted > page.items.size()) std::abort();
+        });
+    parse_or_reject([&] { (void)detail::parse_gamma_public_profile(body); });
+    parse_or_reject(
+        [&]
+        {
+            if (detail::parse_gamma_search_page(body).items.size() != 1) std::abort();
+        });
     return 0;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "polymarket/gamma_catalog_types.hpp"
+#include "polymarket/gamma_social_types.hpp"
 #include "polymarket/gamma_types.hpp"
 #include "polymarket/pagination.hpp"
 
@@ -52,4 +53,13 @@ namespace polymarket::detail
     std::vector<GammaSport> parse_gamma_sports(const std::string &body);
     std::vector<std::string> parse_gamma_sports_market_types(const std::string &body);
     std::vector<GammaTeam> parse_gamma_teams(const std::string &body);
+
+    GammaComment parse_gamma_comment(const json &item);
+    std::vector<GammaComment> parse_gamma_comments(const std::string &body);
+    Page<GammaComment> parse_gamma_comment_keyset_page(const std::string &body);
+    // An offset page counted by its top-level comments.
+    Page<GammaComment> parse_gamma_comment_root_page(const std::string &body);
+    GammaPublicProfile parse_gamma_public_profile(const std::string &body);
+    // One aggregate result; `has_more` from pagination.hasMore.
+    Page<GammaSearchResults> parse_gamma_search_page(const std::string &body);
 } // namespace polymarket::detail

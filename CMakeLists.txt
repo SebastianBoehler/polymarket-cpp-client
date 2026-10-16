@@ -121,6 +121,8 @@ set(POLYMARKET_CLIENT_SOURCES
     src/gamma_market_parsing.cpp
     src/gamma_parsing.cpp
     src/gamma_query.cpp
+    src/gamma_social_client.cpp
+    src/gamma_social_parsing.cpp
     src/geoblock.cpp
     src/http_client.cpp
     src/http_client_connection.cpp

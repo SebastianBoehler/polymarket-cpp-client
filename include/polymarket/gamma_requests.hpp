@@ -161,4 +161,43 @@ namespace polymarket
         std::vector<std::int64_t> provider_ids;
     };
 
+    // Options for GammaClient::search_pager, matching the official SDK's
+    // search. `keep_closed_markets` keeps markets closed within that many
+    // hours. `recurrence` is "daily", "weekly" or "monthly"; `sort` is one of
+    // volume, volume_24hr, liquidity, competitive, closed_time, start_date or
+    // end_date.
+    struct GammaSearchOptions
+    {
+        std::optional<bool> ascending;
+        std::optional<bool> cache;
+        std::string events_status;
+        std::vector<std::string> events_tags;
+        std::vector<std::int64_t> exclude_tag_ids;
+        std::optional<std::int64_t> keep_closed_markets;
+        std::optional<bool> optimized;
+        std::vector<std::string> presets;
+        std::string recurrence;
+        std::optional<bool> search_profiles;
+        std::optional<bool> search_tags;
+        std::string sort;
+    };
+
+    // Filters for GammaClient::comments_pager, matching the official SDK's
+    // list_comments. Without `order`, comments are newest first and
+    // `ascending` is ignored; with "id" or "createdAt" they are ascending
+    // unless `ascending` is false.
+    struct GammaCommentFilter
+    {
+        std::optional<bool> ascending;
+        std::optional<bool> get_positions;
+        std::optional<bool> holders_only;
+        std::string order;
+    };
+
+    struct GammaUserCommentFilter
+    {
+        std::optional<bool> ascending;
+        std::string order;
+    };
+
 } // namespace polymarket

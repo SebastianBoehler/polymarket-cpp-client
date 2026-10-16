@@ -197,6 +197,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_gamma_catalog PRIVATE polymarket::client)
     add_test(NAME test_gamma_catalog COMMAND test_gamma_catalog)
 
+    add_executable(test_gamma_social tests/test_gamma_social.cpp)
+    target_include_directories(test_gamma_social PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_gamma_social PRIVATE polymarket::client)
+    add_test(NAME test_gamma_social COMMAND test_gamma_social)
+
     add_executable(test_clob_pagers tests/test_clob_pagers.cpp)
     target_link_libraries(test_clob_pagers PRIVATE polymarket::client)
     add_test(NAME test_clob_pagers COMMAND test_clob_pagers)

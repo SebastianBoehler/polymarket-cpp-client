@@ -227,4 +227,11 @@ namespace polymarket::detail
             body, "events",
             [](const json &item) { return std::optional<GammaEvent>(parse_gamma_event(item)); });
     }
+
+    Page<GammaComment> parse_gamma_comment_keyset_page(const std::string &body)
+    {
+        return parse_keyset_page<GammaComment>(
+            body, "comments", [](const json &item)
+            { return std::optional<GammaComment>(parse_gamma_comment(item)); });
+    }
 } // namespace polymarket::detail

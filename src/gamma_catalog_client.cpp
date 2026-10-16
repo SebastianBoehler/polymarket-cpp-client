@@ -4,12 +4,18 @@
 #include "gamma_parsing.hpp"
 #include "gamma_query.hpp"
 
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 namespace polymarket
 {
+    namespace
+    {
+        constexpr std::size_t unlimited_offset = std::numeric_limits<std::size_t>::max();
+    } // namespace
+
     Result<GammaTag> GammaClient::get_tag_by_id(const std::string &id,
                                                 const GammaTagLookupOptions &options)
     {
@@ -113,32 +119,13 @@ namespace polymarket
                                                detail::parse_gamma_sports_market_types);
     }
 
-    template <typename T, typename BuildQuery, typename ParseItems>
-    Paginator<T> GammaClient::offset_pager(const char *endpoint, std::size_t page_size,
-                                           std::size_t max_page_size, const PageRequest &resume,
-                                           BuildQuery build_query, ParseItems parse_items)
-    {
-        std::string query;
-        std::optional<SdkError> invalid;
-        try
-        {
-            query = build_query();
-        }
-        catch (const std::invalid_argument &ex)
-        {
-            invalid = detail::gamma_invalid_argument(ex.what(), endpoint);
-        }
-        return detail::gamma_offset_pager<T>(
-            endpoint, query, page_size, max_page_size, resume, std::move(invalid),
-            [this](const std::string &path) { return get(path); }, parse_items);
-    }
-
     Paginator<GammaTag> GammaClient::tags_pager(const GammaTagFilter &filter, std::size_t page_size,
                                                 const PageRequest &resume)
     {
         return offset_pager<GammaTag>(
-            "/tags", page_size, 100, resume, [&] { return detail::gamma_tag_list_query(filter); },
-            detail::parse_gamma_tag_references);
+            "/tags", page_size, 100, unlimited_offset, resume,
+            [&] { return detail::gamma_tag_list_query(filter); },
+            detail::gamma_list_page<GammaTag>(detail::parse_gamma_tag_references));
     }
 
     Paginator<GammaSeries> GammaClient::series_pager(const GammaSeriesFilter &filter,
@@ -146,15 +133,17 @@ namespace polymarket
                                                      const PageRequest &resume)
     {
         return offset_pager<GammaSeries>(
-            "/series", page_size, 50, resume, [&]
-            { return detail::gamma_series_list_query(filter); }, detail::parse_gamma_series_list);
+            "/series", page_size, 50, unlimited_offset, resume,
+            [&] { return detail::gamma_series_list_query(filter); },
+            detail::gamma_list_page<GammaSeries>(detail::parse_gamma_series_list));
     }
 
     Paginator<GammaTeam> GammaClient::teams_pager(const GammaTeamFilter &filter,
                                                   std::size_t page_size, const PageRequest &resume)
     {
         return offset_pager<GammaTeam>(
-            "/teams", page_size, 100, resume, [&] { return detail::gamma_team_list_query(filter); },
-            detail::parse_gamma_teams);
+            "/teams", page_size, 100, unlimited_offset, resume,
+            [&] { return detail::gamma_team_list_query(filter); },
+            detail::gamma_list_page<GammaTeam>(detail::parse_gamma_teams));
     }
 } // namespace polymarket

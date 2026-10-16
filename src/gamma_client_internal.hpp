@@ -69,12 +69,21 @@ namespace polymarket
                 page_size, resume);
         }
 
-        // Offset pages hold at most `max_page_size` items, Gamma's own cap.
-        template <typename T, typename Get, typename ParseItems>
+        // Parses a JSON array body into one offset page.
+        template <typename T, typename ParseItems> auto gamma_list_page(ParseItems parse_items)
+        {
+            return [parse_items](const std::string &body)
+            { return Page<T>{parse_items(body), ""}; };
+        }
+
+        // Offset pages hold at most `max_page_size` items, Gamma's own cap, and
+        // start at most at `max_offset`, past which Gamma rejects the request.
+        template <typename T, typename Get, typename ParsePage>
         Paginator<T> gamma_offset_pager(const std::string &endpoint, const std::string &query,
                                         std::size_t page_size, std::size_t max_page_size,
-                                        const PageRequest &resume, std::optional<SdkError> invalid,
-                                        Get get, ParseItems parse_items)
+                                        std::size_t max_offset, const PageRequest &resume,
+                                        std::optional<SdkError> invalid, Get get,
+                                        ParsePage parse_page)
         {
             if (!invalid && (page_size == 0 || page_size > max_page_size))
                 invalid = gamma_invalid_argument(
@@ -83,20 +92,18 @@ namespace polymarket
             {
                 return Paginator<T>::offset(
                     endpoint, [error = std::move(*invalid)](const PageRequest &)
-                    { return Result<Page<T>>::failure(error); }, 1,
-                    std::numeric_limits<std::size_t>::max());
+                    { return Result<Page<T>>::failure(error); }, 1, max_offset);
             }
             std::string prefix = endpoint + (query.empty() ? "?" : query + "&") +
                                  "limit=" + std::to_string(page_size) + "&offset=";
             return Paginator<T>::offset(
                 endpoint,
-                [endpoint, prefix = std::move(prefix), get, parse_items](const PageRequest &request)
+                [endpoint, prefix = std::move(prefix), get, parse_page](const PageRequest &request)
                 {
                     return gamma_page<T>(get(prefix + std::to_string(request.offset)), endpoint,
-                                         [&](const std::string &body)
-                                         { return Page<T>{parse_items(body), ""}; });
+                                         parse_page);
                 },
-                page_size, std::numeric_limits<std::size_t>::max(), resume.offset);
+                page_size, max_offset, resume.offset);
         }
     } // namespace detail
 
@@ -123,5 +130,26 @@ namespace polymarket
         {
             return Result<T>::failure(make_parse_error(ex.what(), endpoint, response.body));
         }
+    }
+
+    template <typename T, typename BuildQuery, typename ParsePage>
+    Paginator<T> GammaClient::offset_pager(const std::string &endpoint, std::size_t page_size,
+                                           std::size_t max_page_size, std::size_t max_offset,
+                                           const PageRequest &resume, BuildQuery build_query,
+                                           ParsePage parse_page)
+    {
+        std::string query;
+        std::optional<SdkError> invalid;
+        try
+        {
+            query = build_query();
+        }
+        catch (const std::invalid_argument &ex)
+        {
+            invalid = detail::gamma_invalid_argument(ex.what(), endpoint);
+        }
+        return detail::gamma_offset_pager<T>(
+            endpoint, query, page_size, max_page_size, max_offset, resume, std::move(invalid),
+            [this](const std::string &path) { return get(path); }, parse_page);
     }
 } // namespace polymarket
