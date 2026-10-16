@@ -1,6 +1,8 @@
 #pragma once
 
 #include "polymarket/environment.hpp"
+#include "polymarket/gamma_catalog_types.hpp"
+#include "polymarket/gamma_requests.hpp"
 #include "polymarket/gamma_types.hpp"
 #include "polymarket/http_client.hpp"
 #include "polymarket/pagination.hpp"
@@ -16,105 +18,6 @@
 
 namespace polymarket
 {
-    // Filters for GammaClient::markets_pager, matching the official SDK's
-    // list_markets. Unset optionals, empty strings and empty lists are not
-    // sent. Dates are ISO 8601 text. `order` is a comma-separated field list;
-    // "volume" and "liquidity" are sent as volumeNum and liquidityNum so they
-    // sort numerically. `tag_match` is "any" or "all".
-    struct GammaMarketFilter
-    {
-        std::optional<bool> ascending;
-        std::optional<bool> closed;
-        std::vector<std::string> clob_token_ids;
-        std::vector<std::string> condition_ids;
-        std::optional<bool> cyom;
-        std::optional<bool> decimalized;
-        std::string end_date_max;
-        std::string end_date_min;
-        std::string game_id;
-        std::vector<std::int64_t> ids;
-        std::optional<bool> include_tag;
-        std::optional<double> liquidity_num_max;
-        std::optional<double> liquidity_num_min;
-        std::string locale;
-        std::vector<std::string> market_maker_addresses;
-        std::string order;
-        std::vector<std::string> position_ids;
-        std::vector<std::string> question_ids;
-        std::optional<bool> related_tags;
-        std::optional<bool> rfq_enabled;
-        std::optional<double> rewards_min_size;
-        std::vector<std::string> slugs;
-        std::vector<std::string> sports_market_types;
-        std::string start_date_max;
-        std::string start_date_min;
-        std::optional<std::int64_t> tag_id;
-        std::string tag_match;
-        std::string uma_resolution_status;
-        std::optional<double> volume_num_max;
-        std::optional<double> volume_num_min;
-    };
-
-    // Filters for GammaClient::events_pager, matching the official SDK's
-    // list_events, which lists open events unless `closed` is changed.
-    // `event_date` is a YYYY-MM-DD date and `recurrence` is "daily",
-    // "weekly" or "monthly".
-    struct GammaEventFilter
-    {
-        std::optional<bool> ascending;
-        std::optional<bool> closed = false;
-        std::optional<bool> cyom;
-        std::string end_date_max;
-        std::string end_date_min;
-        std::optional<bool> ended;
-        std::string event_date;
-        std::optional<std::int64_t> event_week;
-        std::vector<std::int64_t> exclude_tag_ids;
-        std::optional<bool> featured;
-        std::optional<bool> featured_order;
-        std::vector<std::int64_t> game_ids;
-        std::vector<std::int64_t> ids;
-        std::optional<bool> include_best_lines;
-        std::optional<bool> include_chat;
-        std::optional<bool> include_children;
-        std::optional<bool> include_template;
-        std::optional<double> liquidity_max;
-        std::optional<double> liquidity_min;
-        std::optional<bool> live;
-        std::string locale;
-        std::string order;
-        std::optional<std::int64_t> parent_event_id;
-        std::string partner_slug;
-        std::string recurrence;
-        std::optional<bool> related_tags;
-        std::vector<std::int64_t> series_ids;
-        std::vector<std::string> slugs;
-        std::string start_date_max;
-        std::string start_date_min;
-        std::string start_time_max;
-        std::string start_time_min;
-        std::vector<std::int64_t> tag_ids;
-        std::string tag_match;
-        std::string tag_slug;
-        std::string title_search;
-        std::optional<double> volume_max;
-        std::optional<double> volume_min;
-    };
-
-    struct GammaMarketLookupOptions
-    {
-        std::optional<bool> include_tag;
-        std::string locale;
-    };
-
-    struct GammaEventLookupOptions
-    {
-        std::optional<bool> include_best_lines;
-        std::optional<bool> include_chat;
-        std::optional<bool> include_template;
-        std::string locale;
-    };
-
     // Typed client for the Gamma discovery API (Environment::gamma_url). Calls
     // may run from several threads; requests on one client are serialized.
     // Invalid arguments fail with InvalidArgument before any request, and a
@@ -156,6 +59,39 @@ namespace polymarket
                                            std::size_t page_size = 100,
                                            const PageRequest &resume = {});
 
+        Result<GammaTag> get_tag_by_id(const std::string &id,
+                                       const GammaTagLookupOptions &options = {});
+        Result<GammaTag> get_tag_by_slug(const std::string &slug,
+                                         const GammaTagLookupOptions &options = {});
+        Result<std::vector<GammaRelatedTag>>
+        get_related_tags_by_id(const std::string &id, const GammaRelatedTagOptions &options = {});
+        Result<std::vector<GammaRelatedTag>>
+        get_related_tags_by_slug(const std::string &slug,
+                                 const GammaRelatedTagOptions &options = {});
+        // The tags that related-tag links point to.
+        Result<std::vector<GammaTag>>
+        get_related_tag_resources_by_id(const std::string &id,
+                                        const GammaRelatedTagResourceOptions &options = {});
+        Result<std::vector<GammaTag>>
+        get_related_tag_resources_by_slug(const std::string &slug,
+                                          const GammaRelatedTagResourceOptions &options = {});
+
+        Result<GammaSeries> get_series(const std::string &id, const std::string &locale = "");
+        Result<std::vector<GammaSport>> get_sports();
+        Result<std::vector<std::string>> get_sports_market_types();
+
+        // Offset pagers over /tags, /series and /teams. Gamma caps a page at
+        // 100 tags, 50 series or 100 teams; a larger page_size fails with
+        // InvalidArgument.
+        Paginator<GammaTag> tags_pager(const GammaTagFilter &filter = {},
+                                       std::size_t page_size = 20, const PageRequest &resume = {});
+        Paginator<GammaSeries> series_pager(const GammaSeriesFilter &filter = {},
+                                            std::size_t page_size = 20,
+                                            const PageRequest &resume = {});
+        Paginator<GammaTeam> teams_pager(const GammaTeamFilter &filter = {},
+                                         std::size_t page_size = 20,
+                                         const PageRequest &resume = {});
+
         // Reads that get HTTP 429 are retried after the server's Retry-After
         // delay. Defaults to RateLimitRetry{}; std::nullopt disables retries.
         void set_rate_limit_retry(std::optional<RateLimitRetry> policy);
@@ -171,6 +107,10 @@ namespace polymarket
         HttpResponse get(const std::string &path);
         template <typename T, typename BuildPath, typename Parse>
         Result<T> fetch(BuildPath build_path, Parse parse);
+        template <typename T, typename BuildQuery, typename ParseItems>
+        Paginator<T> offset_pager(const char *endpoint, std::size_t page_size,
+                                  std::size_t max_page_size, const PageRequest &resume,
+                                  BuildQuery build_query, ParseItems parse_items);
     };
 
 } // namespace polymarket

@@ -14,20 +14,6 @@ namespace polymarket::detail
 {
     namespace
     {
-        void check_choice(const char *name, const std::string &value,
-                          std::initializer_list<std::string_view> choices)
-        {
-            if (value.empty()) return;
-            for (const auto choice : choices)
-            {
-                if (value == choice) return;
-            }
-            std::string message = std::string(name) + " must be one of:";
-            for (const auto choice : choices)
-                message += std::string(" ") + std::string(choice);
-            throw std::invalid_argument(message);
-        }
-
         std::string trim(std::string_view text)
         {
             const auto first = text.find_first_not_of(" \t");
@@ -61,6 +47,20 @@ namespace polymarket::detail
             if (value.empty()) throw std::invalid_argument(std::string(name) + " cannot be empty");
         }
     } // namespace
+
+    void gamma_check_choice(const char *name, const std::string &value,
+                            std::initializer_list<std::string_view> choices)
+    {
+        if (value.empty()) return;
+        for (const auto choice : choices)
+        {
+            if (value == choice) return;
+        }
+        std::string message = std::string(name) + " must be one of:";
+        for (const auto choice : choices)
+            message += std::string(" ") + std::string(choice);
+        throw std::invalid_argument(message);
+    }
 
     void GammaQuery::append(std::string_view key, std::string_view value)
     {
@@ -112,7 +112,7 @@ namespace polymarket::detail
 
     std::string gamma_market_list_query(const GammaMarketFilter &filter)
     {
-        check_choice("tag_match", filter.tag_match, {"any", "all"});
+        gamma_check_choice("tag_match", filter.tag_match, {"any", "all"});
         GammaQuery query;
         query.add("ascending", filter.ascending);
         query.add("closed", filter.closed);
@@ -149,8 +149,8 @@ namespace polymarket::detail
 
     std::string gamma_event_list_query(const GammaEventFilter &filter)
     {
-        check_choice("recurrence", filter.recurrence, {"daily", "weekly", "monthly"});
-        check_choice("tag_match", filter.tag_match, {"any", "all"});
+        gamma_check_choice("recurrence", filter.recurrence, {"daily", "weekly", "monthly"});
+        gamma_check_choice("tag_match", filter.tag_match, {"any", "all"});
         GammaQuery query;
         query.add("ascending", filter.ascending);
         query.add("closed", filter.closed);

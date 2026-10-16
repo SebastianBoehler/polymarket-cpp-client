@@ -114,6 +114,9 @@ set(POLYMARKET_CLIENT_SOURCES
     src/evm_reorg_reconciliation.cpp
     src/evm_utils.cpp
     src/gamma_market_fetcher.cpp
+    src/gamma_catalog_client.cpp
+    src/gamma_catalog_parsing.cpp
+    src/gamma_catalog_query.cpp
     src/gamma_client.cpp
     src/gamma_market_parsing.cpp
     src/gamma_parsing.cpp

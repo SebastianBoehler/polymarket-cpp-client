@@ -1,67 +1,16 @@
 #include "polymarket/gamma_client.hpp"
 
+#include "gamma_client_internal.hpp"
 #include "gamma_parsing.hpp"
 #include "gamma_query.hpp"
-#include "query_encoding.hpp"
 #include "rate_limit_internal.hpp"
 
-#include <exception>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 namespace polymarket
 {
-    namespace
-    {
-        SdkError invalid_argument_error(const std::string &message, const std::string &endpoint)
-        {
-            SdkError error;
-            error.code = SdkErrorCode::InvalidArgument;
-            error.message = message;
-            error.endpoint = endpoint;
-            return error;
-        }
-
-        template <typename T, typename Get, typename ParsePage>
-        Paginator<T> keyset_pager(const std::string &endpoint, const std::string &query,
-                                  std::size_t page_size, const PageRequest &resume,
-                                  std::optional<SdkError> invalid, Get get, ParsePage parse_page)
-        {
-            if (invalid)
-            {
-                return Paginator<T>::keyset(
-                    endpoint, [error = std::move(*invalid)](const PageRequest &)
-                    { return Result<Page<T>>::failure(error); }, 1, resume);
-            }
-            std::string prefix = endpoint + (query.empty() ? "?" : query + "&") +
-                                 "limit=" + std::to_string(page_size);
-            return Paginator<T>::keyset(
-                endpoint,
-                [endpoint, prefix = std::move(prefix), get,
-                 parse_page](const PageRequest &request) -> Result<Page<T>>
-                {
-                    std::string path = prefix;
-                    if (!request.cursor.empty())
-                        path +=
-                            "&after_cursor=" + detail::percent_encode_query_value(request.cursor);
-                    const auto response = get(path);
-                    if (!response.ok())
-                        return Result<Page<T>>::failure(make_sdk_error(response, endpoint));
-                    try
-                    {
-                        return Result<Page<T>>::success(parse_page(response.body));
-                    }
-                    catch (const std::exception &ex)
-                    {
-                        return Result<Page<T>>::failure(
-                            make_parse_error(ex.what(), endpoint, response.body));
-                    }
-                },
-                page_size, resume);
-        }
-    } // namespace
-
     GammaClient::GammaClient(Environment environment,
                              const std::optional<HttpClientOptions> &http_options)
         : environment_(std::move(environment))
@@ -89,31 +38,6 @@ namespace polymarket
             policy = rate_limit_retry_;
         }
         return detail::retry_rate_limited(policy, [&] { return http_.get(path); });
-    }
-
-    template <typename T, typename BuildPath, typename Parse>
-    Result<T> GammaClient::fetch(BuildPath build_path, Parse parse)
-    {
-        std::string path;
-        try
-        {
-            path = build_path();
-        }
-        catch (const std::invalid_argument &ex)
-        {
-            return Result<T>::failure(invalid_argument_error(ex.what(), ""));
-        }
-        const std::string endpoint = path.substr(0, path.find('?'));
-        const auto response = get(path);
-        if (!response.ok()) return Result<T>::failure(make_sdk_error(response, endpoint));
-        try
-        {
-            return Result<T>::success(parse(response.body));
-        }
-        catch (const std::exception &ex)
-        {
-            return Result<T>::failure(make_parse_error(ex.what(), endpoint, response.body));
-        }
     }
 
     Result<GammaMarket> GammaClient::get_market_by_id(const std::string &id,
@@ -218,9 +142,9 @@ namespace polymarket
         }
         catch (const std::invalid_argument &ex)
         {
-            invalid = invalid_argument_error(ex.what(), endpoint);
+            invalid = detail::gamma_invalid_argument(ex.what(), endpoint);
         }
-        return keyset_pager<GammaMarket>(
+        return detail::gamma_keyset_pager<GammaMarket>(
             endpoint, query, page_size, resume, std::move(invalid), [this](const std::string &path)
             { return get(path); }, detail::parse_gamma_market_keyset_page);
     }
@@ -239,9 +163,9 @@ namespace polymarket
         }
         catch (const std::invalid_argument &ex)
         {
-            invalid = invalid_argument_error(ex.what(), endpoint);
+            invalid = detail::gamma_invalid_argument(ex.what(), endpoint);
         }
-        return keyset_pager<GammaEvent>(
+        return detail::gamma_keyset_pager<GammaEvent>(
             endpoint, query, page_size, resume, std::move(invalid), [this](const std::string &path)
             { return get(path); }, detail::parse_gamma_event_keyset_page);
     }

@@ -57,6 +57,13 @@ namespace polymarket::detail
         return value->get<std::string>();
     }
 
+    std::string gamma_required_string(const json &object, const char *key)
+    {
+        const auto *value = field(object, key);
+        if (value == nullptr || !value->is_string()) bad_field(key, "a string");
+        return value->get<std::string>();
+    }
+
     std::string gamma_id(const json &object, const char *key)
     {
         const auto *value = field(object, key);
@@ -172,6 +179,16 @@ namespace polymarket::detail
         tag.id = gamma_required_id(item, "id");
         tag.slug = gamma_string(item, "slug");
         tag.label = gamma_string(item, "label");
+        tag.force_show = gamma_bool(item, "forceShow");
+        tag.force_hide = gamma_bool(item, "forceHide");
+        tag.is_carousel = gamma_bool(item, "isCarousel");
+        tag.requires_translation = gamma_bool(item, "requiresTranslation");
+        tag.created_by = gamma_integer(item, "createdBy");
+        tag.updated_by = gamma_integer(item, "updatedBy");
+        tag.active_events_count = gamma_integer(item, "activeEventsCount");
+        tag.published_at = gamma_string(item, "publishedAt");
+        tag.created_at = gamma_string(item, "createdAt");
+        tag.updated_at = gamma_string(item, "updatedAt");
         tag.raw = item;
         return tag;
     }

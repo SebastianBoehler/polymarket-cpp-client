@@ -21,6 +21,16 @@ namespace polymarket
         std::string id;
         std::string slug;
         std::string label;
+        std::optional<bool> force_show;
+        std::optional<bool> force_hide;
+        std::optional<bool> is_carousel;
+        std::optional<bool> requires_translation;
+        std::optional<std::int64_t> created_by;
+        std::optional<std::int64_t> updated_by;
+        std::optional<std::int64_t> active_events_count;
+        std::string published_at;
+        std::string created_at;
+        std::string updated_at;
         nlohmann::json raw;
     };
 

@@ -88,5 +88,16 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
     parse_or_reject([&] { (void)detail::parse_gamma_market_keyset_page(body); });
     parse_or_reject([&] { (void)detail::parse_gamma_event_keyset_page(body); });
     parse_or_reject([&] { (void)detail::parse_gamma_tag_references(body); });
+    parse_or_reject([&] { (void)detail::parse_gamma_tag_response(body); });
+    parse_or_reject([&] { (void)detail::parse_gamma_related_tags(body); });
+    parse_or_reject(
+        [&]
+        {
+            if (detail::parse_gamma_series_response(body).id.empty()) std::abort();
+        });
+    parse_or_reject([&] { (void)detail::parse_gamma_series_list(body); });
+    parse_or_reject([&] { (void)detail::parse_gamma_sports(body); });
+    parse_or_reject([&] { (void)detail::parse_gamma_sports_market_types(body); });
+    parse_or_reject([&] { (void)detail::parse_gamma_teams(body); });
     return 0;
 }
