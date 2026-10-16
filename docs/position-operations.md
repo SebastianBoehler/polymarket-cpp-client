@@ -54,9 +54,9 @@ required for a Safe: it is used for balance reads and receipts.
 
 ## How an operation runs
 
-1. The market is looked up on Gamma (`/markets?condition_ids=...`; redeem adds
-   `closed=true`). Gamma omits closed markets otherwise, so split and merge only
-   work on open markets.
+1. The market is looked up on Gamma through `GammaClient`
+   (`/markets/keyset?condition_ids=...`; redeem adds `closed=true`). Gamma omits
+   closed markets otherwise, so split and merge only work on open markets.
 2. The market's `version` picks the contract:
    - `v1` (CTF) markets use the pUSD collateral adapter, or the neg-risk
      collateral adapter when `negRisk` is true, with the ConditionalTokens ABI

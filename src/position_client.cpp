@@ -1,5 +1,4 @@
 #include "polymarket/position_client.hpp"
-#include "rate_limit_internal.hpp"
 #include "position_calls.hpp"
 #include "position_client_impl.hpp"
 #include <set>
@@ -24,27 +23,28 @@ namespace polymarket
     MarketPositionContext PositionClient::resolve_market(const std::string &condition_id, bool closed_only)
     {
         const auto normalized = detail::normalize_requested_condition_id(condition_id);
-        std::string path = "/markets?condition_ids=" + normalized;
-        if (closed_only)
-            path += "&closed=true";
-        const auto response = detail::retry_rate_limited(impl_->rate_limit_retry,
-                                                         [&] { return impl_->gamma.get(path); });
-        if (!response.ok())
-            throw std::runtime_error("Gamma market lookup failed for condition " + normalized + ": status " +
-                                     std::to_string(response.status_code) + " " + response.error);
-        nlohmann::json body;
-        try
+        GammaMarketFilter filter;
+        filter.condition_ids = {normalized};
+        if (closed_only) filter.closed = true;
+        auto markets = impl_->gamma->markets_pager(filter).collect();
+        if (!markets.ok())
         {
-            body = nlohmann::json::parse(response.body);
+            const auto &error = markets.error();
+            if (error.code == SdkErrorCode::Parse)
+                throw std::runtime_error(
+                    "Gamma market lookup returned invalid JSON for condition " + normalized + ": " +
+                    error.message);
+            throw std::runtime_error("Gamma market lookup failed for condition " + normalized +
+                                     ": status " + std::to_string(error.http_status) + " " +
+                                     error.message);
         }
-        catch (const nlohmann::json::parse_error &)
-        {
-            throw std::runtime_error("Gamma market lookup returned invalid JSON for condition " + normalized);
-        }
-        if (body.is_array() && body.empty())
+        if (markets.value().empty())
             throw std::invalid_argument("no " + std::string(closed_only ? "closed" : "open") +
                                         " market found for condition " + normalized +
                                         (closed_only ? "" : " (closed markets can only be redeemed)"));
+        auto body = nlohmann::json::array();
+        for (auto &market : markets.value())
+            body.push_back(std::move(market.raw));
         return detail::market_context_from_gamma(body, normalized, impl_->contracts);
     }
 

@@ -32,7 +32,10 @@ namespace polymarket
         if (config.rate_limit_retry) detail::validate_rate_limit_retry(*config.rate_limit_retry);
         rate_limit_retry = config.rate_limit_retry;
         rpc->set_timeout_ms(config.rpc_timeout_ms);
-        gamma.set_base_url(config.gamma_api_url);
+        auto gamma_environment = Environment::production();
+        gamma_environment.gamma_url = config.gamma_api_url;
+        gamma = std::make_unique<GammaClient>(std::move(gamma_environment), HttpClientOptions{});
+        gamma->set_rate_limit_retry(rate_limit_retry);
 
         if (wallet_type == SignatureType::EOA)
         {

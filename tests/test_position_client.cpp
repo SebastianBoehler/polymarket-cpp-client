@@ -50,7 +50,7 @@ namespace
 
         void market(const std::string &condition, const std::string &version = "v1", bool neg_risk = false)
         {
-            gamma.enqueue(gamma_market(condition, version, neg_risk).dump());
+            gamma.enqueue(gamma_keyset_page(condition, version, neg_risk));
         }
 
         size_t rpc_count(const std::string &method) const
@@ -77,7 +77,9 @@ namespace
         check(handle.transaction_hashes().size() == 1 && handle.transaction_hash().size() == 66, "split handle");
 
         const auto gamma_requests = h.gamma.requests();
-        check(gamma_requests.size() == 1 && gamma_requests[0].target == "/markets?condition_ids=" + kCondition,
+        check(gamma_requests.size() == 1 &&
+                  gamma_requests[0].target ==
+                      "/markets/keyset?condition_ids=" + kCondition + "&limit=100",
               "split gamma query " + (gamma_requests.empty() ? "" : gamma_requests[0].target));
 
         expect_rpc(h.node, "eth_getTransactionReceipt", nlohmann::json());
@@ -112,7 +114,8 @@ namespace
                            detail::router_merge_call(kContracts.protocol_v2_router, bytes31, "60").data, false);
         (void)h.client.merge_positions(bytes31, "max");
         for (const auto &request : h.gamma.requests())
-            check(request.target == "/markets?condition_ids=" + bytes31, "Gamma lookup target " + request.target);
+            check(request.target == "/markets/keyset?condition_ids=" + bytes31 + "&limit=100",
+                  "Gamma lookup target " + request.target);
         h.market(bytes31, "v2");
         expect_rpc(h.node, "eth_call", balances_result("1", "1"));
         h.market(bytes31, "v2");
@@ -257,7 +260,9 @@ namespace
                            true);
         (void)h.client.redeem_positions(kCondition);
         const auto gamma_requests = h.gamma.requests();
-        check(!gamma_requests.empty() && gamma_requests.back().target.ends_with("&closed=true"),
+        check(!gamma_requests.empty() &&
+                  gamma_requests.back().target ==
+                      "/markets/keyset?closed=true&condition_ids=" + kCondition + "&limit=100",
               "redeem looks up closed markets");
 
         h.market(kCondition);

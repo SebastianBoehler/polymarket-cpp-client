@@ -46,9 +46,17 @@ namespace position_test
                                  {"conditionId", condition},
                                  {"version", version},
                                  {"negRisk", neg_risk},
+                                 {"outcomes", "[\"Yes\", \"No\"]"},
                                  {"clobTokenIds", "[\"" + kYes + "\", \"" + kNo + "\"]"},
                                  {"positionIds", nlohmann::json::array({"100", "101"})}};
         return nlohmann::json::array({market});
+    }
+
+    // The /markets/keyset page that PositionClient::resolve_market reads.
+    inline std::string gamma_keyset_page(const std::string &condition,
+                                         const std::string &version = "v1", bool neg_risk = false)
+    {
+        return nlohmann::json{{"markets", gamma_market(condition, version, neg_risk)}}.dump();
     }
 
     // ---- scripted JSON-RPC node ----
