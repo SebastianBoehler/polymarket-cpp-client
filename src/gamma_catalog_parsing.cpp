@@ -26,10 +26,10 @@ namespace polymarket::detail
         GammaRelatedTag parse_related_tag(const json &item)
         {
             GammaRelatedTag tag;
-            tag.id = gamma_required_id(item, "id");
-            tag.tag_id = gamma_integer(item, "tagID");
-            tag.related_tag_id = gamma_integer(item, "relatedTagID");
-            tag.rank = gamma_integer(item, "rank");
+            tag.id = field_required_id(item, "id");
+            tag.tag_id = field_integer(item, "tagID");
+            tag.related_tag_id = field_integer(item, "relatedTagID");
+            tag.rank = field_integer(item, "rank");
             tag.raw = item;
             return tag;
         }
@@ -37,16 +37,16 @@ namespace polymarket::detail
         GammaSport parse_sport(const json &item)
         {
             GammaSport sport;
-            sport.id = gamma_required_id(item, "id");
-            sport.sport = gamma_required_string(item, "sport");
-            sport.name = gamma_string(item, "name");
-            sport.image = gamma_required_string(item, "image");
-            sport.resolution = gamma_required_string(item, "resolution");
-            sport.ordering = gamma_required_string(item, "ordering");
-            sport.tags = gamma_required_string(item, "tags");
-            sport.series = gamma_required_string(item, "series");
-            sport.created_at = gamma_string(item, "createdAt");
-            sport.updated_at = gamma_string(item, "updatedAt");
+            sport.id = field_required_id(item, "id");
+            sport.sport = field_required_string(item, "sport");
+            sport.name = field_string(item, "name");
+            sport.image = field_required_string(item, "image");
+            sport.resolution = field_required_string(item, "resolution");
+            sport.ordering = field_required_string(item, "ordering");
+            sport.tags = field_required_string(item, "tags");
+            sport.series = field_required_string(item, "series");
+            sport.created_at = field_string(item, "createdAt");
+            sport.updated_at = field_string(item, "updatedAt");
             sport.raw = item;
             return sport;
         }
@@ -54,20 +54,20 @@ namespace polymarket::detail
         GammaTeam parse_team(const json &item)
         {
             GammaTeam team;
-            team.id = gamma_required_id(item, "id");
-            team.name = gamma_string(item, "name");
-            team.league = gamma_string(item, "league");
-            team.record = gamma_string(item, "record");
-            team.logo = gamma_string(item, "logo");
-            team.abbreviation = gamma_string(item, "abbreviation");
-            team.alias = gamma_string(item, "alias");
-            team.color = gamma_string(item, "color");
-            team.ordering = gamma_string(item, "ordering");
+            team.id = field_required_id(item, "id");
+            team.name = field_string(item, "name");
+            team.league = field_string(item, "league");
+            team.record = field_string(item, "record");
+            team.logo = field_string(item, "logo");
+            team.abbreviation = field_string(item, "abbreviation");
+            team.alias = field_string(item, "alias");
+            team.color = field_string(item, "color");
+            team.ordering = field_string(item, "ordering");
             if (!team.ordering.empty() && team.ordering != "home" && team.ordering != "away")
                 throw std::invalid_argument("Gamma field ordering must be home or away");
-            team.provider_id = gamma_integer(item, "providerId");
-            team.created_at = gamma_string(item, "createdAt");
-            team.updated_at = gamma_string(item, "updatedAt");
+            team.provider_id = field_integer(item, "providerId");
+            team.created_at = field_string(item, "createdAt");
+            team.updated_at = field_string(item, "updatedAt");
             team.raw = item;
             return team;
         }
@@ -86,35 +86,35 @@ namespace polymarket::detail
     GammaSeries parse_gamma_series(const json &item)
     {
         GammaSeries series;
-        series.id = gamma_required_id(item, "id");
-        series.ticker = gamma_string(item, "ticker");
-        series.slug = gamma_string(item, "slug");
-        series.title = gamma_string(item, "title");
-        series.subtitle = gamma_string(item, "subtitle");
-        series.series_type = gamma_string(item, "seriesType");
-        series.recurrence = gamma_string(item, "recurrence");
-        series.description = gamma_string(item, "description");
-        series.image = gamma_string(item, "image");
-        series.icon = gamma_string(item, "icon");
-        series.layout = gamma_string(item, "layout");
-        series.active = gamma_bool(item, "active");
-        series.closed = gamma_bool(item, "closed");
-        series.archived = gamma_bool(item, "archived");
-        series.is_new = gamma_bool(item, "new");
-        series.featured = gamma_bool(item, "featured");
-        series.restricted = gamma_bool(item, "restricted");
-        series.comments_enabled = gamma_bool(item, "commentsEnabled");
-        series.competitive = gamma_string(item, "competitive");
-        series.volume = gamma_number(item, "volume");
-        series.liquidity = gamma_number(item, "liquidity");
-        series.comment_count = gamma_integer(item, "commentCount");
-        series.start_date = gamma_string(item, "startDate");
-        series.published_at = gamma_string(item, "publishedAt");
-        series.created_at = gamma_string(item, "createdAt");
-        series.updated_at = gamma_string(item, "updatedAt");
-        for (const auto &event : gamma_objects(item, "events"))
+        series.id = field_required_id(item, "id");
+        series.ticker = field_string(item, "ticker");
+        series.slug = field_string(item, "slug");
+        series.title = field_string(item, "title");
+        series.subtitle = field_string(item, "subtitle");
+        series.series_type = field_string(item, "seriesType");
+        series.recurrence = field_string(item, "recurrence");
+        series.description = field_string(item, "description");
+        series.image = field_string(item, "image");
+        series.icon = field_string(item, "icon");
+        series.layout = field_string(item, "layout");
+        series.active = field_bool(item, "active");
+        series.closed = field_bool(item, "closed");
+        series.archived = field_bool(item, "archived");
+        series.is_new = field_bool(item, "new");
+        series.featured = field_bool(item, "featured");
+        series.restricted = field_bool(item, "restricted");
+        series.comments_enabled = field_bool(item, "commentsEnabled");
+        series.competitive = field_string(item, "competitive");
+        series.volume = field_number(item, "volume");
+        series.liquidity = field_number(item, "liquidity");
+        series.comment_count = field_integer(item, "commentCount");
+        series.start_date = field_string(item, "startDate");
+        series.published_at = field_string(item, "publishedAt");
+        series.created_at = field_string(item, "createdAt");
+        series.updated_at = field_string(item, "updatedAt");
+        for (const auto &event : field_objects(item, "events"))
             series.events.push_back(parse_gamma_event(event));
-        for (const auto &tag : gamma_objects(item, "tags"))
+        for (const auto &tag : field_objects(item, "tags"))
             series.tags.push_back(parse_gamma_tag_reference(tag));
         series.raw = item;
         return series;
@@ -137,7 +137,7 @@ namespace polymarket::detail
 
     std::vector<std::string> parse_gamma_sports_market_types(const std::string &body)
     {
-        return gamma_string_list(json::parse(body), "marketTypes");
+        return field_string_list(json::parse(body), "marketTypes");
     }
 
     std::vector<GammaTeam> parse_gamma_teams(const std::string &body)

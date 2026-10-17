@@ -100,7 +100,7 @@ namespace polymarket
             [&]
             {
                 if (id.empty()) throw std::invalid_argument("id cannot be empty");
-                detail::GammaQuery query;
+                detail::QueryBuilder query;
                 query.add("locale", locale);
                 return "/series/" + detail::percent_encode_query_value(id) + query.str();
             },
@@ -125,7 +125,7 @@ namespace polymarket
         return offset_pager<GammaTag>(
             "/tags", page_size, 100, unlimited_offset, resume,
             [&] { return detail::gamma_tag_list_query(filter); },
-            detail::gamma_list_page<GammaTag>(detail::parse_gamma_tag_references));
+            detail::list_page<GammaTag>(detail::parse_gamma_tag_references));
     }
 
     Paginator<GammaSeries> GammaClient::series_pager(const GammaSeriesFilter &filter,
@@ -135,7 +135,7 @@ namespace polymarket
         return offset_pager<GammaSeries>(
             "/series", page_size, 50, unlimited_offset, resume,
             [&] { return detail::gamma_series_list_query(filter); },
-            detail::gamma_list_page<GammaSeries>(detail::parse_gamma_series_list));
+            detail::list_page<GammaSeries>(detail::parse_gamma_series_list));
     }
 
     Paginator<GammaTeam> GammaClient::teams_pager(const GammaTeamFilter &filter,
@@ -144,6 +144,6 @@ namespace polymarket
         return offset_pager<GammaTeam>(
             "/teams", page_size, 100, unlimited_offset, resume,
             [&] { return detail::gamma_team_list_query(filter); },
-            detail::gamma_list_page<GammaTeam>(detail::parse_gamma_teams));
+            detail::list_page<GammaTeam>(detail::parse_gamma_teams));
     }
 } // namespace polymarket
