@@ -1,5 +1,6 @@
 #pragma once
 
+#include "polymarket/data_analytics_types.hpp"
 #include "polymarket/data_portfolio_types.hpp"
 #include "polymarket/data_requests.hpp"
 #include "polymarket/data_types.hpp"
@@ -10,6 +11,7 @@
 #include "polymarket/sdk_error.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -20,8 +22,8 @@ namespace polymarket
     // Typed client for the Data API v2 (Environment::data_url). Calls may run
     // from several threads; requests on one client are serialized. Invalid
     // arguments fail with InvalidArgument before any request. Pagers page by
-    // server cursor, at most 1000 rows per page, and borrow this client, which
-    // must outlive them.
+    // server cursor, at most 1000 rows per page unless noted, and borrow this
+    // client, which must outlive them.
     class DataClient
     {
       public:
@@ -59,6 +61,25 @@ namespace polymarket
                                                const DataTimeRange &range = {});
         // The wallet's accounting snapshot as zip archive bytes.
         Result<std::string> download_accounting_snapshot(const std::string &user);
+
+        // Holders of the markets' outcomes. `condition_ids` is required and
+        // follows DataPositionFilter's rules; `page_size` applies per outcome.
+        Paginator<DataAssetHolders> holders_pager(const std::vector<std::string> &condition_ids,
+                                                  const DataHolderFilter &filter = {},
+                                                  std::size_t page_size = 100,
+                                                  const PageRequest &resume = {});
+        // Global open interest when `condition_ids` is empty.
+        Result<std::vector<DataOpenInterest>>
+        get_open_interests(const std::vector<std::string> &condition_ids = {});
+        // Combined taker volume of the events, which are required.
+        Result<DataLiveVolume> get_event_live_volume(const std::vector<std::int64_t> &event_ids);
+        // Prices oldest first, at most 10000 per page.
+        Paginator<DataPricePoint> price_history_pager(const std::string &asset_id,
+                                                      const DataPriceHistoryFilter &filter,
+                                                      std::size_t page_size = 10000,
+                                                      const PageRequest &resume = {});
+        // Rows the Data API does not know are left out.
+        Result<std::vector<DataResolution>> get_resolutions(const DataResolutionFilter &filter);
 
         // Reads that get HTTP 429 are retried after the server's Retry-After
         // delay. Defaults to RateLimitRetry{}; std::nullopt disables retries.

@@ -1,5 +1,7 @@
 #include "data_parsing.hpp"
 
+#include "market_time.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -108,6 +110,48 @@ namespace polymarket::detail
         const auto value = field_integer(object, key);
         if (!value) throw_bad_field(key, "an integer");
         return *value;
+    }
+
+    std::string data_choice(const json &object, const char *key,
+                            std::initializer_list<std::string_view> choices, const char *expected)
+    {
+        auto value = field_required_string(object, key);
+        for (const auto allowed : choices)
+        {
+            if (value == allowed) return value;
+        }
+        throw_bad_field(key, expected);
+    }
+
+    std::string data_optional_choice(const json &object, const char *key,
+                                     std::initializer_list<std::string_view> choices,
+                                     const char *expected)
+    {
+        if (find_field(object, key) == nullptr) return {};
+        return data_choice(object, key, choices, expected);
+    }
+
+    std::int64_t data_epoch_or_iso(const json &object, const char *key)
+    {
+        const auto *value = find_field(object, key);
+        if (value != nullptr && value->is_string())
+        {
+            const auto &text = value->get_ref<const std::string &>();
+            if (!text.empty() && text.find_first_not_of("0123456789") != std::string::npos)
+            {
+                const auto ms = parse_iso8601_ms(text);
+                if (ms == 0) throw_bad_field(key, "an ISO 8601 UTC time or Unix seconds");
+                return static_cast<std::int64_t>(ms / 1000);
+            }
+        }
+        return data_epoch_seconds(object, key);
+    }
+
+    std::optional<std::int64_t> data_optional_epoch_or_iso(const json &object, const char *key)
+    {
+        const auto *value = find_field(object, key);
+        if (value == nullptr || *value == "") return std::nullopt;
+        return data_epoch_or_iso(object, key);
     }
 
     std::int64_t data_epoch_seconds(const json &object, const char *key)

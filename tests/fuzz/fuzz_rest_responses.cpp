@@ -146,5 +146,24 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
     parse_or_reject([&] { (void)detail::parse_data_user_stats(body); });
     parse_or_reject([&] { (void)detail::parse_data_pnl_series(body); });
     parse_or_reject([&] { (void)detail::parse_data_user_volume(body); });
+    parse_or_reject(
+        [&]
+        {
+            for (const auto &group : detail::parse_data_holders_page(body).items)
+            {
+                if (group.asset_id.empty()) std::abort();
+            }
+        });
+    parse_or_reject([&] { (void)detail::parse_data_open_interests(body); });
+    parse_or_reject([&] { (void)detail::parse_data_live_volume(body); });
+    parse_or_reject([&] { (void)detail::parse_data_price_history_page(body); });
+    parse_or_reject(
+        [&]
+        {
+            for (const auto &resolution : detail::parse_data_resolutions(body))
+            {
+                if (resolution.status.empty() || resolution.last_updated_at <= 0) std::abort();
+            }
+        });
     return 0;
 }

@@ -3,6 +3,7 @@
 #include "polymarket/data_requests.hpp"
 #include "query_builder.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -42,4 +43,16 @@ namespace polymarket::detail
     std::string data_user_pnl_query(const std::string &user, const std::string &interval,
                                     const std::string &fidelity);
     std::string data_user_volume_query(const std::string &user, const DataTimeRange &range);
+
+    inline constexpr std::size_t data_price_history_page_size = 10000;
+
+    std::string data_holders_query(const std::vector<std::string> &condition_ids,
+                                   const DataHolderFilter &filter);
+    std::string data_open_interest_query(const std::vector<std::string> &condition_ids);
+    std::string data_live_volume_query(const std::vector<std::int64_t> &event_ids);
+    // `now` (Unix seconds) ends a window without `end`.
+    std::string data_price_history_query(const std::string &asset_id,
+                                         const DataPriceHistoryFilter &filter,
+                                         std::size_t page_size, std::int64_t now);
+    std::string data_resolution_query(const DataResolutionFilter &filter);
 } // namespace polymarket::detail

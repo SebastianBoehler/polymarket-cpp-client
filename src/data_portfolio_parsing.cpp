@@ -1,27 +1,14 @@
 #include "data_parsing.hpp"
 
 #include <cctype>
-#include <initializer_list>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 
 // Field names and rules follow py-sdk models/data/portfolio.py and common.py.
 namespace polymarket::detail
 {
     namespace
     {
-        std::string choice(const json &item, const char *key,
-                           std::initializer_list<std::string_view> choices, const char *expected)
-        {
-            auto value = field_required_string(item, key);
-            for (const auto allowed : choices)
-            {
-                if (value == allowed) return value;
-            }
-            throw_bad_field(key, expected);
-        }
-
         std::string event_id(const json &item, const char *key)
         {
             auto id = field_id(item, key);
@@ -66,8 +53,8 @@ namespace polymarket::detail
         position.total_pnl = data_required_number(item, "total_pnl");
         position.percent_pnl = data_required_number(item, "percent_pnl");
         position.percent_realized_pnl = data_required_number(item, "percent_realized_pnl");
-        position.status =
-            choice(item, "status", {"OPEN", "REDEEMABLE", "CLOSED"}, "OPEN, REDEEMABLE or CLOSED");
+        position.status = data_choice(item, "status", {"OPEN", "REDEEMABLE", "CLOSED"},
+                                      "OPEN, REDEEMABLE or CLOSED");
         position.redeemable = data_required_bool(item, "redeemable");
         position.mergeable = data_required_bool(item, "mergeable");
         position.negative_risk = data_required_bool(item, "negative_risk");
@@ -165,11 +152,13 @@ namespace polymarket::detail
         constexpr const char *fidelities = "1d, 18h, 12h, 3h or 1h";
         DataPnlSeries series;
         series.wallet = field_required_string(data, "proxy_wallet");
-        series.interval = choice(data, "interval", {"max", "all", "1m", "1w", "1d", "12h", "6h"},
-                                 "max, all, 1m, 1w, 1d, 12h or 6h");
-        series.fidelity = choice(data, "fidelity", {"1d", "18h", "12h", "3h", "1h"}, fidelities);
+        series.interval =
+            data_choice(data, "interval", {"max", "all", "1m", "1w", "1d", "12h", "6h"},
+                        "max, all, 1m, 1w, 1d, 12h or 6h");
+        series.fidelity =
+            data_choice(data, "fidelity", {"1d", "18h", "12h", "3h", "1h"}, fidelities);
         series.source_fidelity =
-            choice(data, "source_fidelity", {"1d", "18h", "12h", "3h", "1h"}, fidelities);
+            data_choice(data, "source_fidelity", {"1d", "18h", "12h", "3h", "1h"}, fidelities);
         const auto *points = find_field(data, "points");
         if (points == nullptr || !points->is_array()) throw_bad_field("points", "an array");
         series.points.reserve(points->size());
