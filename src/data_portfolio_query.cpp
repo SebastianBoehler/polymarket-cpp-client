@@ -12,8 +12,8 @@ namespace polymarket::detail
         std::string checked_title(const std::string &title)
         {
             if (title.find_first_not_of(" \t\n\v\f\r") == std::string::npos) return {};
-            const auto characters = std::count_if(title.begin(), title.end(), [](char c)
-                                                  { return (c & 0xC0) != 0x80; });
+            const auto characters = std::count_if(title.begin(), title.end(),
+                                                  [](char c) { return (c & 0xC0) != 0x80; });
             if (characters > 200)
                 throw std::invalid_argument("title must contain at most 200 characters");
             return title;
@@ -37,8 +37,7 @@ namespace polymarket::detail
         const bool has_user = !filter.user.empty();
         if (!has_user && condition_ids.size() != 1)
             throw std::invalid_argument("Provide user or exactly one condition_id");
-        if (!event_ids.empty() && !has_user)
-            throw std::invalid_argument("event_id requires user");
+        if (!event_ids.empty() && !has_user) throw std::invalid_argument("event_id requires user");
         if ((filter.status == "REDEEMABLE_LOST" || filter.status == "MERGEABLE") && !has_user)
             throw std::invalid_argument(filter.status + " requires user");
         if (filter.status == "CLOSED" && filter.include_archived.value_or(false))

@@ -28,7 +28,8 @@ namespace polymarket::detail
             std::set<std::string> seen;
             for (const auto &value : values)
             {
-                if (!is_hex(value)) throw std::invalid_argument("condition_id must be a hex string");
+                if (!is_hex(value))
+                    throw std::invalid_argument("condition_id must be a hex string");
                 auto id = normalize(value);
                 std::string key = id;
                 std::transform(key.begin(), key.end(), key.begin(),
@@ -64,7 +65,8 @@ namespace polymarket::detail
     void data_check_amount(const char *name, const std::optional<double> &value)
     {
         if (value && (!std::isfinite(*value) || *value < 0))
-            throw std::invalid_argument(std::string(name) + " must be a finite non-negative amount");
+            throw std::invalid_argument(std::string(name) +
+                                        " must be a finite non-negative amount");
     }
 
     std::vector<std::string> data_condition_ids(const std::vector<std::string> &values)

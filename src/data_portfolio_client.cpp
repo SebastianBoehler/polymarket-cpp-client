@@ -12,8 +12,7 @@ namespace polymarket
     {
         return cursor_pager<DataPosition>(
             "/v2/positions", page_size, detail::data_max_page_size, resume,
-            [&] { return detail::data_position_query(filter); },
-            detail::parse_data_position_page);
+            [&] { return detail::data_position_query(filter); }, detail::parse_data_position_page);
     }
 
     Result<DataPortfolioValue>

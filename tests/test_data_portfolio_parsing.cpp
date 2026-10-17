@@ -79,10 +79,9 @@ namespace
         row["opposite_outcome"] = "";
         row["current_size"] = "12.5";
         const auto position = detail::parse_data_position(row);
-        check(position.event_id.empty() && position.end_date.empty() &&
-                  !position.outcome_index && !position.last_event_at &&
-                  !position.first_entry_at && position.opposite_outcome.empty() &&
-                  position.current_size == 12.5,
+        check(position.event_id.empty() && position.end_date.empty() && !position.outcome_index &&
+                  !position.last_event_at && !position.first_entry_at &&
+                  position.opposite_outcome.empty() && position.current_size == 12.5,
               "Data API placeholders must read as unset");
         row["event_id"] = 77;
         check(detail::parse_data_position(row).event_id == "77",
@@ -97,8 +96,9 @@ namespace
               "portfolio value must parse");
 
         const auto stats = detail::parse_data_user_stats(data_fixtures::data_user_stats);
-        check(stats && stats->traded_market_count == 2795 && near(stats->biggest_win, 137934.308878) &&
-                  stats->views == 4356 && stats->join_date == 1782617410 && stats->all_time_pnl,
+        check(stats && stats->traded_market_count == 2795 &&
+                  near(stats->biggest_win, 137934.308878) && stats->views == 4356 &&
+                  stats->join_date == 1782617410 && stats->all_time_pnl,
               "user stats must parse");
         const auto &pnl = *stats->all_time_pnl;
         check(pnl.timestamp == 1792273655 && pnl.source_block == 95712205 &&
@@ -140,30 +140,33 @@ namespace
                         [] { (void)detail::parse_data_portfolio_value(R"({"value":1})"); });
         expect_rejected("a list value",
                         [] { (void)detail::parse_data_portfolio_value(R"({"data":[]})"); });
-        expect_rejected("an unknown PnL fidelity",
-                        []
-                        {
-                            (void)detail::parse_data_pnl_series(
-                                R"({"data":{"proxy_wallet":"0x1","interval":"1d","fidelity":"5m","source_fidelity":"1d","points":[]}})");
-                        });
-        expect_rejected("PnL without points",
-                        []
-                        {
-                            (void)detail::parse_data_pnl_series(
-                                R"({"data":{"proxy_wallet":"0x1","interval":"1d","fidelity":"1h","source_fidelity":"1d"}})");
-                        });
+        expect_rejected(
+            "an unknown PnL fidelity",
+            []
+            {
+                (void)detail::parse_data_pnl_series(
+                    R"({"data":{"proxy_wallet":"0x1","interval":"1d","fidelity":"5m","source_fidelity":"1d","points":[]}})");
+            });
+        expect_rejected(
+            "PnL without points",
+            []
+            {
+                (void)detail::parse_data_pnl_series(
+                    R"({"data":{"proxy_wallet":"0x1","interval":"1d","fidelity":"1h","source_fidelity":"1d"}})");
+            });
         expect_rejected("a fractional trade count",
                         []
                         {
                             (void)detail::parse_data_user_volume(
                                 R"({"data":{"volume":1,"volume_usdc":1,"trade_count":1.5}})");
                         });
-        expect_rejected("stats with a malformed PnL",
-                        []
-                        {
-                            (void)detail::parse_data_user_stats(
-                                R"({"data":{"proxy_wallet":"0x1","trades":0,"biggest_win":0,"views":0,"all_time_pnl":{"timestamp":1}}})");
-                        });
+        expect_rejected(
+            "stats with a malformed PnL",
+            []
+            {
+                (void)detail::parse_data_user_stats(
+                    R"({"data":{"proxy_wallet":"0x1","trades":0,"biggest_win":0,"views":0,"all_time_pnl":{"timestamp":1}}})");
+            });
     }
 } // namespace
 

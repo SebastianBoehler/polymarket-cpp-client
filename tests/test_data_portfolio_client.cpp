@@ -156,19 +156,19 @@ namespace clob_test
             mixed.end = 5;
             const auto rejected = [](const auto &result)
             { return !result.ok() && result.error().code == SdkErrorCode::InvalidArgument; };
-            const bool reads_rejected =
-                rejected(client.get_portfolio_value("")) &&
-                rejected(client.get_portfolio_value(user, {"0x12"})) &&
-                rejected(client.get_user_stats("")) &&
-                rejected(client.get_user_pnl(user, "2d")) &&
-                rejected(client.get_user_pnl(user, "", "5m")) &&
-                rejected(client.get_user_volume(user, mixed)) &&
-                rejected(client.download_accounting_snapshot(""));
+            const bool reads_rejected = rejected(client.get_portfolio_value("")) &&
+                                        rejected(client.get_portfolio_value(user, {"0x12"})) &&
+                                        rejected(client.get_user_stats("")) &&
+                                        rejected(client.get_user_pnl(user, "2d")) &&
+                                        rejected(client.get_user_pnl(user, "", "5m")) &&
+                                        rejected(client.get_user_volume(user, mixed)) &&
+                                        rejected(client.download_accounting_snapshot(""));
             const bool no_requests = server.requests().empty();
             server.enqueue(empty_page);
             auto accented = client.positions_pager(long_title).next_page();
             return check(all_rejected, "invalid position filters must fail with InvalidArgument") &&
-                   check(reads_rejected, "invalid portfolio reads must fail with InvalidArgument") &&
+                   check(reads_rejected,
+                         "invalid portfolio reads must fail with InvalidArgument") &&
                    check(no_requests, "invalid arguments must not send requests") &&
                    check(accented.ok(), "a title limit must count characters, not bytes");
         }
@@ -194,9 +194,8 @@ namespace clob_test
 int main()
 {
     using namespace clob_test;
-    const bool passed =
-        test_positions_pager() && test_portfolio_reads() && test_invalid_arguments() &&
-        test_failures();
+    const bool passed = test_positions_pager() && test_portfolio_reads() &&
+                        test_invalid_arguments() && test_failures();
     if (!passed) return 1;
     std::cout << "test_data_portfolio_client passed\n";
     return 0;
