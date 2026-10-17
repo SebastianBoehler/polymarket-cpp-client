@@ -133,5 +133,18 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
                 if (activity.known && !activity.timestamp) std::abort();
             }
         });
+    parse_or_reject(
+        [&]
+        {
+            const auto page = detail::parse_data_position_page(body);
+            for (const auto &position : page.items)
+            {
+                if (position.condition_id.empty() || position.status.empty()) std::abort();
+            }
+        });
+    parse_or_reject([&] { (void)detail::parse_data_portfolio_value(body); });
+    parse_or_reject([&] { (void)detail::parse_data_user_stats(body); });
+    parse_or_reject([&] { (void)detail::parse_data_pnl_series(body); });
+    parse_or_reject([&] { (void)detail::parse_data_user_volume(body); });
     return 0;
 }

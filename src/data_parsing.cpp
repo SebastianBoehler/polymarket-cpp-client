@@ -17,32 +17,11 @@ namespace polymarket::detail
     {
         constexpr double max_epoch_seconds = 253402300799.0; // 9999-12-31T23:59:59Z
 
-        std::string required_string(const json &item, const char *key)
-        {
-            const auto *value = find_field(item, key);
-            if (value == nullptr || !value->is_string()) throw_bad_field(key, "a string");
-            return value->get<std::string>();
-        }
-
-        std::string required_hex(const json &item, const char *key)
-        {
-            auto text = field_hex(item, key);
-            if (text.empty()) throw_bad_field(key, "a 0x-prefixed hex string");
-            return text;
-        }
-
         std::string order_side(const json &item, const char *key)
         {
-            auto side = required_string(item, key);
+            auto side = field_required_string(item, key);
             if (side != "BUY" && side != "SELL") throw_bad_field(key, "BUY or SELL");
             return side;
-        }
-
-        double required_number(const json &item, const char *key)
-        {
-            const auto number = field_number(item, key);
-            if (!number) throw_bad_field(key, "a number");
-            return *number;
         }
 
         void profile_fields(const json &item, DataActivity &activity)
@@ -72,18 +51,6 @@ namespace polymarket::detail
             return type == "REWARD" || type == "DEPOSIT" || type == "WITHDRAWAL" ||
                    type == "MAKER_REBATE" || type == "TAKER_REBATE" || type == "REFERRAL_REWARD" ||
                    type == "MIGRATION" || type == "TIP" || type == "YIELD";
-        }
-
-        template <typename T, typename Parse>
-        Page<T> parse_page(const std::string &body, Parse parse_item)
-        {
-            const auto parsed = json::parse(body);
-            Page<T> page;
-            const auto &items = data_page_items(parsed, page.next_cursor);
-            page.items.reserve(items.size());
-            for (const auto &item : items)
-                page.items.push_back(parse_item(item));
-            return page;
         }
     } // namespace
 
@@ -115,12 +82,47 @@ namespace polymarket::detail
         return body.at("data");
     }
 
+    std::string data_required_hex(const json &object, const char *key)
+    {
+        auto text = field_hex(object, key);
+        if (text.empty()) throw_bad_field(key, "a 0x-prefixed hex string");
+        return text;
+    }
+
+    double data_required_number(const json &object, const char *key)
+    {
+        const auto number = field_number(object, key);
+        if (!number) throw_bad_field(key, "a number");
+        return *number;
+    }
+
+    bool data_required_bool(const json &object, const char *key)
+    {
+        const auto value = field_bool(object, key);
+        if (!value) throw_bad_field(key, "a boolean");
+        return *value;
+    }
+
+    std::int64_t data_required_integer(const json &object, const char *key)
+    {
+        const auto value = field_integer(object, key);
+        if (!value) throw_bad_field(key, "an integer");
+        return *value;
+    }
+
     std::int64_t data_epoch_seconds(const json &object, const char *key)
     {
         const auto seconds = field_number(object, key);
         if (!seconds || std::abs(*seconds) > max_epoch_seconds)
             throw_bad_field(key, "Unix seconds");
         return static_cast<std::int64_t>(std::floor(*seconds));
+    }
+
+    std::optional<std::int64_t> data_optional_epoch_seconds(const json &object, const char *key)
+    {
+        const auto *time = find_field(object, key);
+        if (time == nullptr || *time == 0 || *time == "0" || *time == "") return std::nullopt;
+        return data_epoch_seconds(object, key);
     }
 
     std::optional<int> data_outcome_index(const json &object, const char *key)
@@ -134,7 +136,7 @@ namespace polymarket::detail
 
     std::string data_combo_condition_id(const json &object, const char *key)
     {
-        auto id = required_hex(object, key);
+        auto id = data_required_hex(object, key);
         std::transform(id.begin(), id.end(), id.begin(),
                        [](unsigned char c) { return std::tolower(c); });
         if (id.size() == 66 && id.starts_with("0x03") && (id.ends_with("00") || id.ends_with("01")))
@@ -147,14 +149,14 @@ namespace polymarket::detail
     DataTrade parse_data_trade(const json &item)
     {
         DataTrade trade;
-        trade.wallet = required_string(item, "proxy_wallet");
-        trade.asset_id = required_string(item, "token_id");
-        trade.condition_id = required_hex(item, "condition_id");
+        trade.wallet = field_required_string(item, "proxy_wallet");
+        trade.asset_id = field_required_string(item, "token_id");
+        trade.condition_id = data_required_hex(item, "condition_id");
         trade.side = order_side(item, "side");
-        trade.size = required_number(item, "size");
-        trade.price = required_number(item, "price");
+        trade.size = data_required_number(item, "size");
+        trade.price = data_required_number(item, "price");
         trade.timestamp = data_epoch_seconds(item, "timestamp");
-        trade.transaction_hash = required_string(item, "transaction_hash");
+        trade.transaction_hash = field_required_string(item, "transaction_hash");
         trade.title = field_string(item, "title");
         trade.slug = field_string(item, "slug");
         trade.icon = field_string(item, "icon");
@@ -188,25 +190,23 @@ namespace polymarket::detail
         {
             activity.wallet = field_string(item, "proxy_wallet");
             activity.transaction_hash = field_string(item, "transaction_hash");
-            const auto *time = find_field(item, "timestamp");
-            const bool unset = time == nullptr || *time == 0 || *time == "0" || *time == "";
-            if (!unset) activity.timestamp = data_epoch_seconds(item, "timestamp");
+            activity.timestamp = data_optional_epoch_seconds(item, "timestamp");
             return activity;
         }
 
-        activity.wallet = required_string(item, "proxy_wallet");
+        activity.wallet = field_required_string(item, "proxy_wallet");
         activity.timestamp = data_epoch_seconds(item, "timestamp");
-        activity.transaction_hash = required_string(item, "transaction_hash");
+        activity.transaction_hash = field_required_string(item, "transaction_hash");
         if (trade)
         {
             activity.condition_id = activity.is_combo
                                         ? data_combo_condition_id(item, "condition_id")
-                                        : required_hex(item, "condition_id");
-            activity.asset_id = required_string(item, "token_id");
+                                        : data_required_hex(item, "condition_id");
+            activity.asset_id = field_required_string(item, "token_id");
             activity.side = order_side(item, "side");
-            activity.shares = required_number(item, "size");
-            activity.amount = required_number(item, "usdc_size");
-            activity.price = required_number(item, "price");
+            activity.shares = data_required_number(item, "size");
+            activity.amount = data_required_number(item, "usdc_size");
+            activity.price = data_required_number(item, "price");
             activity.title = field_string(item, "title");
             activity.icon = field_string(item, "icon");
             if (!activity.is_combo)
@@ -218,10 +218,10 @@ namespace polymarket::detail
             }
             return activity;
         }
-        activity.amount = required_number(item, "usdc_size");
+        activity.amount = data_required_number(item, "usdc_size");
         if (is_market_event(activity.type))
         {
-            activity.condition_id = required_hex(item, "condition_id");
+            activity.condition_id = data_required_hex(item, "condition_id");
             market_text(item, activity);
         }
         else if (activity.type == "TIP")
@@ -236,11 +236,11 @@ namespace polymarket::detail
 
     Page<DataTrade> parse_data_trade_page(const std::string &body)
     {
-        return parse_page<DataTrade>(body, parse_data_trade);
+        return data_page<DataTrade>(body, parse_data_trade);
     }
 
     Page<DataActivity> parse_data_activity_page(const std::string &body)
     {
-        return parse_page<DataActivity>(body, parse_data_activity);
+        return data_page<DataActivity>(body, parse_data_activity);
     }
 } // namespace polymarket::detail

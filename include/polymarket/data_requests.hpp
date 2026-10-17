@@ -40,4 +40,35 @@ namespace polymarket
         bool full_history{false};
     };
 
+    // Positions need `user`, or exactly one condition ID without one. Condition
+    // IDs here are 32-byte, or 31-byte structural market IDs starting 0x01 or
+    // 0x02, which are padded with 00; all are sent lowercased. Positions are
+    // unbounded in time by default.
+    struct DataPositionFilter
+    {
+        std::string user;
+        std::vector<std::string> condition_ids;
+        std::vector<std::int64_t> event_ids; // requires `user`
+        // OPEN, REDEEMABLE, CLOSED, or REDEEMABLE_LOST and MERGEABLE, which
+        // require `user`.
+        std::string status;
+        std::string title; // at most 200 characters; blank is not sent
+        std::string filter_type;             // CASH or TOKENS, with filter_amount
+        std::optional<double> filter_amount; // finite and non-negative
+        std::optional<bool> include_archived; // not true with CLOSED
+        // CURRENT_VALUE, PRICE, TOKENS, UNREALIZED_PNL, REALIZED_PNL, TOTAL_PNL
+        // or TIMESTAMP.
+        std::string sort_by;
+        std::string sort_direction; // ASC or DESC
+        std::optional<std::int64_t> start;
+        std::optional<std::int64_t> end;
+    };
+
+    struct DataTimeRange
+    {
+        std::optional<std::int64_t> start;
+        std::optional<std::int64_t> end;
+        bool full_history{false};
+    };
+
 } // namespace polymarket

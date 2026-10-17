@@ -14,8 +14,17 @@
 // std::invalid_argument.
 namespace polymarket::detail
 {
+    void data_check_selectors(const std::vector<std::string> &condition_ids,
+                              const std::vector<std::int64_t> &event_ids);
+    void data_require_user(const std::string &user);
+    // Positive and no later than 9999-12-31T23:59:59Z.
+    std::optional<std::int64_t> data_timestamp(std::optional<std::int64_t> value);
+    void data_check_amount(const char *name, const std::optional<double> &value);
+
     // Condition IDs as given, without case-insensitive repeats; 31- or 32-byte hex, at most 20.
     std::vector<std::string> data_condition_ids(const std::vector<std::string> &values);
+    // Lowercased market condition IDs without repeats, 31-byte structural IDs padded; at most 20.
+    std::vector<std::string> data_market_condition_ids(const std::vector<std::string> &values);
     // Event IDs without repeats; each a positive 32-bit integer.
     std::vector<std::int64_t> data_event_ids(const std::vector<std::int64_t> &values);
     // `full_history` becomes start=1 with no end.
@@ -25,4 +34,12 @@ namespace polymarket::detail
 
     std::string data_trade_query(const DataTradeFilter &filter);
     std::string data_activity_query(const std::string &user, const DataActivityFilter &filter);
+
+    std::string data_position_query(const DataPositionFilter &filter);
+    std::string data_portfolio_value_query(const std::string &user,
+                                           const std::vector<std::string> &condition_ids);
+    std::string data_user_query(const std::string &user);
+    std::string data_user_pnl_query(const std::string &user, const std::string &interval,
+                                    const std::string &fidelity);
+    std::string data_user_volume_query(const std::string &user, const DataTimeRange &range);
 } // namespace polymarket::detail

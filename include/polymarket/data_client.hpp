@@ -1,5 +1,6 @@
 #pragma once
 
+#include "polymarket/data_portfolio_types.hpp"
 #include "polymarket/data_requests.hpp"
 #include "polymarket/data_types.hpp"
 #include "polymarket/environment.hpp"
@@ -12,6 +13,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace polymarket
 {
@@ -39,6 +41,25 @@ namespace polymarket
                                                std::size_t page_size = 100,
                                                const PageRequest &resume = {});
 
+        Paginator<DataPosition> positions_pager(const DataPositionFilter &filter,
+                                                std::size_t page_size = 100,
+                                                const PageRequest &resume = {});
+        // Condition IDs follow DataPositionFilter's rules.
+        Result<DataPortfolioValue>
+        get_portfolio_value(const std::string &user,
+                            const std::vector<std::string> &condition_ids = {});
+        // std::nullopt when the Data API has no stats for the wallet.
+        Result<std::optional<DataUserStats>> get_user_stats(const std::string &user);
+        // `interval` and `fidelity` are the DataPnlSeries values, or "" for the
+        // server default.
+        Result<DataPnlSeries> get_user_pnl(const std::string &user,
+                                           const std::string &interval = "",
+                                           const std::string &fidelity = "");
+        Result<DataUserVolume> get_user_volume(const std::string &user,
+                                               const DataTimeRange &range = {});
+        // The wallet's accounting snapshot as zip archive bytes.
+        Result<std::string> download_accounting_snapshot(const std::string &user);
+
         // Reads that get HTTP 429 are retried after the server's Retry-After
         // delay. Defaults to RateLimitRetry{}; std::nullopt disables retries.
         void set_rate_limit_retry(std::optional<RateLimitRetry> policy);
@@ -56,6 +77,8 @@ namespace polymarket
         Paginator<T> cursor_pager(const char *endpoint, std::size_t page_size,
                                   std::size_t max_page_size, const PageRequest &resume,
                                   BuildQuery build_query, ParsePage parse_page);
+        template <typename T, typename BuildPath, typename Parse>
+        Result<T> fetch(BuildPath build_path, Parse parse);
     };
 
 } // namespace polymarket

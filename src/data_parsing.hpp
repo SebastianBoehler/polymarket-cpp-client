@@ -1,6 +1,7 @@
 #pragma once
 
 #include "json_fields.hpp"
+#include "polymarket/data_portfolio_types.hpp"
 #include "polymarket/data_types.hpp"
 #include "polymarket/pagination.hpp"
 
@@ -17,8 +18,26 @@ namespace polymarket::detail
     // The `data` member of a `{data}` envelope; it may be null.
     const json &data_envelope(const json &body);
 
+    template <typename T, typename Parse> Page<T> data_page(const std::string &body, Parse parse_item)
+    {
+        const auto parsed = json::parse(body);
+        Page<T> page;
+        const auto &items = data_page_items(parsed, page.next_cursor);
+        page.items.reserve(items.size());
+        for (const auto &item : items)
+            page.items.push_back(parse_item(item));
+        return page;
+    }
+
+    std::string data_required_hex(const json &object, const char *key);
+    double data_required_number(const json &object, const char *key);
+    bool data_required_bool(const json &object, const char *key);
+    std::int64_t data_required_integer(const json &object, const char *key);
+
     // Unix seconds from a number or numeric string.
     std::int64_t data_epoch_seconds(const json &object, const char *key);
+    // Unset for an absent, null, 0, "0" or "" value.
+    std::optional<std::int64_t> data_optional_epoch_seconds(const json &object, const char *key);
     // Unset for 999, the Data API's "no outcome".
     std::optional<int> data_outcome_index(const json &object, const char *key);
     // A combo condition ID in its 31-byte form, lowercased.
@@ -28,4 +47,12 @@ namespace polymarket::detail
     DataActivity parse_data_activity(const json &item);
     Page<DataTrade> parse_data_trade_page(const std::string &body);
     Page<DataActivity> parse_data_activity_page(const std::string &body);
+
+    DataPosition parse_data_position(const json &item);
+    DataPnlPoint parse_data_pnl_point(const json &item);
+    Page<DataPosition> parse_data_position_page(const std::string &body);
+    DataPortfolioValue parse_data_portfolio_value(const std::string &body);
+    std::optional<DataUserStats> parse_data_user_stats(const std::string &body);
+    DataPnlSeries parse_data_pnl_series(const std::string &body);
+    DataUserVolume parse_data_user_volume(const std::string &body);
 } // namespace polymarket::detail

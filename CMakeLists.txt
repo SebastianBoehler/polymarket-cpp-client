@@ -116,6 +116,9 @@ set(POLYMARKET_CLIENT_SOURCES
     src/gamma_market_fetcher.cpp
     src/data_client.cpp
     src/data_parsing.cpp
+    src/data_portfolio_client.cpp
+    src/data_portfolio_parsing.cpp
+    src/data_portfolio_query.cpp
     src/data_query.cpp
     src/gamma_catalog_client.cpp
     src/gamma_catalog_parsing.cpp
