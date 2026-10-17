@@ -118,6 +118,9 @@ set(POLYMARKET_CLIENT_SOURCES
     src/data_analytics_parsing.cpp
     src/data_analytics_query.cpp
     src/data_client.cpp
+    src/data_leaderboard_client.cpp
+    src/data_leaderboard_parsing.cpp
+    src/data_leaderboard_query.cpp
     src/data_parsing.cpp
     src/data_portfolio_client.cpp
     src/data_portfolio_parsing.cpp

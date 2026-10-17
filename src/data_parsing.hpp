@@ -2,6 +2,7 @@
 
 #include "json_fields.hpp"
 #include "polymarket/data_analytics_types.hpp"
+#include "polymarket/data_leaderboard_types.hpp"
 #include "polymarket/data_portfolio_types.hpp"
 #include "polymarket/data_types.hpp"
 #include "polymarket/pagination.hpp"
@@ -78,4 +79,10 @@ namespace polymarket::detail
     DataLiveVolume parse_data_live_volume(const std::string &body);
     Page<DataPricePoint> parse_data_price_history_page(const std::string &body);
     std::vector<DataResolution> parse_data_resolutions(const std::string &body);
+
+    DataTraderEntry parse_data_trader_entry(const json &item);
+    DataBiggestWinner parse_data_biggest_winner(const json &item);
+    Page<DataTraderEntry> parse_data_trader_leaderboard_page(const std::string &body);
+    std::optional<DataTraderStanding> parse_data_trader_standing(const std::string &body);
+    Page<DataBiggestWinner> parse_data_biggest_winners_page(const std::string &body);
 } // namespace polymarket::detail

@@ -165,5 +165,16 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
                 if (resolution.status.empty() || resolution.last_updated_at <= 0) std::abort();
             }
         });
+    parse_or_reject([&] { (void)detail::parse_data_trader_leaderboard_page(body); });
+    parse_or_reject([&] { (void)detail::parse_data_trader_standing(body); });
+    parse_or_reject(
+        [&]
+        {
+            for (const auto &winner : detail::parse_data_biggest_winners_page(body).items)
+            {
+                if (winner.kind == "market" ? winner.event_id.empty() : !winner.event_id.empty())
+                    std::abort();
+            }
+        });
     return 0;
 }

@@ -55,4 +55,9 @@ namespace polymarket::detail
                                          const DataPriceHistoryFilter &filter,
                                          std::size_t page_size, std::int64_t now);
     std::string data_resolution_query(const DataResolutionFilter &filter);
+
+    std::string data_trader_leaderboard_query(const DataLeaderboardFilter &filter);
+    std::string data_trader_standing_query(const std::string &user,
+                                           const DataLeaderboardFilter &filter);
+    std::string data_biggest_winners_query(const DataLeaderboardFilter &filter);
 } // namespace polymarket::detail

@@ -102,4 +102,12 @@ namespace polymarket
         std::vector<std::int64_t> event_ids;
     };
 
+    struct DataLeaderboardFilter
+    {
+        std::string category; // all categories when empty
+        std::string window;   // day, week, month or all
+        // PNL or VOLUME; only the trader leaderboard sorts.
+        std::string sort_by;
+    };
+
 } // namespace polymarket

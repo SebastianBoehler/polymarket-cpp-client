@@ -1,6 +1,7 @@
 #pragma once
 
 #include "polymarket/data_analytics_types.hpp"
+#include "polymarket/data_leaderboard_types.hpp"
 #include "polymarket/data_portfolio_types.hpp"
 #include "polymarket/data_requests.hpp"
 #include "polymarket/data_types.hpp"
@@ -80,6 +81,16 @@ namespace polymarket
                                                       const PageRequest &resume = {});
         // Rows the Data API does not know are left out.
         Result<std::vector<DataResolution>> get_resolutions(const DataResolutionFilter &filter);
+
+        Paginator<DataTraderEntry>
+        trader_leaderboard_pager(const DataLeaderboardFilter &filter = {},
+                                 std::size_t page_size = 100, const PageRequest &resume = {});
+        // std::nullopt when the trader is not on the leaderboard.
+        Result<std::optional<DataTraderStanding>>
+        get_trader_standing(const std::string &user, const DataLeaderboardFilter &filter = {});
+        Paginator<DataBiggestWinner> biggest_winners_pager(const DataLeaderboardFilter &filter = {},
+                                                           std::size_t page_size = 100,
+                                                           const PageRequest &resume = {});
 
         // Reads that get HTTP 429 are retried after the server's Retry-After
         // delay. Defaults to RateLimitRetry{}; std::nullopt disables retries.
