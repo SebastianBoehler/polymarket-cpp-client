@@ -1,5 +1,6 @@
 #pragma once
 
+#include "polymarket/gamma_client.hpp"
 #include "polymarket/http_client.hpp"
 #include "polymarket/order_signer.hpp"
 #include "polymarket/position_client.hpp"
@@ -22,7 +23,7 @@ namespace polymarket
         SignatureType wallet_type;
         std::shared_ptr<EvmJsonRpcHttpClient> rpc;
         std::shared_ptr<detail::RelayerClient> relayer; // Safe only
-        HttpClient gamma;
+        std::unique_ptr<GammaClient> gamma;
         std::optional<RateLimitRetry> rate_limit_retry;
         std::chrono::milliseconds relayer_retry_delay;
         int relayer_max_submit_retries;

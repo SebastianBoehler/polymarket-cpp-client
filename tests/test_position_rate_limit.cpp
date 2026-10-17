@@ -20,12 +20,40 @@ namespace
         return config;
     }
 
+    void expect_lookup_error(PositionClient &client, const std::string &prefix)
+    {
+        try
+        {
+            (void)client.resolve_market(kCondition);
+            check(false, "a failed Gamma lookup must throw");
+        }
+        catch (const std::runtime_error &error)
+        {
+            check(std::string(error.what()).starts_with(prefix + kCondition),
+                  std::string("unexpected Gamma lookup error: ") + error.what());
+        }
+    }
+
+    void gamma_lookup_failures()
+    {
+        clob_test::LocalServer gamma;
+        auto config = eoa_config(gamma.url());
+        config.rate_limit_retry = std::nullopt;
+        PositionClient client(config);
+        gamma.enqueue(R"({"error":"boom"})", 500);
+        expect_lookup_error(client, "Gamma market lookup failed for condition ");
+        gamma.enqueue("[]");
+        expect_lookup_error(client, "Gamma market lookup returned invalid JSON for condition ");
+        gamma.enqueue(R"({"markets":[{"id":"1","outcomes":["Yes","No"],"conditionId":7}]})");
+        expect_lookup_error(client, "Gamma market lookup returned invalid JSON for condition ");
+    }
+
     void gamma_lookup_retries()
     {
         clob_test::LocalServer gamma;
         PositionClient client(eoa_config(gamma.url()));
         gamma.enqueue(slow_down, 429, retry_now);
-        gamma.enqueue("[]");
+        gamma.enqueue(R"({"markets":[]})");
         expect_throws<std::invalid_argument>("empty market lookup",
                                              [&] { client.resolve_market(kCondition); });
         check(gamma.requests().size() == 2, "a rate-limited Gamma lookup must be retried");
@@ -95,6 +123,7 @@ int main()
 {
     http_global_init();
     gamma_lookup_retries();
+    gamma_lookup_failures();
     relayer_reads_retry_but_submit_does_not();
     market_fetcher_retries();
     http_global_cleanup();

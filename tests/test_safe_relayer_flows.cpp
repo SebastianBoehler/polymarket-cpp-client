@@ -67,7 +67,7 @@ namespace
         Harness h;
         check(h.client.wallet_address() == kSafe, "Safe wallet address");
 
-        h.gamma.enqueue(gamma_market(kCondition).dump());
+        h.gamma.enqueue(gamma_keyset_page(kCondition));
         expect_rpc(h.node, "eth_call", [](const nlohmann::json &params)
                    {
             const auto data = params.at(0).at("data").get<std::string>();
@@ -151,9 +151,9 @@ namespace
     void batch_merge_is_one_multisend()
     {
         Harness h;
-        h.gamma.enqueue(gamma_market(kCondition).dump());
+        h.gamma.enqueue(gamma_keyset_page(kCondition));
         expect_rpc(h.node, "eth_call", balances_result("10", "20"));
-        h.gamma.enqueue(gamma_market(kCondition2).dump());
+        h.gamma.enqueue(gamma_keyset_page(kCondition2));
         expect_rpc(h.node, "eth_call", balances_result("4", "4"));
         expect_rpc(h.node, "eth_chainId", "0x89");
         h.params("0");
