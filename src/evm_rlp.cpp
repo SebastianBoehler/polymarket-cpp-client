@@ -1,5 +1,7 @@
 #include "evm_rlp.hpp"
 
+#include <cstddef>
+
 namespace polymarket::detail
 {
     namespace
