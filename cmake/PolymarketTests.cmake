@@ -202,6 +202,42 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_gamma_social PRIVATE polymarket::client)
     add_test(NAME test_gamma_social COMMAND test_gamma_social)
 
+    add_executable(test_data_parsing tests/test_data_parsing.cpp)
+    target_include_directories(test_data_parsing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_data_parsing PRIVATE polymarket::client)
+    add_test(NAME test_data_parsing COMMAND test_data_parsing)
+
+    add_executable(test_data_client tests/test_data_client.cpp)
+    target_link_libraries(test_data_client PRIVATE polymarket::client)
+    add_test(NAME test_data_client COMMAND test_data_client)
+
+    add_executable(test_data_portfolio_parsing tests/test_data_portfolio_parsing.cpp)
+    target_include_directories(test_data_portfolio_parsing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_data_portfolio_parsing PRIVATE polymarket::client)
+    add_test(NAME test_data_portfolio_parsing COMMAND test_data_portfolio_parsing)
+
+    add_executable(test_data_portfolio_client tests/test_data_portfolio_client.cpp)
+    target_link_libraries(test_data_portfolio_client PRIVATE polymarket::client)
+    add_test(NAME test_data_portfolio_client COMMAND test_data_portfolio_client)
+
+    add_executable(test_data_analytics_parsing tests/test_data_analytics_parsing.cpp)
+    target_include_directories(test_data_analytics_parsing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_data_analytics_parsing PRIVATE polymarket::client)
+    add_test(NAME test_data_analytics_parsing COMMAND test_data_analytics_parsing)
+
+    add_executable(test_data_analytics_client tests/test_data_analytics_client.cpp)
+    target_link_libraries(test_data_analytics_client PRIVATE polymarket::client)
+    add_test(NAME test_data_analytics_client COMMAND test_data_analytics_client)
+
+    add_executable(test_data_leaderboard_parsing tests/test_data_leaderboard_parsing.cpp)
+    target_include_directories(test_data_leaderboard_parsing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_data_leaderboard_parsing PRIVATE polymarket::client)
+    add_test(NAME test_data_leaderboard_parsing COMMAND test_data_leaderboard_parsing)
+
+    add_executable(test_data_leaderboard_client tests/test_data_leaderboard_client.cpp)
+    target_link_libraries(test_data_leaderboard_client PRIVATE polymarket::client)
+    add_test(NAME test_data_leaderboard_client COMMAND test_data_leaderboard_client)
+
     add_executable(test_clob_pagers tests/test_clob_pagers.cpp)
     target_link_libraries(test_clob_pagers PRIVATE polymarket::client)
     add_test(NAME test_clob_pagers COMMAND test_clob_pagers)

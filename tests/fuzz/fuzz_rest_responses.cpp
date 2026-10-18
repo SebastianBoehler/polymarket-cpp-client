@@ -1,4 +1,5 @@
 #include "clob_client_internal.hpp"
+#include "data_parsing.hpp"
 #include "gamma_parsing.hpp"
 #include "polymarket/market_fetcher.hpp"
 #include "rest_orderbook_parsing.hpp"
@@ -12,7 +13,7 @@
 #include <string>
 #include <vector>
 
-// Feeds one raw REST response body to every CLOB and Gamma response parser. Rejected
+// Feeds one raw REST response body to every CLOB, Gamma and Data API response parser. Rejected
 // input must raise std::exception; an accepted order book must hold valid
 // levels with no repeated price on either side.
 namespace
@@ -112,6 +113,68 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
         [&]
         {
             if (detail::parse_gamma_search_page(body).items.size() != 1) std::abort();
+        });
+    parse_or_reject(
+        [&]
+        {
+            const auto page = detail::parse_data_trade_page(body);
+            for (const auto &trade : page.items)
+            {
+                if (trade.condition_id.empty() || (trade.side != "BUY" && trade.side != "SELL"))
+                    std::abort();
+            }
+        });
+    parse_or_reject(
+        [&]
+        {
+            const auto page = detail::parse_data_activity_page(body);
+            for (const auto &activity : page.items)
+            {
+                if (activity.known && !activity.timestamp) std::abort();
+            }
+        });
+    parse_or_reject(
+        [&]
+        {
+            const auto page = detail::parse_data_position_page(body);
+            for (const auto &position : page.items)
+            {
+                if (position.condition_id.empty() || position.status.empty()) std::abort();
+            }
+        });
+    parse_or_reject([&] { (void)detail::parse_data_portfolio_value(body); });
+    parse_or_reject([&] { (void)detail::parse_data_user_stats(body); });
+    parse_or_reject([&] { (void)detail::parse_data_pnl_series(body); });
+    parse_or_reject([&] { (void)detail::parse_data_user_volume(body); });
+    parse_or_reject(
+        [&]
+        {
+            for (const auto &group : detail::parse_data_holders_page(body).items)
+            {
+                if (group.asset_id.empty()) std::abort();
+            }
+        });
+    parse_or_reject([&] { (void)detail::parse_data_open_interests(body); });
+    parse_or_reject([&] { (void)detail::parse_data_live_volume(body); });
+    parse_or_reject([&] { (void)detail::parse_data_price_history_page(body); });
+    parse_or_reject(
+        [&]
+        {
+            for (const auto &resolution : detail::parse_data_resolutions(body))
+            {
+                if (resolution.status.empty() || resolution.last_updated_at <= 0) std::abort();
+            }
+        });
+    parse_or_reject([&] { (void)detail::parse_data_trader_leaderboard_page(body); });
+    parse_or_reject([&] { (void)detail::parse_data_trader_standing(body); });
+    parse_or_reject(
+        [&]
+        {
+            for (const auto &winner : detail::parse_data_biggest_winners_page(body).items)
+            {
+                if (winner.kind == "market" ? winner.event_id.empty() : !winner.event_id.empty())
+                    std::abort();
+            }
         });
     return 0;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "polymarket/gamma_client.hpp"
+#include "query_builder.hpp"
 
 #include <cstdint>
 #include <initializer_list>
@@ -13,27 +14,6 @@
 // std::invalid_argument.
 namespace polymarket::detail
 {
-    class GammaQuery
-    {
-      public:
-        void add(std::string_view key, const std::optional<bool> &value);
-        void add(std::string_view key, const std::optional<double> &value);
-        void add(std::string_view key, const std::optional<std::int64_t> &value);
-        void add(std::string_view key, const std::string &value); // skipped when empty
-        void add(std::string_view key, const std::vector<std::string> &values);
-        void add(std::string_view key, const std::vector<std::int64_t> &values);
-        // "?a=1&b=2", or "" when nothing was added.
-        std::string str() const;
-
-      private:
-        void append(std::string_view key, std::string_view value);
-        std::string query_;
-    };
-
-    // Accepts "" or one of `choices`.
-    void gamma_check_choice(const char *name, const std::string &value,
-                            std::initializer_list<std::string_view> choices);
-
     std::string gamma_market_list_query(const GammaMarketFilter &filter);
     std::string gamma_event_list_query(const GammaEventFilter &filter);
     std::string gamma_market_lookup_query(const GammaMarketLookupOptions &options);

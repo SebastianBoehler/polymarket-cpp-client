@@ -26,12 +26,11 @@ namespace polymarket
         std::string search_query(const std::string &q, const GammaSearchOptions &options)
         {
             require_nonempty("q", q);
-            detail::gamma_check_choice("recurrence", options.recurrence,
-                                       {"daily", "weekly", "monthly"});
-            detail::gamma_check_choice("sort", options.sort,
-                                       {"volume", "volume_24hr", "liquidity", "competitive",
-                                        "closed_time", "start_date", "end_date"});
-            detail::GammaQuery query;
+            detail::check_choice("recurrence", options.recurrence, {"daily", "weekly", "monthly"});
+            detail::check_choice("sort", options.sort,
+                                 {"volume", "volume_24hr", "liquidity", "competitive",
+                                  "closed_time", "start_date", "end_date"});
+            detail::QueryBuilder query;
             query.add("q", q);
             query.add("ascending", options.ascending);
             query.add("cache", options.cache);
@@ -79,7 +78,7 @@ namespace polymarket
         }
         catch (const std::invalid_argument &ex)
         {
-            invalid = detail::gamma_invalid_argument(ex.what(), endpoint);
+            invalid = detail::invalid_argument_error(ex.what(), endpoint);
         }
         if (invalid)
         {
@@ -93,8 +92,8 @@ namespace polymarket
             {
                 const auto path = prefix + std::to_string(request.page) +
                                   "&limit_per_type=" + std::to_string(request.limit);
-                return detail::gamma_page<GammaSearchResults>(get(path), endpoint,
-                                                              detail::parse_gamma_search_page);
+                return detail::rest_page<GammaSearchResults>(get(path), endpoint,
+                                                             detail::parse_gamma_search_page);
             },
             page_size, resume);
     }
@@ -106,7 +105,7 @@ namespace polymarket
             [&]
             {
                 require_nonempty("id", id);
-                detail::GammaQuery query;
+                detail::QueryBuilder query;
                 query.add("get_positions", get_positions);
                 return "/comments/" + detail::percent_encode_query_value(id) + query.str();
             },
@@ -126,7 +125,7 @@ namespace polymarket
                 [&]
                 {
                     check_comment_parent(parent_entity_id, parent_entity_type);
-                    detail::GammaQuery query;
+                    detail::QueryBuilder query;
                     query.add("parent_entity_id", parent_entity_id);
                     query.add("parent_entity_type", parent_entity_type);
                     query.add("ascending", filter.ascending);
@@ -149,7 +148,7 @@ namespace polymarket
             // Pinned so the first page matches the offset listing's newest-first default.
             const std::string order = filter.order.empty() ? "createdAt" : filter.order;
             const bool ascending = filter.order.empty() ? false : filter.ascending.value_or(true);
-            detail::GammaQuery builder;
+            detail::QueryBuilder builder;
             builder.add("parent_entity_id", parent_entity_id);
             builder.add("parent_entity_type", parent_entity_type);
             builder.add("order", order);
@@ -158,11 +157,12 @@ namespace polymarket
         }
         catch (const std::invalid_argument &ex)
         {
-            invalid = detail::gamma_invalid_argument(ex.what(), endpoint);
+            invalid = detail::invalid_argument_error(ex.what(), endpoint);
         }
-        return detail::gamma_keyset_pager<GammaComment>(
-            endpoint, query, page_size, resume, std::move(invalid), [this](const std::string &path)
-            { return get(path); }, detail::parse_gamma_comment_keyset_page);
+        return detail::keyset_pager<GammaComment>(
+            endpoint, query, page_size, resume, std::move(invalid), "after_cursor",
+            [this](const std::string &path) { return get(path); },
+            detail::parse_gamma_comment_keyset_page);
     }
 
     Paginator<GammaComment> GammaClient::user_comments_pager(const std::string &address,
@@ -177,12 +177,12 @@ namespace polymarket
             [&]
             {
                 require_nonempty("address", address);
-                detail::GammaQuery query;
+                detail::QueryBuilder query;
                 query.add("ascending", filter.ascending);
                 query.add("order", filter.order);
                 return query.str();
             },
-            detail::gamma_list_page<GammaComment>(detail::parse_gamma_comments));
+            detail::list_page<GammaComment>(detail::parse_gamma_comments));
     }
 
     Result<std::optional<GammaPublicProfile>>
@@ -192,7 +192,7 @@ namespace polymarket
             [&]
             {
                 require_nonempty("address", address);
-                detail::GammaQuery query;
+                detail::QueryBuilder query;
                 query.add("address", address);
                 return "/public-profile" + query.str();
             },

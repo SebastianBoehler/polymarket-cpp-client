@@ -142,11 +142,12 @@ namespace polymarket
         }
         catch (const std::invalid_argument &ex)
         {
-            invalid = detail::gamma_invalid_argument(ex.what(), endpoint);
+            invalid = detail::invalid_argument_error(ex.what(), endpoint);
         }
-        return detail::gamma_keyset_pager<GammaMarket>(
-            endpoint, query, page_size, resume, std::move(invalid), [this](const std::string &path)
-            { return get(path); }, detail::parse_gamma_market_keyset_page);
+        return detail::keyset_pager<GammaMarket>(
+            endpoint, query, page_size, resume, std::move(invalid), "after_cursor",
+            [this](const std::string &path) { return get(path); },
+            detail::parse_gamma_market_keyset_page);
     }
 
     Paginator<GammaEvent> GammaClient::events_pager(const GammaEventFilter &filter,
@@ -163,10 +164,11 @@ namespace polymarket
         }
         catch (const std::invalid_argument &ex)
         {
-            invalid = detail::gamma_invalid_argument(ex.what(), endpoint);
+            invalid = detail::invalid_argument_error(ex.what(), endpoint);
         }
-        return detail::gamma_keyset_pager<GammaEvent>(
-            endpoint, query, page_size, resume, std::move(invalid), [this](const std::string &path)
-            { return get(path); }, detail::parse_gamma_event_keyset_page);
+        return detail::keyset_pager<GammaEvent>(
+            endpoint, query, page_size, resume, std::move(invalid), "after_cursor",
+            [this](const std::string &path) { return get(path); },
+            detail::parse_gamma_event_keyset_page);
     }
 } // namespace polymarket

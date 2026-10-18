@@ -11,8 +11,8 @@ namespace polymarket::detail
     {
         std::string profile_wallet(const json &item)
         {
-            if (item.contains("wallet")) return gamma_string(item, "wallet");
-            return gamma_string(item, "proxyWallet");
+            if (item.contains("wallet")) return field_string(item, "wallet");
+            return field_string(item, "proxyWallet");
         }
 
         std::optional<GammaCommentProfile> comment_profile(const json &item, const char *key)
@@ -20,30 +20,30 @@ namespace polymarket::detail
             if (!item.contains(key) || item.at(key).is_null()) return std::nullopt;
             const auto &value = item.at(key);
             GammaCommentProfile profile;
-            profile.name = gamma_string(value, "name");
-            profile.pseudonym = gamma_string(value, "pseudonym");
-            profile.bio = gamma_string(value, "bio");
+            profile.name = field_string(value, "name");
+            profile.pseudonym = field_string(value, "pseudonym");
+            profile.bio = field_string(value, "bio");
             profile.wallet = profile_wallet(value);
-            profile.base_address = gamma_string(value, "baseAddress");
-            profile.profile_image = gamma_string(value, "profileImage");
-            profile.display_username_public = gamma_bool(value, "displayUsernamePublic");
-            profile.is_mod = gamma_bool(value, "isMod");
-            profile.is_creator = gamma_bool(value, "isCreator");
-            for (const auto &position : gamma_objects(value, "positions"))
+            profile.base_address = field_string(value, "baseAddress");
+            profile.profile_image = field_string(value, "profileImage");
+            profile.display_username_public = field_bool(value, "displayUsernamePublic");
+            profile.is_mod = field_bool(value, "isMod");
+            profile.is_creator = field_bool(value, "isCreator");
+            for (const auto &position : field_objects(value, "positions"))
                 profile.positions.push_back(
-                    {gamma_id(position, "tokenId"), gamma_integer(position, "positionSize")});
+                    {field_id(position, "tokenId"), field_integer(position, "positionSize")});
             return profile;
         }
 
         GammaReaction reaction(const json &item)
         {
             GammaReaction result;
-            result.id = gamma_required_id(item, "id");
-            result.comment_id = gamma_integer(item, "commentID");
-            result.reaction_type = gamma_string(item, "reactionType");
-            result.icon = gamma_string(item, "icon");
-            result.user_address = gamma_string(item, "userAddress");
-            result.created_at = gamma_string(item, "createdAt");
+            result.id = field_required_id(item, "id");
+            result.comment_id = field_integer(item, "commentID");
+            result.reaction_type = field_string(item, "reactionType");
+            result.icon = field_string(item, "icon");
+            result.user_address = field_string(item, "userAddress");
+            result.created_at = field_string(item, "createdAt");
             result.profile = comment_profile(item, "profile");
             return result;
         }
@@ -51,16 +51,16 @@ namespace polymarket::detail
         GammaSearchProfile search_profile(const json &item)
         {
             GammaSearchProfile profile;
-            profile.id = gamma_id(item, "id");
+            profile.id = field_id(item, "id");
             profile.wallet = profile_wallet(item);
-            profile.name = gamma_string(item, "name");
-            profile.pseudonym = gamma_string(item, "pseudonym");
-            profile.bio = gamma_string(item, "bio");
-            profile.profile_image = gamma_string(item, "profileImage");
-            profile.x_username = gamma_string(item, "xUsername");
-            profile.display_username_public = gamma_bool(item, "displayUsernamePublic");
-            profile.verified_badge = gamma_bool(item, "verifiedBadge");
-            profile.created_at = gamma_string(item, "createdAt");
+            profile.name = field_string(item, "name");
+            profile.pseudonym = field_string(item, "pseudonym");
+            profile.bio = field_string(item, "bio");
+            profile.profile_image = field_string(item, "profileImage");
+            profile.x_username = field_string(item, "xUsername");
+            profile.display_username_public = field_bool(item, "displayUsernamePublic");
+            profile.verified_badge = field_bool(item, "verifiedBadge");
+            profile.created_at = field_string(item, "createdAt");
             profile.raw = item;
             return profile;
         }
@@ -79,21 +79,21 @@ namespace polymarket::detail
     GammaComment parse_gamma_comment(const json &item)
     {
         GammaComment comment;
-        comment.id = gamma_required_id(item, "id");
-        comment.body = gamma_string(item, "body");
-        comment.parent_entity_type = gamma_string(item, "parentEntityType");
-        comment.parent_entity_id = gamma_id(item, "parentEntityID");
-        comment.parent_comment_id = gamma_id(item, "parentCommentID");
-        comment.user_address = gamma_string(item, "userAddress");
-        comment.reply_address = gamma_string(item, "replyAddress");
-        comment.created_at = gamma_string(item, "createdAt");
-        comment.updated_at = gamma_string(item, "updatedAt");
+        comment.id = field_required_id(item, "id");
+        comment.body = field_string(item, "body");
+        comment.parent_entity_type = field_string(item, "parentEntityType");
+        comment.parent_entity_id = field_id(item, "parentEntityID");
+        comment.parent_comment_id = field_id(item, "parentCommentID");
+        comment.user_address = field_string(item, "userAddress");
+        comment.reply_address = field_string(item, "replyAddress");
+        comment.created_at = field_string(item, "createdAt");
+        comment.updated_at = field_string(item, "updatedAt");
         comment.profile = comment_profile(item, "profile");
-        for (const auto &value : gamma_objects(item, "reactions"))
+        for (const auto &value : field_objects(item, "reactions"))
             comment.reactions.push_back(reaction(value));
-        comment.report_count = gamma_integer(item, "reportCount");
-        comment.reaction_count = gamma_integer(item, "reactionCount");
-        comment.trade_asset = gamma_string(item, "tradeAsset");
+        comment.report_count = field_integer(item, "reportCount");
+        comment.reaction_count = field_integer(item, "reactionCount");
+        comment.trade_asset = field_string(item, "tradeAsset");
         comment.raw = item;
         return comment;
     }
@@ -128,18 +128,18 @@ namespace polymarket::detail
         const auto item = json::parse(body);
         GammaPublicProfile profile;
         profile.wallet = profile_wallet(item);
-        profile.name = gamma_string(item, "name");
-        profile.pseudonym = gamma_string(item, "pseudonym");
-        profile.bio = gamma_string(item, "bio");
-        profile.profile_image = gamma_string(item, "profileImage");
-        profile.x_username = gamma_string(item, "xUsername");
-        profile.display_username_public = gamma_bool(item, "displayUsernamePublic");
-        profile.verified_badge = gamma_bool(item, "verifiedBadge");
-        profile.created_at = gamma_string(item, "createdAt");
-        for (const auto &user : gamma_objects(item, "users"))
-            profile.users.push_back({gamma_required_id(user, "id"),
-                                     gamma_bool(user, "communityMod"), gamma_bool(user, "creator"),
-                                     gamma_bool(user, "mod")});
+        profile.name = field_string(item, "name");
+        profile.pseudonym = field_string(item, "pseudonym");
+        profile.bio = field_string(item, "bio");
+        profile.profile_image = field_string(item, "profileImage");
+        profile.x_username = field_string(item, "xUsername");
+        profile.display_username_public = field_bool(item, "displayUsernamePublic");
+        profile.verified_badge = field_bool(item, "verifiedBadge");
+        profile.created_at = field_string(item, "createdAt");
+        for (const auto &user : field_objects(item, "users"))
+            profile.users.push_back({field_required_id(user, "id"),
+                                     field_bool(user, "communityMod"), field_bool(user, "creator"),
+                                     field_bool(user, "mod")});
         profile.raw = item;
         return profile;
     }
@@ -153,8 +153,8 @@ namespace polymarket::detail
         for (const auto &event : optional_array(parsed, "events"))
             results.events.push_back(parse_gamma_event(event));
         for (const auto &tag : optional_array(parsed, "tags"))
-            results.tags.push_back({gamma_required_id(tag, "id"), gamma_string(tag, "label"),
-                                    gamma_string(tag, "slug"), gamma_integer(tag, "event_count")});
+            results.tags.push_back({field_required_id(tag, "id"), field_string(tag, "label"),
+                                    field_string(tag, "slug"), field_integer(tag, "event_count")});
         for (const auto &profile : optional_array(parsed, "profiles"))
             results.profiles.push_back(search_profile(profile));
 
@@ -162,8 +162,8 @@ namespace polymarket::detail
         if (parsed.contains("pagination") && !parsed.at("pagination").is_null())
         {
             const auto &pagination = parsed.at("pagination");
-            page.has_more = gamma_bool(pagination, "hasMore").value_or(false);
-            results.total_results = gamma_integer(pagination, "totalResults");
+            page.has_more = field_bool(pagination, "hasMore").value_or(false);
+            results.total_results = field_integer(pagination, "totalResults");
         }
         page.items.push_back(std::move(results));
         return page;

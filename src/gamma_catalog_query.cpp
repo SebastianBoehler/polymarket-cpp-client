@@ -7,7 +7,7 @@ namespace polymarket::detail
 {
     std::string gamma_tag_list_query(const GammaTagFilter &filter)
     {
-        GammaQuery query;
+        QueryBuilder query;
         query.add("ascending", filter.ascending);
         query.add("include_template", filter.include_template);
         query.add("is_carousel", filter.is_carousel);
@@ -18,8 +18,8 @@ namespace polymarket::detail
 
     std::string gamma_series_list_query(const GammaSeriesFilter &filter)
     {
-        gamma_check_choice("recurrence", filter.recurrence, {"daily", "weekly", "monthly"});
-        GammaQuery query;
+        check_choice("recurrence", filter.recurrence, {"daily", "weekly", "monthly"});
+        QueryBuilder query;
         query.add("ascending", filter.ascending);
         query.add("closed", filter.closed);
         query.add("exclude_events", filter.exclude_events);
@@ -32,7 +32,7 @@ namespace polymarket::detail
 
     std::string gamma_team_list_query(const GammaTeamFilter &filter)
     {
-        GammaQuery query;
+        QueryBuilder query;
         query.add("abbreviation", filter.abbreviations);
         query.add("ascending", filter.ascending);
         query.add("league", filter.leagues);
@@ -44,7 +44,7 @@ namespace polymarket::detail
 
     std::string gamma_tag_lookup_query(const GammaTagLookupOptions &options)
     {
-        GammaQuery query;
+        QueryBuilder query;
         query.add("include_template", options.include_template);
         query.add("locale", options.locale);
         return query.str();
@@ -52,7 +52,7 @@ namespace polymarket::detail
 
     std::string gamma_related_tag_query(const GammaRelatedTagOptions &options)
     {
-        GammaQuery query;
+        QueryBuilder query;
         query.add("omit_empty", options.omit_empty);
         query.add("status", options.status);
         return query.str();
@@ -60,7 +60,7 @@ namespace polymarket::detail
 
     std::string gamma_related_tag_resource_query(const GammaRelatedTagResourceOptions &options)
     {
-        GammaQuery query;
+        QueryBuilder query;
         query.add("locale", options.locale);
         query.add("omit_empty", options.omit_empty);
         query.add("status", options.status);

@@ -3,6 +3,7 @@
 #include "polymarket/gamma_catalog_types.hpp"
 #include "polymarket/gamma_social_types.hpp"
 #include "polymarket/gamma_types.hpp"
+#include "json_fields.hpp"
 #include "polymarket/pagination.hpp"
 
 #include <nlohmann/json.hpp>
@@ -16,22 +17,6 @@
 namespace polymarket::detail
 {
     using json = nlohmann::json;
-
-    // Absent and null fields read as empty or unset.
-    std::string gamma_string(const json &object, const char *key);
-    std::string gamma_id(const json &object, const char *key); // string or integer
-    std::string gamma_required_id(const json &object, const char *key);
-    std::string gamma_hex(const json &object, const char *key); // "" or 0x-prefixed hex
-    std::string gamma_decimal_text(const json &object, const char *key);
-    std::optional<double> gamma_number(const json &object, const char *key); // "" is unset
-    std::optional<std::int64_t> gamma_integer(const json &object, const char *key);
-    std::optional<bool> gamma_bool(const json &object, const char *key);
-    // A JSON array or a JSON-encoded array string.
-    std::vector<json> gamma_sequence(const json &object, const char *key);
-    std::vector<std::string> gamma_string_list(const json &object, const char *key);
-    std::vector<json> gamma_objects(const json &object, const char *key);
-
-    std::string gamma_required_string(const json &object, const char *key);
 
     GammaTagReference parse_gamma_tag_reference(const json &item);
     // Nullopt for a market that does not have exactly two outcomes.
