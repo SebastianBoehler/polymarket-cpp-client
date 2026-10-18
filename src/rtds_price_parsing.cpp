@@ -54,7 +54,7 @@ namespace polymarket::detail
         // The full-accuracy text when it is valid for the source, else `value`.
         std::string crypto_exact(const json &payload, bool chainlink)
         {
-            const auto value = required_decimal(payload, "value");
+            auto value = required_decimal(payload, "value");
             const auto *full = find_field(payload, "full_accuracy_value");
             if (full == nullptr || !full->is_string()) return value;
             const auto &text = full->get_ref<const std::string &>();

@@ -92,6 +92,7 @@ namespace polymarket::detail
     std::vector<RtdsServerKey> rtds_comment_keys(const RtdsCommentFilter &normalized)
     {
         std::vector<RtdsServerKey> keys;
+        keys.reserve(normalized.types.size());
         for (const auto &type : normalized.types)
             keys.push_back({comments_topic, type, ""});
         return keys;
