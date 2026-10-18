@@ -168,23 +168,30 @@ namespace
         LocalWebSocketServer server;
         polymarket::WebSocketClient client;
         auto options = quiet_options();
-        options.idle_timeout_ms = 400;
+        options.idle_timeout_ms = 2000;
         options.server_ping_message = "ping";
         options.server_ping_reply = "pong";
         client.configure(options);
         client.set_url(server.url());
         client.connect();
         const bool connected = client.wait_until_connected(2s);
-        for (int i = 0; i < 12; ++i)
+        const auto until = std::chrono::steady_clock::now() + 3s;
+        int pings = 0;
+        while (std::chrono::steady_clock::now() < until)
         {
             server.send_to_clients("ping");
+            pings++;
             std::this_thread::sleep_for(100ms);
         }
+        const bool ponged = server.wait_for_message_count("pong", 1, 2s);
         const bool still_one = !server.wait_for_connections(2, 200ms);
         const auto stats = client.stats();
         client.disconnect();
-        return check(connected && still_one && stats.idle_timeouts == 0,
-                     "server pings must keep an idle timeout from firing");
+        return check(connected && ponged && still_one && stats.idle_timeouts == 0,
+                     "server pings must keep an idle timeout from firing (pings " +
+                         std::to_string(pings) + ", reconnects " +
+                         std::to_string(stats.reconnects) + ", idle timeouts " +
+                         std::to_string(stats.idle_timeouts) + ")");
     }
 } // namespace
 
