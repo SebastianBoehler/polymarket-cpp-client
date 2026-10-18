@@ -83,6 +83,9 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
             const auto event = detail::parse_rtds_message(message);
             if (event && event->comment && !event->comment->comment && !event->comment->reaction)
                 std::abort();
+            if (event && event->price && event->price->type == "update" &&
+                event->price->price.exact_value.empty())
+                std::abort();
         });
     return 0;
 }

@@ -1,5 +1,6 @@
 #include "polymarket/rtds_stream.hpp"
 #include "rtds_fixtures.hpp"
+#include "rtds_price_fixtures.hpp"
 #include "websocket_test_server.hpp"
 
 #include <atomic>
@@ -148,6 +149,58 @@ namespace
                      "a removed subscription must stop receiving events");
     }
 
+    bool test_price_subscriptions()
+    {
+        constexpr const char *binance_frame =
+            R"({"action":"subscribe","subscriptions":[{"topic":"crypto_prices","type":"update"}]})";
+        constexpr const char *twap_frame =
+            R"({"action":"subscribe","subscriptions":[{"topic":"crypto_prices_twap_sixty","type":"update"}]})";
+        constexpr const char *binance_unsubscribe =
+            R"({"action":"unsubscribe","subscriptions":[{"topic":"crypto_prices","type":"update"}]})";
+        LocalWebSocketServer server;
+        polymarket::RtdsStream stream(local_config(server.url()));
+        const bool connected = stream.connect();
+        std::mutex mutex;
+        std::vector<std::string> received;
+        const auto record = [&](const char *name)
+        {
+            return [&, name](const polymarket::RtdsPriceEvent &event)
+            {
+                std::lock_guard lock(mutex);
+                received.push_back(std::string(name) + ":" + event.symbol);
+            };
+        };
+        const auto btc = stream.subscribe_crypto_prices({"binance", {"btcusdt"}}, record("btc"));
+        const auto eth = stream.subscribe_crypto_prices({"binance", {"ethusdt"}}, record("eth"));
+        stream.subscribe_crypto_twap({60, {}}, record("twap"));
+        const bool subscribed = server.wait_for_message_count(binance_frame, 1, 2s) &&
+                                server.wait_for_message_count(twap_frame, 1, 2s);
+        const bool shared = !server.wait_for_message_count(binance_frame, 2, 200ms);
+
+        server.send_to_clients(rtds_fixtures::rtds_binance_update);
+        server.send_to_clients(rtds_fixtures::rtds_twap_thirty_update);
+        server.send_to_clients(rtds_fixtures::rtds_twap_sixty_update);
+        const bool delivered = wait_until(
+            [&]
+            {
+                std::lock_guard lock(mutex);
+                return received.size() == 2;
+            },
+            2s);
+        stream.unsubscribe(btc);
+        const bool still_shared = !server.wait_for_message_count(binance_unsubscribe, 1, 200ms);
+        stream.unsubscribe(eth);
+        const bool released = server.wait_for_message_count(binance_unsubscribe, 1, 2s);
+        stream.disconnect();
+        std::lock_guard lock(mutex);
+        return check(connected && subscribed && shared,
+                     "price subscriptions must share one whole-topic subscription") &&
+               check(delivered && received[0] == "btc:btcusdt" && received[1] == "twap:btc/usd",
+                     "prices must be narrowed by symbol and window") &&
+               check(still_shared && released,
+                     "a topic must be unsubscribed only when its last subscription goes");
+    }
+
     bool test_invalid_arguments()
     {
         polymarket::RtdsStream stream;
@@ -173,14 +226,24 @@ namespace
         {
             empty_rejected = true;
         }
-        return check(rejected && empty_rejected, "invalid filters and URLs must be rejected");
+        bool price_rejected = false;
+        try
+        {
+            stream.subscribe_crypto_twap({45, {}}, {});
+        }
+        catch (const std::invalid_argument &)
+        {
+            price_rejected = true;
+        }
+        return check(rejected && empty_rejected && price_rejected,
+                     "invalid filters and URLs must be rejected");
     }
 } // namespace
 
 int main()
 {
-    const bool passed =
-        test_subscriptions_and_delivery() && test_diffs_and_replay() && test_invalid_arguments();
+    const bool passed = test_subscriptions_and_delivery() && test_diffs_and_replay() &&
+                        test_price_subscriptions() && test_invalid_arguments();
     if (!passed) return 1;
     std::cout << "test_rtds_stream passed\n";
     return 0;

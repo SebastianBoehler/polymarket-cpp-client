@@ -1,0 +1,1 @@
+{"connection_id":"example-connection","payload":{"full_accuracy_value":"81527437376226865446912","symbol":"btc/usd","timestamp":1792287328000,"value":81527.43737622687,"window_s":60},"timestamp":1792287329255,"topic":"crypto_prices_twap_sixty","type":"update"}

@@ -53,7 +53,7 @@ namespace polymarket::detail
         if (event.topic == comments_topic)
             event.comment = parse_rtds_comment_event(frame);
         else
-            throw std::invalid_argument("unknown RTDS topic " + event.topic);
+            event.price = parse_rtds_price_event(frame, event.topic);
         return event;
     }
 

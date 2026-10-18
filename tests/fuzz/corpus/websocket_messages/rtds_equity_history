@@ -1,0 +1,1 @@
+{"connection_id":"example-connection","payload":{"symbol":"aapl","data":[{"timestamp":1792330140000,"value":231.3},{"timestamp":1792330170000,"value":"231.35"}]},"timestamp":1792330200100,"topic":"equity_prices","type":"subscribe"}

@@ -200,6 +200,41 @@ namespace polymarket
                              });
     }
 
+    namespace
+    {
+        RtdsSubscriptionId add_price(detail::RtdsStreamRuntime &runtime,
+                                     detail::RtdsPriceMatch match, RtdsPriceCallback callback)
+        {
+            auto keys = detail::rtds_price_keys(match);
+            return runtime.add(
+                std::move(keys),
+                [match = std::move(match),
+                 callback = std::move(callback)](const detail::RtdsParsedEvent &event)
+                {
+                    if (callback && event.price && detail::rtds_price_matches(match, *event.price))
+                        callback(*event.price);
+                });
+        }
+    } // namespace
+
+    RtdsSubscriptionId RtdsStream::subscribe_crypto_prices(const RtdsCryptoPriceFilter &filter,
+                                                           RtdsPriceCallback callback)
+    {
+        return add_price(*runtime_, detail::rtds_crypto_price_match(filter), std::move(callback));
+    }
+
+    RtdsSubscriptionId RtdsStream::subscribe_crypto_twap(const RtdsCryptoTwapFilter &filter,
+                                                         RtdsPriceCallback callback)
+    {
+        return add_price(*runtime_, detail::rtds_crypto_twap_match(filter), std::move(callback));
+    }
+
+    RtdsSubscriptionId RtdsStream::subscribe_equity_prices(const RtdsEquityPriceFilter &filter,
+                                                           RtdsPriceCallback callback)
+    {
+        return add_price(*runtime_, detail::rtds_equity_price_match(filter), std::move(callback));
+    }
+
     void RtdsStream::unsubscribe(RtdsSubscriptionId id)
     {
         runtime_->remove(id);
