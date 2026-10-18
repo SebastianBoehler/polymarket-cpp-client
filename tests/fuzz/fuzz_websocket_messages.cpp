@@ -1,3 +1,4 @@
+#include "rtds_parsing.hpp"
 #include "sports_parsing.hpp"
 #include "user_stream_protocol.hpp"
 #include "websocket_resilience.hpp"
@@ -11,7 +12,7 @@
 #include <map>
 #include <string>
 
-// Feeds one raw WebSocket frame to every market, user and sports stream parser.
+// Feeds one raw WebSocket frame to every market, user, sports and RTDS parser.
 // Rejected input must raise std::exception; accepted book updates must leave
 // each book with valid, ordered levels.
 namespace
@@ -75,6 +76,13 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
         [&]
         {
             if (!detail::parse_sports_message(message).raw.is_object()) std::abort();
+        });
+    parse_or_reject(
+        [&]
+        {
+            const auto event = detail::parse_rtds_message(message);
+            if (event && event->comment && !event->comment->comment && !event->comment->reaction)
+                std::abort();
         });
     return 0;
 }

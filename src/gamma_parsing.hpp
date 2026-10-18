@@ -40,6 +40,7 @@ namespace polymarket::detail
     std::vector<GammaTeam> parse_gamma_teams(const std::string &body);
 
     GammaComment parse_gamma_comment(const json &item);
+    GammaReaction parse_gamma_reaction(const json &item);
     std::vector<GammaComment> parse_gamma_comments(const std::string &body);
     Page<GammaComment> parse_gamma_comment_keyset_page(const std::string &body);
     // An offset page counted by its top-level comments.
