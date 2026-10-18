@@ -97,8 +97,13 @@ namespace polymarket::detail
 
     void PublicStream::handle_message(const std::string &message, std::uint64_t generation)
     {
-        if (!active() || generation != websocket_.stream_generation()) return;
-        handler_(message);
+        if (!is_current(generation)) return;
+        handler_(message, generation);
+    }
+
+    bool PublicStream::is_current(std::uint64_t generation) const
+    {
+        return active() && generation == websocket_.stream_generation();
     }
 
     void PublicStream::handle_gap(std::uint64_t generation)

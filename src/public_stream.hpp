@@ -26,7 +26,8 @@ namespace polymarket::detail
     class PublicStream final : public std::enable_shared_from_this<PublicStream>
     {
       public:
-        using MessageHandler = std::function<void(const std::string &message)>;
+        using MessageHandler =
+            std::function<void(const std::string &message, std::uint64_t generation)>;
 
         static std::shared_ptr<PublicStream> create(const std::string &url,
                                                     const WebSocketOptions &options,
@@ -52,6 +53,8 @@ namespace polymarket::detail
         void replace_subscriptions(std::vector<std::string> messages);
         bool send(const std::string &message);
         void request_resnapshot(const std::string &reason);
+        // False once the stream stops or the connection that sent `generation` ends.
+        bool is_current(std::uint64_t generation) const;
 
       private:
         PublicStream(const std::string &url, const WebSocketOptions &options,

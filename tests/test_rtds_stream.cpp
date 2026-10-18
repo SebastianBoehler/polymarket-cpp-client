@@ -201,6 +201,35 @@ namespace
                      "a topic must be unsubscribed only when its last subscription goes");
     }
 
+    bool test_stop_from_callback()
+    {
+        LocalWebSocketServer server;
+        polymarket::RtdsStream stream(local_config(server.url()));
+        const bool connected = stream.connect();
+        std::atomic<int> first_calls{0};
+        std::atomic<int> second_calls{0};
+        stream.subscribe_comments({},
+                                  [&](const polymarket::RtdsCommentEvent &)
+                                  {
+                                      first_calls++;
+                                      stream.stop();
+                                  });
+        stream.subscribe_comments({},
+                                  [&](const polymarket::RtdsCommentEvent &) { second_calls++; });
+        const bool subscribed = server.wait_for_message_count(created_frame, 1, 2s);
+
+        server.send_to_clients(rtds_fixtures::rtds_comment_created);
+        const bool stopped = wait_until([&] { return first_calls.load() == 1; }, 2s);
+        std::this_thread::sleep_for(200ms);
+        stream.disconnect();
+        return check(connected && subscribed && stopped,
+                     "the first subscriber must receive the event") &&
+               check(first_calls.load() == 1 && second_calls.load() == 0,
+                     "no subscriber may run after stop() from a callback, got first=" +
+                         std::to_string(first_calls.load()) +
+                         " second=" + std::to_string(second_calls.load()));
+    }
+
     bool test_invalid_arguments()
     {
         polymarket::RtdsStream stream;
@@ -243,7 +272,8 @@ namespace
 int main()
 {
     const bool passed = test_subscriptions_and_delivery() && test_diffs_and_replay() &&
-                        test_price_subscriptions() && test_invalid_arguments();
+                        test_price_subscriptions() && test_stop_from_callback() &&
+                        test_invalid_arguments();
     if (!passed) return 1;
     std::cout << "test_rtds_stream passed\n";
     return 0;

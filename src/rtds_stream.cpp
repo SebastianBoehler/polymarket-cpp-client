@@ -43,14 +43,13 @@ namespace polymarket
             {
                 auto runtime = std::shared_ptr<RtdsStreamRuntime>(new RtdsStreamRuntime());
                 std::weak_ptr<RtdsStreamRuntime> weak = runtime;
-                runtime->stream_ =
-                    PublicStream::create(config.rtds_ws_url, rtds_options(),
-                                         std::chrono::milliseconds(config.ws_connect_timeout_ms),
-                                         [weak](const std::string &message)
-                                         {
-                                             if (auto self = weak.lock())
-                                                 self->handle_message(message);
-                                         });
+                runtime->stream_ = PublicStream::create(
+                    config.rtds_ws_url, rtds_options(),
+                    std::chrono::milliseconds(config.ws_connect_timeout_ms),
+                    [weak](const std::string &message, std::uint64_t generation)
+                    {
+                        if (auto self = weak.lock()) self->handle_message(message, generation);
+                    });
                 return runtime;
             }
 
@@ -141,7 +140,7 @@ namespace polymarket
                        stream_->send(rtds_subscription_frame("unsubscribe", removed));
             }
 
-            void handle_message(const std::string &message)
+            void handle_message(const std::string &message, std::uint64_t generation)
             {
                 std::optional<RtdsParsedEvent> event;
                 try
@@ -162,7 +161,10 @@ namespace polymarket
                         targets.push_back(subscription.deliver);
                 }
                 for (const auto &deliver : targets)
+                {
+                    if (!stream_->is_current(generation)) return;
                     deliver(*event);
+                }
             }
 
             std::shared_ptr<PublicStream> stream_;

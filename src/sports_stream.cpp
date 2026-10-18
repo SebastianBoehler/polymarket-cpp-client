@@ -37,7 +37,7 @@ namespace polymarket
                 runtime->stream_ =
                     PublicStream::create(config.sports_ws_url, sports_options(),
                                          std::chrono::milliseconds(config.ws_connect_timeout_ms),
-                                         [weak](const std::string &message)
+                                         [weak](const std::string &message, std::uint64_t)
                                          {
                                              if (auto self = weak.lock())
                                                  self->handle_message(message);
