@@ -109,7 +109,7 @@ namespace clob_test
                            []
                            {
                                (void)detail::parse_gamma_comments(
-                                   R"([{"id":"1","profile":{"positions":[{"positionSize":"4.5"}]}}])");
+                                   R"([{"id":"1","profile":{"positions":[{"tokenId":"99390970186095476158604553843389938788064583141526825109668507201084266675707","positionSize":"4.5"}]}}])");
                            }),
                        "a fractional position size must be rejected") &&
                    check(rejected([] { (void)detail::parse_gamma_public_profile(R"([])"); }),

@@ -6,6 +6,7 @@
 #include <cctype>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 // Price topics, following py-sdk models/rtds_events.py and
 // _internal/streams/rtds/protocol.py.
@@ -167,17 +168,23 @@ namespace polymarket::detail
     {
         if (filter.source != "binance" && filter.source != "chainlink")
             throw std::invalid_argument("source must be binance or chainlink");
-        return {filter.source == "binance" ? binance_topic : chainlink_topic,
-                distinct_symbols(filter.symbols),
-                std::nullopt,
-                {}};
+        auto symbols = distinct_symbols(filter.symbols);
+        RtdsPriceMatch match;
+        match.topic = filter.source == "binance" ? binance_topic : chainlink_topic;
+        match.symbols = std::move(symbols);
+        return match;
     }
 
     RtdsPriceMatch rtds_crypto_twap_match(const RtdsCryptoTwapFilter &filter)
     {
         if (filter.window_seconds != 30 && filter.window_seconds != 60)
             throw std::invalid_argument("window_seconds must be 30 or 60");
-        return {twap_topic, distinct_symbols(filter.symbols), filter.window_seconds, {}};
+        auto symbols = distinct_symbols(filter.symbols);
+        RtdsPriceMatch match;
+        match.topic = twap_topic;
+        match.symbols = std::move(symbols);
+        match.window_seconds = filter.window_seconds;
+        return match;
     }
 
     RtdsPriceMatch rtds_equity_price_match(const RtdsEquityPriceFilter &filter)

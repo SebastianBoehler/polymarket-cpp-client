@@ -44,8 +44,12 @@ namespace polymarket::detail
             profile.is_mod = field_bool(value, "isMod");
             profile.is_creator = field_bool(value, "isCreator");
             for (const auto &position : field_objects(value, "positions"))
-                profile.positions.push_back(
-                    {field_id(position, "tokenId"), integer_or_text(position, "positionSize")});
+            {
+                GammaCommentPosition entry;
+                entry.position_size = integer_or_text(position, "positionSize");
+                entry.token_id = field_id(position, "tokenId");
+                profile.positions.push_back(std::move(entry));
+            }
             return profile;
         }
 
