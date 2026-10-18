@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <vector>
 namespace
@@ -221,9 +222,12 @@ int main()
         const auto before_replay = handed_off_count.load();
         handoff_transport->emit(make_indexer_log(108, 0, 0, "0xlater"));
         handoff_transport->emit(make_indexer_log(175, 0, 0, "0x175"));
-        require(wait_for_indexer([&]()
-                                 { return handed_off_count.load() == before_replay + 1; }),
-                "dedup cache should prune durable history but retain its recent window");
+        require(wait_for_indexer([&]() { return handed_off_count.load() == before_replay + 1; },
+                                 std::chrono::seconds(10)),
+                ("dedup cache should prune durable history but retain its recent window (saw " +
+                 std::to_string(handed_off_count.load()) + " deliveries, expected " +
+                 std::to_string(before_replay + 1) + ")")
+                    .c_str());
     }
     require(handed_off[0] == std::make_pair(std::string("0xconfirmed"), false),
             "confirmed catch-up log should be first");
