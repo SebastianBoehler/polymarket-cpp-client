@@ -270,6 +270,15 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_websocket_heartbeat PRIVATE polymarket::client)
     add_test(NAME test_websocket_heartbeat COMMAND test_websocket_heartbeat)
 
+    add_executable(test_sports_parsing tests/test_sports_parsing.cpp)
+    target_include_directories(test_sports_parsing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_sports_parsing PRIVATE polymarket::client)
+    add_test(NAME test_sports_parsing COMMAND test_sports_parsing)
+
+    add_executable(test_sports_stream tests/test_sports_stream.cpp)
+    target_link_libraries(test_sports_stream PRIVATE polymarket::client)
+    add_test(NAME test_sports_stream COMMAND test_sports_stream)
+
     add_executable(test_network_routing tests/test_network_routing.cpp)
     target_link_libraries(test_network_routing PRIVATE polymarket::client)
     add_test(NAME test_network_routing COMMAND test_network_routing)

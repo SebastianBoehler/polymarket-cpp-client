@@ -1,3 +1,4 @@
+#include "sports_parsing.hpp"
 #include "user_stream_protocol.hpp"
 #include "websocket_resilience.hpp"
 
@@ -10,7 +11,7 @@
 #include <map>
 #include <string>
 
-// Feeds one raw WebSocket frame to every market and user stream parser.
+// Feeds one raw WebSocket frame to every market, user and sports stream parser.
 // Rejected input must raise std::exception; accepted book updates must leave
 // each book with valid, ordered levels.
 namespace
@@ -69,6 +70,11 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
                 parse_or_reject([&] { detail::apply_market_book_event(book, event, 1); });
                 require_valid_book(book);
             }
+        });
+    parse_or_reject(
+        [&]
+        {
+            if (!detail::parse_sports_message(message).raw.is_object()) std::abort();
         });
     return 0;
 }

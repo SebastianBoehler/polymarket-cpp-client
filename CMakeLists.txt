@@ -169,6 +169,9 @@ set(POLYMARKET_CLIENT_SOURCES
     src/user_stream_runtime.cpp
     src/user_stream_runtime_events.cpp
     src/user_stream_subscription.cpp
+    src/public_stream.cpp
+    src/sports_parsing.cpp
+    src/sports_stream.cpp
     src/order_amounts.cpp
     src/clob_order_execution.cpp
     src/clob_order_submission.cpp

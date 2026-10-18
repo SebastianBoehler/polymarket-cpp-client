@@ -284,8 +284,8 @@ namespace polymarket
             "btc", "eth", "xrp", "sol", "doge", "bnb",
             "ada", "avax", "matic", "link", "dot", "ltc"};
 
-        // CLOB, Gamma and RTDS endpoints from `environment`, which is validated
-        // first; every other field keeps its default.
+        // CLOB, Gamma, RTDS and Sports endpoints from `environment`, which is
+        // validated first; every other field keeps its default.
         static Config for_environment(const Environment &environment);
     };
 
