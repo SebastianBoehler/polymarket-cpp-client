@@ -37,6 +37,7 @@ namespace
         expect_equal("production data", env.data_url, "https://data-api.polymarket.com");
         expect_equal("production relayer", env.relayer_url, "https://relayer-v2.polymarket.com");
         expect_equal("production rtds", env.rtds_ws_url, "wss://ws-live-data.polymarket.com");
+        expect_equal("production sports", env.sports_ws_url, "wss://sports-api.polymarket.com/ws");
         env.validate();
     }
 
@@ -68,7 +69,8 @@ namespace
                   restored.contracts.collateral_token == prod.contracts.collateral_token &&
                   restored.clob_market_ws_url == prod.clob_market_ws_url &&
                   restored.clob_user_ws_url == prod.clob_user_ws_url &&
-                  restored.rtds_ws_url == prod.rtds_ws_url,
+                  restored.rtds_ws_url == prod.rtds_ws_url &&
+                  restored.sports_ws_url == prod.sports_ws_url,
               "preproduction must match production outside the four REST hosts");
         env.validate();
     }
@@ -111,6 +113,7 @@ namespace
                        mutated([](Environment &e) { e.data_url = "wss://x"; }));
         expect_invalid("http scheme for ws",
                        mutated([](Environment &e) { e.clob_user_ws_url = "https://x"; }));
+        expect_invalid("empty sports ws", mutated([](Environment &e) { e.sports_ws_url.clear(); }));
         expect_invalid("missing scheme",
                        mutated([](Environment &e) { e.rpc_url = "polygon.drpc.org"; }));
         expect_invalid("bad contract",
@@ -130,6 +133,7 @@ namespace
         expect_equal("default user ws", config.clob_user_ws_url, from_preset.clob_user_ws_url);
         expect_equal("default gamma", config.gamma_api_url, from_preset.gamma_api_url);
         expect_equal("default rtds", config.rtds_ws_url, from_preset.rtds_ws_url);
+        expect_equal("default sports", config.sports_ws_url, from_preset.sports_ws_url);
 
         const PositionClientConfig position;
         expect_equal("default position gamma", position.gamma_api_url, production.gamma_url);
@@ -147,6 +151,7 @@ namespace
         env.clob_market_ws_url = "ws://127.0.0.1:9001/ws/market";
         env.clob_user_ws_url = "ws://127.0.0.1:9001/ws/user";
         env.rtds_ws_url = "ws://127.0.0.1:9002";
+        env.sports_ws_url = "ws://127.0.0.1:9003/ws";
         const auto config = Config::for_environment(env);
         const Config defaults;
         expect_equal("config clob rest", config.clob_rest_url, env.clob_url);
@@ -154,6 +159,7 @@ namespace
         expect_equal("config user ws", config.clob_user_ws_url, env.clob_user_ws_url);
         expect_equal("config gamma", config.gamma_api_url, env.gamma_url);
         expect_equal("config rtds", config.rtds_ws_url, env.rtds_ws_url);
+        expect_equal("config sports", config.sports_ws_url, env.sports_ws_url);
         check(config.http_timeout_ms == defaults.http_timeout_ms &&
                   config.ws_ping_interval_ms == defaults.ws_ping_interval_ms &&
                   config.max_markets == defaults.max_markets &&

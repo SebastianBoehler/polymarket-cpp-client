@@ -44,6 +44,22 @@ namespace polymarket::detail
         return message;
     }
 
+    std::optional<QueuedMessage> BoundedMessageQueue::pop_for(std::chrono::milliseconds timeout)
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        cv_.wait_for(lock, timeout, [this]() { return closed_ || !messages_.empty(); });
+        if (messages_.empty()) return std::nullopt;
+        auto message = std::move(messages_.front());
+        messages_.pop_front();
+        return message;
+    }
+
+    bool BoundedMessageQueue::closed() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return closed_;
+    }
+
     std::size_t BoundedMessageQueue::discard_pending()
     {
         std::lock_guard<std::mutex> lock(mutex_);

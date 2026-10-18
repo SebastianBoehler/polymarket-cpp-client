@@ -2,6 +2,7 @@
 
 #include "polymarket/websocket_client.hpp"
 #include "polymarket/types.hpp"
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
@@ -52,6 +53,9 @@ namespace polymarket::detail
 
         QueuePushResult push(QueuedMessage message);
         std::optional<QueuedMessage> pop();
+        // Empty when `timeout` passes first or the queue is closed.
+        std::optional<QueuedMessage> pop_for(std::chrono::milliseconds timeout);
+        bool closed() const;
         std::size_t discard_pending();
         void record_drop();
         void close();

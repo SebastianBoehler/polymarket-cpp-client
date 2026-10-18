@@ -3,6 +3,7 @@
 #include "polymarket/websocket_client.hpp"
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <exception>
 #include <memory>
@@ -100,6 +101,7 @@ namespace polymarket::detail
         void dispatch_message(const std::string &message, uint64_t generation);
         void mark_stream_gap();
         bool restore_subscriptions();
+        void check_idle(std::chrono::milliseconds idle_timeout);
         void report_callback_failure(const char *name, const char *reason) noexcept;
         bool invoke_error_callback(const std::string &message) noexcept;
 
@@ -182,6 +184,8 @@ namespace polymarket::detail
         std::atomic<uint64_t> parse_errors_{0};
         std::atomic<uint64_t> callback_errors_{0};
         std::atomic<uint64_t> last_message_time_ns_{0};
+        std::atomic<uint64_t> last_activity_ns_{0};
+        std::atomic<uint64_t> idle_timeouts_{0};
         std::atomic<uint64_t> stream_generation_{0};
     };
 }

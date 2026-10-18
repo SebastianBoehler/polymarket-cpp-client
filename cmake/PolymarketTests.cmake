@@ -265,6 +265,11 @@ if(POLYMARKET_CLIENT_BUILD_TESTS)
     target_link_libraries(test_websocket_resilience PRIVATE polymarket::client)
     add_test(NAME test_websocket_resilience COMMAND test_websocket_resilience)
 
+    add_executable(test_websocket_heartbeat tests/test_websocket_heartbeat.cpp)
+    target_include_directories(test_websocket_heartbeat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_websocket_heartbeat PRIVATE polymarket::client)
+    add_test(NAME test_websocket_heartbeat COMMAND test_websocket_heartbeat)
+
     add_executable(test_network_routing tests/test_network_routing.cpp)
     target_link_libraries(test_network_routing PRIVATE polymarket::client)
     add_test(NAME test_network_routing COMMAND test_network_routing)

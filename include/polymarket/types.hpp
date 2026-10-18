@@ -264,6 +264,7 @@ namespace polymarket
         std::string clob_ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market";
         std::string gamma_api_url = "https://gamma-api.polymarket.com";
         std::string rtds_ws_url = "wss://ws-live-data.polymarket.com";
+        std::string sports_ws_url = "wss://sports-api.polymarket.com/ws";
         std::string clob_user_ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/user";
 
         // Trading parameters

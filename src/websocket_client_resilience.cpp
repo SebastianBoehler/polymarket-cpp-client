@@ -3,6 +3,7 @@
 #include "websocket_resilience.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 #include <string>
 
@@ -29,6 +30,9 @@ namespace polymarket::detail
             throw std::invalid_argument("WebSocket ping interval must be positive");
         if (options.message_queue_limit == 0)
             throw std::invalid_argument("WebSocket message queue limit must be positive");
+        if (options.server_ping_message.empty() != options.server_ping_reply.empty())
+            throw std::invalid_argument(
+                "WebSocket server ping message and reply must be set together");
     }
 
     void WebSocketClientState::require_inactive_locked() const
@@ -69,8 +73,8 @@ namespace polymarket::detail
     {
         const int ping_seconds = static_cast<int>(
             (static_cast<int64_t>(options_.ping_interval_ms) + 999) / 1000);
-        ws_.setPingMessage("PING", ix::SendMessageKind::Text);
-        ws_.setPingInterval(ping_seconds);
+        ws_.setPingMessage(options_.ping_message, ix::SendMessageKind::Text);
+        ws_.setPingInterval(options_.ping_message.empty() ? -1 : ping_seconds);
         ws_.setMinWaitBetweenReconnectionRetries(options_.min_backoff_ms);
         ws_.setMaxWaitBetweenReconnectionRetries(options_.max_backoff_ms);
         if (options_.reconnect_enabled)
@@ -134,13 +138,9 @@ namespace polymarket::detail
 
     WebSocketStats WebSocketClientState::stats() const
     {
-        return {messages_received_.load(),
-                bytes_received_.load(),
-                reconnects_.load(),
-                message_queue_->dropped(),
-                parse_errors_.load(),
-                last_message_time_ns_.load(),
-                callback_errors_.load()};
+        return {messages_received_.load(), bytes_received_.load(), reconnects_.load(),
+                message_queue_->dropped(), parse_errors_.load(),   last_message_time_ns_.load(),
+                callback_errors_.load(),   idle_timeouts_.load()};
     }
 
     void WebSocketClientState::start_message_worker()
@@ -157,14 +157,41 @@ namespace polymarket::detail
 
         worker_running_.store(true);
         auto self = shared_from_this();
-        message_worker_ = std::thread([self]
-                                      {
-            while (self->worker_running_.load())
+        message_worker_ = std::thread(
+            [self]
             {
-                auto message = self->message_queue_->pop();
-                if (!message) break;
-                self->dispatch_message(message->payload, message->generation);
-            } });
+                const auto idle_timeout = std::chrono::milliseconds(self->options_.idle_timeout_ms);
+                const auto check_every = std::clamp(idle_timeout / 4, std::chrono::milliseconds(10),
+                                                    std::chrono::milliseconds(1000));
+                while (self->worker_running_.load())
+                {
+                    auto message = idle_timeout.count() > 0
+                                       ? self->message_queue_->pop_for(check_every)
+                                       : self->message_queue_->pop();
+                    if (message)
+                    {
+                        self->dispatch_message(message->payload, message->generation);
+                        continue;
+                    }
+                    if (self->message_queue_->closed()) break;
+                    self->check_idle(idle_timeout);
+                }
+            });
+    }
+
+    void WebSocketClientState::check_idle(std::chrono::milliseconds idle_timeout)
+    {
+        if (state_.load() != WsState::CONNECTED) return;
+        const auto last_activity = last_activity_ns_.load();
+        const auto now = now_ns();
+        if (now < last_activity ||
+            now - last_activity <
+                static_cast<uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(idle_timeout).count()))
+            return;
+        last_activity_ns_.store(now_ns());
+        idle_timeouts_++;
+        request_resnapshot("no WebSocket frame within the idle timeout; reconnecting");
     }
 
     void WebSocketClientState::request_message_worker_stop()
