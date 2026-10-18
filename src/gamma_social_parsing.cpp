@@ -1,5 +1,7 @@
 #include "gamma_parsing.hpp"
 
+#include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -13,6 +15,18 @@ namespace polymarket::detail
         {
             if (item.contains("wallet")) return field_string(item, "wallet");
             return field_string(item, "proxyWallet");
+        }
+
+        std::optional<std::int64_t> integer_or_text(const json &item, const char *key)
+        {
+            const auto *value = find_field(item, key);
+            if (value == nullptr || !value->is_string()) return field_integer(item, key);
+            const auto &text = value->get_ref<const std::string &>();
+            const auto digits = text.starts_with('-') ? text.substr(1) : text;
+            if (digits.empty() || digits.size() > 18 ||
+                digits.find_first_not_of("0123456789") != std::string::npos)
+                throw_bad_field(key, "an integer");
+            return std::stoll(text);
         }
 
         std::optional<GammaCommentProfile> comment_profile(const json &item, const char *key)
@@ -31,21 +45,8 @@ namespace polymarket::detail
             profile.is_creator = field_bool(value, "isCreator");
             for (const auto &position : field_objects(value, "positions"))
                 profile.positions.push_back(
-                    {field_id(position, "tokenId"), field_integer(position, "positionSize")});
+                    {field_id(position, "tokenId"), integer_or_text(position, "positionSize")});
             return profile;
-        }
-
-        GammaReaction reaction(const json &item)
-        {
-            GammaReaction result;
-            result.id = field_required_id(item, "id");
-            result.comment_id = field_integer(item, "commentID");
-            result.reaction_type = field_string(item, "reactionType");
-            result.icon = field_string(item, "icon");
-            result.user_address = field_string(item, "userAddress");
-            result.created_at = field_string(item, "createdAt");
-            result.profile = comment_profile(item, "profile");
-            return result;
         }
 
         GammaSearchProfile search_profile(const json &item)
@@ -76,6 +77,19 @@ namespace polymarket::detail
         }
     } // namespace
 
+    GammaReaction parse_gamma_reaction(const json &item)
+    {
+        GammaReaction result;
+        result.id = field_required_id(item, "id");
+        result.comment_id = field_integer(item, "commentID");
+        result.reaction_type = field_string(item, "reactionType");
+        result.icon = field_string(item, "icon");
+        result.user_address = field_string(item, "userAddress");
+        result.created_at = field_string(item, "createdAt");
+        result.profile = comment_profile(item, "profile");
+        return result;
+    }
+
     GammaComment parse_gamma_comment(const json &item)
     {
         GammaComment comment;
@@ -90,7 +104,7 @@ namespace polymarket::detail
         comment.updated_at = field_string(item, "updatedAt");
         comment.profile = comment_profile(item, "profile");
         for (const auto &value : field_objects(item, "reactions"))
-            comment.reactions.push_back(reaction(value));
+            comment.reactions.push_back(parse_gamma_reaction(value));
         comment.report_count = field_integer(item, "reportCount");
         comment.reaction_count = field_integer(item, "reactionCount");
         comment.trade_asset = field_string(item, "tradeAsset");

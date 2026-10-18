@@ -97,6 +97,21 @@ namespace clob_test
                          "non-array search results must be rejected") &&
                    check(rejected([] { (void)detail::parse_gamma_comments(R"([{"body":"x"}])"); }),
                          "a comment without id must be rejected") &&
+                   check(
+                       detail::parse_gamma_comments(
+                           R"([{"id":"1","profile":{"positions":[{"tokenId":"7","positionSize":"47612999494"}]}}])")
+                               .at(0)
+                               .profile->positions.at(0)
+                               .position_size == 47612999494,
+                       "a digit-string position size must parse") &&
+                   check(
+                       rejected(
+                           []
+                           {
+                               (void)detail::parse_gamma_comments(
+                                   R"([{"id":"1","profile":{"positions":[{"positionSize":"4.5"}]}}])");
+                           }),
+                       "a fractional position size must be rejected") &&
                    check(rejected([] { (void)detail::parse_gamma_public_profile(R"([])"); }),
                          "a non-object profile must be rejected");
         }
