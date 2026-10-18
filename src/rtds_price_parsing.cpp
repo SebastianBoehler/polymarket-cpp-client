@@ -201,6 +201,13 @@ namespace polymarket::detail
         return match;
     }
 
+    bool is_rtds_price_wire_topic(const std::string &topic)
+    {
+        return topic == "crypto_prices" || topic == "crypto_prices_chainlink" ||
+               topic == "crypto_prices_twap_thirty" || topic == "crypto_prices_twap_sixty" ||
+               topic == "equity_prices";
+    }
+
     std::vector<RtdsServerKey> rtds_price_keys(const RtdsPriceMatch &match)
     {
         if (match.topic == binance_topic) return {{"crypto_prices", "update", ""}};

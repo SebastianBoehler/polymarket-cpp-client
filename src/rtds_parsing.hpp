@@ -40,6 +40,9 @@ namespace polymarket::detail
 
     // Unset for the empty frame RTDS sends after connecting.
     std::optional<RtdsParsedEvent> parse_rtds_message(const std::string &message);
+    // True for a JSON frame whose topic is one this client parses.
+    bool rtds_supported_frame(const std::string &message);
+    bool is_rtds_price_wire_topic(const std::string &topic);
     RtdsCommentEvent parse_rtds_comment_event(const json &frame);
 
     // {"action": action, "subscriptions": [...]} for `keys`.

@@ -57,6 +57,16 @@ namespace polymarket::detail
         return event;
     }
 
+    bool rtds_supported_frame(const std::string &message)
+    {
+        const auto frame = json::parse(message, nullptr, false);
+        if (!frame.is_object()) return false;
+        const auto *topic = find_field(frame, "topic");
+        if (topic == nullptr || !topic->is_string()) return false;
+        const auto &name = topic->get_ref<const std::string &>();
+        return name == comments_topic || is_rtds_price_wire_topic(name);
+    }
+
     std::string rtds_subscription_frame(const char *action, const std::vector<RtdsServerKey> &keys)
     {
         json subscriptions = json::array();

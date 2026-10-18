@@ -230,6 +230,58 @@ namespace
                          " second=" + std::to_string(second_calls.load()));
     }
 
+    bool test_malformed_event_reports_gap()
+    {
+        constexpr const char *malformed_comment =
+            R"({"topic":"comments","type":"comment_created","timestamp":1792286429215})";
+        LocalWebSocketServer server;
+        polymarket::RtdsStream stream(local_config(server.url()));
+        std::mutex mutex;
+        std::vector<std::string> errors;
+        std::atomic<int> gaps{0};
+        std::atomic<int> recoveries{0};
+        Recorder comments;
+        stream.subscribe_comments({}, comments.callback());
+        stream.on_error(
+            [&](const std::string &error)
+            {
+                std::lock_guard lock(mutex);
+                errors.push_back(error);
+            });
+        stream.on_stream_gap([&] { gaps++; });
+        stream.on_stream_recovered([&] { recoveries++; });
+
+        const bool connected = stream.connect();
+        const bool subscribed = server.wait_for_message_count(created_frame, 1, 2s);
+        const bool first_recovery = wait_until([&] { return recoveries.load() == 1; }, 2s);
+        const int gaps_before = gaps.load();
+        server.send_to_clients(R"({"topic":"activity","type":"trades","payload":{}})");
+        const bool unknown_skipped = !server.wait_for_connections(2, 200ms);
+        const int gaps_after_unknown = gaps.load();
+        server.send_to_clients(malformed_comment);
+        const bool reconnected = server.wait_for_connections(2, 5s);
+        const bool restored = server.wait_for_message_count(created_frame, 2, 5s);
+        const bool recovered = wait_until([&] { return recoveries.load() == 2; }, 5s);
+        server.send_to_clients(rtds_fixtures::rtds_comment_created);
+        const bool resumed = wait_until([&] { return comments.size() == 1; }, 2s);
+        stream.disconnect();
+
+        std::lock_guard lock(mutex);
+        const bool reported = errors.size() == 1 &&
+                              errors[0].find("invalid RTDS event") != std::string::npos &&
+                              errors[0].find("payload") != std::string::npos;
+        return check(connected && subscribed && first_recovery, "the stream must connect") &&
+               check(unknown_skipped && gaps_after_unknown == gaps_before,
+                     "an unknown topic must be skipped without a gap") &&
+               check(stream.dropped_events() == 2, "both bad frames must be counted") &&
+               check(reported, "a malformed event must be reported once with its cause") &&
+               check(gaps.load() > gaps_before && reconnected && restored && recovered,
+                     "a malformed event must report a gap and recover, got gaps=" +
+                         std::to_string(gaps.load() - gaps_before) +
+                         " recoveries=" + std::to_string(recoveries.load())) &&
+               check(resumed, "events must resume after recovery");
+    }
+
     bool test_invalid_arguments()
     {
         polymarket::RtdsStream stream;
@@ -273,7 +325,7 @@ int main()
 {
     const bool passed = test_subscriptions_and_delivery() && test_diffs_and_replay() &&
                         test_price_subscriptions() && test_stop_from_callback() &&
-                        test_invalid_arguments();
+                        test_malformed_event_reports_gap() && test_invalid_arguments();
     if (!passed) return 1;
     std::cout << "test_rtds_stream passed\n";
     return 0;

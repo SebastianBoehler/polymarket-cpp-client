@@ -41,7 +41,8 @@ namespace polymarket
 
     using SportsResultCallback = std::function<void(const SportsGameResult &result)>;
     // Fired whenever updates may have been missed: every connect, disconnect,
-    // queue overflow or idle reconnect. The server does not replay them.
+    // queue overflow, idle reconnect or malformed update. The server does not
+    // replay them.
     using SportsStreamGapCallback = std::function<void()>;
     // Fired once the connection is back after a gap; refresh game state from
     // GammaClient here if it matters.
@@ -51,8 +52,9 @@ namespace polymarket
     // Public Sports stream (Config::sports_ws_url). Every connection receives
     // every game update; there are no filters. The stream answers the
     // server's heartbeat and reconnects when no frame arrives for 30 seconds.
-    // Callbacks run on the stream's own threads; a malformed update is
-    // counted in dropped_events() and skipped.
+    // Callbacks run on the stream's own threads. A malformed update is
+    // counted in dropped_events(), reported to on_error() with its cause, and
+    // followed by a reconnect.
     class SportsStream
     {
       public:

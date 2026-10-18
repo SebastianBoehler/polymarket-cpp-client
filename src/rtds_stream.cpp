@@ -147,9 +147,12 @@ namespace polymarket
                 {
                     event = parse_rtds_message(message);
                 }
-                catch (const std::exception &)
+                catch (const std::exception &error)
                 {
                     dropped_events_++;
+                    if (rtds_supported_frame(message))
+                        stream_->report_invalid_message(
+                            std::string("invalid RTDS event: ") + error.what(), generation);
                     return;
                 }
                 if (!event) return;

@@ -34,14 +34,13 @@ namespace polymarket
             {
                 auto runtime = std::shared_ptr<SportsStreamRuntime>(new SportsStreamRuntime());
                 std::weak_ptr<SportsStreamRuntime> weak = runtime;
-                runtime->stream_ =
-                    PublicStream::create(config.sports_ws_url, sports_options(),
-                                         std::chrono::milliseconds(config.ws_connect_timeout_ms),
-                                         [weak](const std::string &message, std::uint64_t)
-                                         {
-                                             if (auto self = weak.lock())
-                                                 self->handle_message(message);
-                                         });
+                runtime->stream_ = PublicStream::create(
+                    config.sports_ws_url, sports_options(),
+                    std::chrono::milliseconds(config.ws_connect_timeout_ms),
+                    [weak](const std::string &message, std::uint64_t generation)
+                    {
+                        if (auto self = weak.lock()) self->handle_message(message, generation);
+                    });
                 return runtime;
             }
 
@@ -68,16 +67,18 @@ namespace polymarket
           private:
             SportsStreamRuntime() = default;
 
-            void handle_message(const std::string &message)
+            void handle_message(const std::string &message, std::uint64_t generation)
             {
                 SportsGameResult result;
                 try
                 {
                     result = parse_sports_message(message);
                 }
-                catch (const std::exception &)
+                catch (const std::exception &error)
                 {
                     dropped_events_++;
+                    stream_->report_invalid_message(
+                        std::string("invalid Sports update: ") + error.what(), generation);
                     return;
                 }
                 result_events_++;

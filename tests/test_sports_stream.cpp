@@ -61,7 +61,6 @@ namespace
         const bool connected = stream.connect();
         const bool first_recovery = wait_until([&] { return recoveries.load() == 1; }, 2s);
         server.send_to_clients("ping");
-        server.send_to_clients(sports_fixtures::sports_partial_result);
         server.send_to_clients(sports_fixtures::sports_live_result);
         const bool ponged = server.wait_for_message_count("pong", 1, 2s);
         const bool delivered = wait_until(
@@ -91,13 +90,56 @@ namespace
                check(ponged, "the stream must answer the server heartbeat") &&
                check(delivered && results[0].game_id == 70918912 && results[0].score == "10-21",
                      "a game update must be delivered") &&
-               check(stream.dropped_events() == 1 && stream.result_events() == 2,
-                     "a malformed update must be counted and skipped") &&
+               check(stream.dropped_events() == 0 && stream.result_events() == 2,
+                     "valid updates must not be dropped") &&
                check(reconnected && second_recovery && gaps.load() >= 3,
                      "a dropped connection must report a gap and recover") &&
                check(after_reconnect && results[1].league_abbreviation == "mls",
                      "updates must resume after a reconnect") &&
                check(no_client_ping, "the stream must not send client pings");
+    }
+
+    bool test_malformed_update_reports_gap()
+    {
+        LocalWebSocketServer server;
+        polymarket::SportsStream stream(local_config(server.url()));
+        std::mutex mutex;
+        std::vector<std::string> errors;
+        std::atomic<int> results{0};
+        std::atomic<int> gaps{0};
+        std::atomic<int> recoveries{0};
+        stream.on_result([&](const polymarket::SportsGameResult &) { results++; });
+        stream.on_error(
+            [&](const std::string &error)
+            {
+                std::lock_guard lock(mutex);
+                errors.push_back(error);
+            });
+        stream.on_stream_gap([&] { gaps++; });
+        stream.on_stream_recovered([&] { recoveries++; });
+
+        const bool connected = stream.connect();
+        const bool first_recovery = wait_until([&] { return recoveries.load() == 1; }, 2s);
+        const int gaps_before = gaps.load();
+        server.send_to_clients(sports_fixtures::sports_partial_result);
+        const bool reconnected = server.wait_for_connections(2, 5s);
+        const bool recovered = wait_until([&] { return recoveries.load() == 2; }, 5s);
+        server.send_to_clients(sports_fixtures::sports_live_result);
+        const bool resumed = wait_until([&] { return results.load() == 1; }, 2s);
+        stream.disconnect();
+
+        std::lock_guard lock(mutex);
+        const bool reported = !errors.empty() &&
+                              errors[0].find("invalid Sports update") != std::string::npos &&
+                              errors[0].find("gameId") != std::string::npos;
+        return check(connected && first_recovery, "the stream must connect") &&
+               check(stream.dropped_events() == 1, "a malformed update must be counted") &&
+               check(reported, "a malformed update must be reported with its cause") &&
+               check(gaps.load() > gaps_before && reconnected && recovered,
+                     "a malformed update must report a gap and recover, got gaps=" +
+                         std::to_string(gaps.load() - gaps_before) +
+                         " recoveries=" + std::to_string(recoveries.load())) &&
+               check(resumed, "updates must resume after recovery");
     }
 
     bool test_disconnect_stops_delivery()
@@ -150,8 +192,9 @@ namespace
 
 int main()
 {
-    const bool passed = test_stream_delivery() && test_disconnect_stops_delivery() &&
-                        test_invalid_config() && test_unreachable_server();
+    const bool passed = test_stream_delivery() && test_malformed_update_reports_gap() &&
+                        test_disconnect_stops_delivery() && test_invalid_config() &&
+                        test_unreachable_server();
     if (!passed) return 1;
     std::cout << "test_sports_stream passed\n";
     return 0;

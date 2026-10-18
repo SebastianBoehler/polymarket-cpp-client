@@ -99,7 +99,8 @@ namespace polymarket
     using RtdsCommentCallback = std::function<void(const RtdsCommentEvent &event)>;
     using RtdsPriceCallback = std::function<void(const RtdsPriceEvent &event)>;
     // Fired whenever events may have been missed: every connect, disconnect,
-    // queue overflow or idle reconnect. RTDS does not replay them.
+    // queue overflow, idle reconnect or malformed event. RTDS does not replay
+    // them.
     using RtdsStreamGapCallback = std::function<void()>;
     // Fired once the connection and its subscriptions are back after a gap.
     using RtdsStreamRecoveredCallback = std::function<void()>;
@@ -109,8 +110,10 @@ namespace polymarket
     // be added and removed before or after connect(); the stream sends the
     // combined server subscription and restores it after every reconnect.
     // It pings every 5 seconds and reconnects when no frame arrives for 10
-    // minutes. Callbacks run on the stream's own threads; a malformed or
-    // unknown frame is counted in dropped_events() and skipped.
+    // minutes. Callbacks run on the stream's own threads. Malformed and
+    // unknown frames are counted in dropped_events(). A malformed frame on a
+    // comment or price topic is also reported to on_error() with its cause
+    // and followed by a reconnect; other frames are skipped.
     class RtdsStream
     {
       public:

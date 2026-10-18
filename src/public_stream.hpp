@@ -55,6 +55,8 @@ namespace polymarket::detail
         void request_resnapshot(const std::string &reason);
         // False once the stream stops or the connection that sent `generation` ends.
         bool is_current(std::uint64_t generation) const;
+        // Reports `error` and reconnects, firing the gap and recovery callbacks.
+        void report_invalid_message(const std::string &error, std::uint64_t generation);
 
       private:
         PublicStream(const std::string &url, const WebSocketOptions &options,

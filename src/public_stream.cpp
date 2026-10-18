@@ -106,6 +106,14 @@ namespace polymarket::detail
         return active() && generation == websocket_.stream_generation();
     }
 
+    void PublicStream::report_invalid_message(const std::string &error, std::uint64_t generation)
+    {
+        if (!is_current(generation)) return;
+        handle_error(error);
+        if (!is_current(generation)) return;
+        websocket_.request_resnapshot(error + "; reconnecting");
+    }
+
     void PublicStream::handle_gap(std::uint64_t generation)
     {
         if (!active()) return;
