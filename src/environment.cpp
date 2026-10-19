@@ -38,6 +38,7 @@ namespace polymarket
         env.data_url = "https://data-api.polymarket.com";
         env.relayer_url = "https://relayer-v2.polymarket.com";
         env.rtds_ws_url = "wss://ws-live-data.polymarket.com";
+        env.sports_ws_url = "wss://sports-api.polymarket.com/ws";
         return env;
     }
 
@@ -75,6 +76,7 @@ namespace polymarket
             {"clob_market_ws_url", &clob_market_ws_url},
             {"clob_user_ws_url", &clob_user_ws_url},
             {"rtds_ws_url", &rtds_ws_url},
+            {"sports_ws_url", &sports_ws_url},
         };
         for (const auto &[field, url] : ws_urls)
             require_url(field, *url, "wss://", "ws://");
@@ -91,6 +93,7 @@ namespace polymarket
         config.clob_user_ws_url = environment.clob_user_ws_url;
         config.gamma_api_url = environment.gamma_url;
         config.rtds_ws_url = environment.rtds_ws_url;
+        config.sports_ws_url = environment.sports_ws_url;
         return config;
     }
 

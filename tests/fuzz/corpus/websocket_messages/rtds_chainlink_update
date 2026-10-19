@@ -1,0 +1,1 @@
+{"connection_id":"example-connection","payload":{"full_accuracy_value":"81529465877486595000000","symbol":"btc/usd","timestamp":1792287296000,"value":81529.4658774866},"timestamp":1792287296856,"topic":"crypto_prices_chainlink","type":"update"}

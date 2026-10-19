@@ -26,6 +26,7 @@ namespace polymarket
         std::string data_url;
         std::string relayer_url;
         std::string rtds_ws_url;
+        std::string sports_ws_url;
 
         static Environment production();
         static Environment preproduction();

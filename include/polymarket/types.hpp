@@ -264,6 +264,7 @@ namespace polymarket
         std::string clob_ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market";
         std::string gamma_api_url = "https://gamma-api.polymarket.com";
         std::string rtds_ws_url = "wss://ws-live-data.polymarket.com";
+        std::string sports_ws_url = "wss://sports-api.polymarket.com/ws";
         std::string clob_user_ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/user";
 
         // Trading parameters
@@ -283,8 +284,8 @@ namespace polymarket
             "btc", "eth", "xrp", "sol", "doge", "bnb",
             "ada", "avax", "matic", "link", "dot", "ltc"};
 
-        // CLOB, Gamma and RTDS endpoints from `environment`, which is validated
-        // first; every other field keeps its default.
+        // CLOB, Gamma, RTDS and Sports endpoints from `environment`, which is
+        // validated first; every other field keeps its default.
         static Config for_environment(const Environment &environment);
     };
 

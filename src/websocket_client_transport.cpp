@@ -158,6 +158,13 @@ namespace polymarket::detail
             handle_error(message);
             break;
         case ix::WebSocketMessageType::Message:
+            last_activity_ns_.store(now_ns());
+            if (!options_.server_ping_message.empty() &&
+                message->str == options_.server_ping_message)
+            {
+                ws_.send(options_.server_ping_reply);
+                break;
+            }
             messages_received_++;
             bytes_received_ += message->str.size();
             last_message_time_ns_.store(now_ns());
@@ -166,12 +173,14 @@ namespace polymarket::detail
         case ix::WebSocketMessageType::Ping:
         case ix::WebSocketMessageType::Pong:
         case ix::WebSocketMessageType::Fragment:
+            last_activity_ns_.store(now_ns());
             break;
         }
     }
 
     void WebSocketClientState::handle_open()
     {
+        last_activity_ns_.store(now_ns());
         mark_stream_gap();
         {
             std::lock_guard<std::mutex> lock(lifecycle_mutex_);

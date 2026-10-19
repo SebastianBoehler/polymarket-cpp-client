@@ -38,6 +38,15 @@ namespace polymarket
         uint32_t min_backoff_ms{250};
         uint32_t max_backoff_ms{10000};
         int ping_interval_ms{10000};
+        // Text sent every ping_interval_ms; empty sends no client pings.
+        std::string ping_message{"PING"};
+        // A text frame equal to server_ping_message is answered with
+        // server_ping_reply and not delivered. Both set, or both empty.
+        std::string server_ping_message;
+        std::string server_ping_reply;
+        // Reconnects, reporting a stream gap, when no frame arrives for this
+        // long while connected; 0 disables.
+        uint32_t idle_timeout_ms{0};
         std::size_t message_queue_limit{1024};
         // Route for this connection; empty fields fall back to the default
         // route in <polymarket/network.hpp>. A set route sends the connection
@@ -55,6 +64,7 @@ namespace polymarket
         uint64_t parse_errors{0};
         uint64_t last_message_time_ns{0};
         uint64_t callback_errors{0};
+        uint64_t idle_timeouts{0};
     };
 
     struct TypedWebSocketMessage

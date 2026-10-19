@@ -30,14 +30,20 @@ namespace polymarket::detail
 
         GammaEventReference event_reference(const json &item)
         {
-            return {field_required_id(item, "id"), field_string(item, "slug"),
-                    field_string(item, "title")};
+            GammaEventReference reference;
+            reference.id = field_required_id(item, "id");
+            reference.slug = field_string(item, "slug");
+            reference.title = field_string(item, "title");
+            return reference;
         }
 
         GammaSeriesReference series_reference(const json &item)
         {
-            return {field_required_id(item, "id"), field_string(item, "slug"),
-                    field_string(item, "title")};
+            GammaSeriesReference reference;
+            reference.id = field_required_id(item, "id");
+            reference.slug = field_string(item, "slug");
+            reference.title = field_string(item, "title");
+            return reference;
         }
     } // namespace
 
