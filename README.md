@@ -88,6 +88,10 @@ Tick size and neg-risk metadata are resolved and cached for you. See
 | **Trading**            | CLOB V2 EIP-712 order signing (EOA, proxy, Safe, `POLY_1271` deposit wallets), limit and market orders, batch posting, cancels, tick-size rounding |
 | **Order flow**         | Book-walk fill estimates, one-call limit and market orders with post-only, GTD, and worst-price bounds, on-chain settlement waits                  |
 | **Market data**        | REST books, prices, midpoints, markets, trades; WebSocket orderbook streaming with reconnect, subscription replay, gap detection, backpressure     |
+| **Discovery**          | Typed `GammaClient` for markets, events, tags, series, sports, teams, search, comments, and profiles                                               |
+| **Data API**           | Typed `DataClient` for wallet activity, positions, portfolio analytics, market data, and leaderboards                                              |
+| **Public streams**     | `RtdsStream` for comments, reactions, and prices; `SportsStream` for live game results, with gap and recovery callbacks                            |
+| **Pagination**         | `Paginator<T>` and CLOB, Gamma, and Data API pagers with page iteration, bounded collection, resume tokens, and explicit errors                    |
 | **User stream**        | Authenticated `UserStream` with typed order/trade events, gap callbacks, and REST reconciliation hooks                                             |
 | **On-chain positions** | `PositionClient` split/merge/redeem for CTF and Protocol V2, trading approvals, gasless Safe operations through the Polymarket relayer             |
 | **Polygon indexing**   | JSON-RPC HTTP catch-up + WebSocket subscriptions, persistent `EvmEventIndexer`, UMA and Conditional Tokens event decoders                          |
@@ -114,7 +118,7 @@ include(FetchContent)
 FetchContent_Declare(
     polymarket_client
     GIT_REPOSITORY https://github.com/SebastianBoehler/polymarket-cpp-client.git
-    GIT_TAG v3.0.0 # or any release tag
+    GIT_TAG v4.0.0 # or any release tag
 )
 FetchContent_MakeAvailable(polymarket_client)
 
@@ -129,13 +133,13 @@ dependencies and headers:
 
 ```bash
 # macOS arm64 (use polymarket-cpp-client-linux-x64.tar.gz on Linux)
-curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v3.0.0/polymarket-cpp-client-macos-arm64.tar.gz
-mkdir -p polymarket-cpp-client-3.0.0
-tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C polymarket-cpp-client-3.0.0
+curl -LO https://github.com/SebastianBoehler/polymarket-cpp-client/releases/download/v4.0.0/polymarket-cpp-client-macos-arm64.tar.gz
+mkdir -p polymarket-cpp-client-4.0.0
+tar -xzf polymarket-cpp-client-macos-arm64.tar.gz -C polymarket-cpp-client-4.0.0
 ```
 
 ```cmake
-# cmake -S . -B build -DCMAKE_PREFIX_PATH=/absolute/path/to/polymarket-cpp-client-3.0.0
+# cmake -S . -B build -DCMAKE_PREFIX_PATH=/absolute/path/to/polymarket-cpp-client-4.0.0
 find_package(polymarket_client REQUIRED)
 target_link_libraries(your_target PRIVATE polymarket::client)
 ```
@@ -391,6 +395,7 @@ Methodology and how to compare branches: [docs/benchmarks.md](docs/benchmarks.md
 | [CLOB V2 migration](docs/clob-v2-migration.md)       | V2 order signing and exchange contracts                |
 | [Benchmarks](docs/benchmarks.md)                     | Benchmark targets and methodology                      |
 | [Migration guide](docs/migration.md)                 | Upgrading between major versions                       |
+| [v4.0.0 release notes](docs/releases/v4.0.0.md)      | New APIs, compatibility changes, and validation limits |
 | [Protocol development](docs/protocol-development.md) | Rules for protocol, signing, and stream lifecycle work |
 | [Releasing](docs/releasing.md)                       | Release process for maintainers                        |
 
