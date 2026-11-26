@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 252" role="img" aria-labelledby="title">
+  <title id="title">Polymarket C++20 client</title>
+  <defs>
+    <linearGradient id="background" x2="100%">
+      <stop stop-color="#101a30"/>
+      <stop offset="1" stop-color="#27416c"/>
+    </linearGradient>
+    <pattern id="grid" x="720" y="34" width="38" height="38" patternUnits="userSpaceOnUse">
+      <path d="M38 0H0V38" fill="none" stroke="#a8c9fa" stroke-opacity=".15"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="252" rx="16" fill="url(#background)"/>
+  <rect x="720" y="34" width="414" height="183" fill="url(#grid)"/>
+  <g fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" color="#79afff">
+    <path d="M728 175H888V153H924V130H958" stroke="currentColor" opacity=".9"/>
+    <path d="M958 130H991V106H1039V83H1118" stroke="#d0dfff"/>
+    <path d="M728 184H888V162H924V139H958V200H728Z" fill="currentColor" fill-opacity=".11" stroke="none"/>
+    <path d="M958 139H991V115H1039V92H1118V200H958Z" fill="#d0dfff" fill-opacity=".10" stroke="none"/>
+    <circle cx="958" cy="130" r="6" fill="#eef4ff" stroke="none"/>
+    <path d="M958 50V120M958 140V207" stroke="#d0dfff" opacity=".45" stroke-dasharray="2 8"/>
+  </g>
+  <path d="M62 62H102" stroke="#79afff" stroke-width="4"/>
+  <g font-family="system-ui, -apple-system, sans-serif">
+    <text x="58" y="137" fill="#f4f7ff" font-size="66" font-weight="700" letter-spacing="-2">Polymarket</text>
+    <text x="62" y="183" fill="#a8c9fa" font-size="25">C++20 client for the Polymarket CLOB</text>
+  </g>
+</svg>

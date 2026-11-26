@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/banner.svg" alt="Polymarket C++20 client" width="100%">
+
 # polymarket-cpp-client
 
 **A low-latency C++20 SDK for Polymarket.**<br>
